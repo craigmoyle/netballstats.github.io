@@ -1,0 +1,25 @@
+name: netballstats
+metadata:
+  template: netballstats-azure-postgres@0.1.0
+infra:
+  provider: bicep
+  path: infra
+  module: main
+services:
+  web:
+    project: .
+    dist: dist
+    language: js
+    host: staticwebapp
+    module: main
+  api:
+    project: .
+    language: js
+    host: containerapp
+    module: main
+    docker:
+      path: ./Dockerfile.azure
+      context: .
+      platform: amd64
+      remoteBuild: true
+    apiVersion: 2025-07-01

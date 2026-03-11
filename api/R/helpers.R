@@ -1,15 +1,3 @@
-`%||%` <- function(x, y) {
-  if (is.null(x) || length(x) == 0 || all(is.na(x))) {
-    return(y)
-  }
-
-  if (is.character(x) && !nzchar(x[1])) {
-    return(y)
-  }
-
-  x
-}
-
 repo_root <- function() {
   getOption(
     "netballstats.repo_root",
@@ -18,24 +6,11 @@ repo_root <- function() {
 }
 
 default_db_path <- function() {
-  normalizePath(
-    file.path(repo_root(), "storage", "netball_stats.sqlite"),
-    mustWork = FALSE
-  )
+  default_sqlite_db_path(repo_root())
 }
 
 open_db <- function() {
-  db_path <- Sys.getenv("NETBALL_STATS_DB", default_db_path())
-  if (!file.exists(db_path)) {
-    stop(
-      "Database file not found at ",
-      db_path,
-      ". Run scripts/build_database.R first.",
-      call. = FALSE
-    )
-  }
-
-  DBI::dbConnect(RSQLite::SQLite(), db_path)
+  open_database_connection(default_db_path(), require_existing_sqlite = TRUE)
 }
 
 json_error <- function(res, status, message) {

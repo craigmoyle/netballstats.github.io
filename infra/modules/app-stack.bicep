@@ -1,0 +1,440 @@
+targetScope = 'resourceGroup'
+
+@description('Short name for the azd environment, for example dev or prod.')
+param environmentName string
+
+@description('Azure region for the deployment.')
+param location string = resourceGroup().location
+
+@description('Base prefix used for Azure resource names.')
+param namePrefix string
+
+@description('Tags applied to every provisioned resource.')
+param tags object = {}
+
+@description('Static Web Apps plan. Standard is required for linked backends.')
+@allowed([
+  'Standard'
+])
+param staticWebAppSku string = 'Standard'
+
+@description('Admin username for Azure Database for PostgreSQL Flexible Server.')
+param postgresAdminUsername string
+
+@description('Admin password for Azure Database for PostgreSQL Flexible Server.')
+@secure()
+param postgresAdminPassword string
+
+@description('Read-only PostgreSQL user used by the API at runtime.')
+param postgresApiUsername string = 'netballstats_api'
+
+@description('Password for the read-only PostgreSQL API user.')
+@secure()
+param postgresApiPassword string
+
+@description('Database name used by the application.')
+param postgresDatabaseName string = 'netballstats'
+
+@description('PostgreSQL version.')
+@allowed([
+  '16'
+  '17'
+])
+param postgresVersion string = '16'
+
+@description('PostgreSQL compute SKU name.')
+param postgresSkuName string = 'Standard_B1ms'
+
+@description('PostgreSQL compute tier.')
+@allowed([
+  'Burstable'
+  'GeneralPurpose'
+  'MemoryOptimized'
+])
+param postgresSkuTier string = 'Burstable'
+
+@description('Storage size for PostgreSQL in GB.')
+@minValue(32)
+param postgresStorageSizeGb int = 32
+
+@description('CPU allocation for the API container app.')
+param apiCpu int = 1
+
+@description('Memory allocation for the API container app.')
+param apiMemory string = '2Gi'
+
+@description('Container port exposed by the Plumber API.')
+param apiPort int = 8000
+
+@description('Minimum API replicas.')
+@minValue(1)
+param apiMinReplicas int = 1
+
+@description('Maximum API replicas.')
+@minValue(1)
+param apiMaxReplicas int = 2
+
+@description('Optional additional frontend hostname to permit through CORS.')
+param customFrontendHostname string = ''
+
+var resourceToken = toLower(take(uniqueString(subscription().id, resourceGroup().name, environmentName, namePrefix), 6))
+var normalizedPrefix = toLower(replace(namePrefix, '-', ''))
+var containerRegistryName = take('${normalizedPrefix}${resourceToken}acr', 50)
+var postgresServerName = take('${normalizedPrefix}-${resourceToken}-pg', 63)
+var staticWebAppName = take('${namePrefix}-web-${resourceToken}', 40)
+var containerEnvironmentName = take('${namePrefix}-aca-env-${resourceToken}', 32)
+var containerAppName = take('${namePrefix}-api-${resourceToken}', 32)
+var keyVaultName = take('${normalizedPrefix}-${resourceToken}-kv', 24)
+var workspaceName = take('${namePrefix}-logs-${resourceToken}', 63)
+var userAssignedIdentityName = take('${namePrefix}-api-mi-${resourceToken}', 64)
+var allowAllAzureIpsRuleName = 'allow-azure-services'
+var staticWebAppHostName = 'https://${staticWebApp.properties.defaultHostname}'
+var allowedCorsOrigins = empty(customFrontendHostname)
+  ? [
+      staticWebAppHostName
+    ]
+  : [
+      staticWebAppHostName
+      customFrontendHostname
+    ]
+var allowedCorsOriginsCsv = join(allowedCorsOrigins, ',')
+var keyVaultSecretsUserRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-07-01' = {
+  name: workspaceName
+  location: location
+  tags: tags
+  properties: {
+    retentionInDays: 30
+    sku: {
+      name: 'PerGB2018'
+    }
+  }
+}
+
+resource userAssignedIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
+  name: userAssignedIdentityName
+  location: location
+  tags: tags
+}
+
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
+  name: containerRegistryName
+  location: location
+  tags: tags
+  sku: {
+    name: 'Basic'
+  }
+  properties: {
+    adminUserEnabled: false
+    anonymousPullEnabled: false
+    publicNetworkAccess: 'Enabled'
+  }
+}
+
+resource acrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(containerRegistry.id, userAssignedIdentity.id, 'AcrPull')
+  scope: containerRegistry
+  properties: {
+    principalId: userAssignedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: acrPullRoleDefinitionId
+  }
+}
+
+resource keyVault 'Microsoft.KeyVault/vaults@2025-05-01' = {
+  name: keyVaultName
+  location: location
+  tags: tags
+  properties: {
+    enableRbacAuthorization: true
+    enablePurgeProtection: true
+    publicNetworkAccess: 'Enabled'
+    sku: {
+      family: 'A'
+      name: 'standard'
+    }
+    softDeleteRetentionInDays: 90
+    tenantId: tenant().tenantId
+  }
+}
+
+resource postgresAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = {
+  parent: keyVault
+  name: 'postgres-admin-password'
+  properties: {
+    value: postgresAdminPassword
+  }
+}
+
+resource postgresApiPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = {
+  parent: keyVault
+  name: 'postgres-api-password'
+  properties: {
+    value: postgresApiPassword
+  }
+}
+
+resource keyVaultSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, userAssignedIdentity.id, 'KeyVaultSecretsUser')
+  scope: keyVault
+  properties: {
+    principalId: userAssignedIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: keyVaultSecretsUserRoleDefinitionId
+  }
+}
+
+resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' = {
+  name: postgresServerName
+  location: location
+  tags: tags
+  sku: {
+    name: postgresSkuName
+    tier: postgresSkuTier
+  }
+  properties: {
+    administratorLogin: postgresAdminUsername
+    administratorLoginPassword: postgresAdminPassword
+    authConfig: {
+      activeDirectoryAuth: 'Disabled'
+      passwordAuth: 'Enabled'
+    }
+    backup: {
+      backupRetentionDays: 7
+      geoRedundantBackup: 'Disabled'
+    }
+    createMode: 'Create'
+    highAvailability: {
+      mode: 'Disabled'
+    }
+    network: {
+      publicNetworkAccess: 'Enabled'
+    }
+    storage: {
+      autoGrow: 'Enabled'
+      storageSizeGB: postgresStorageSizeGb
+    }
+    version: postgresVersion
+  }
+}
+
+resource postgresDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2025-08-01' = {
+  parent: postgresServer
+  name: postgresDatabaseName
+  properties: {
+    charset: 'UTF8'
+    collation: 'en_US.utf8'
+  }
+}
+
+resource postgresFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2025-08-01' = {
+  parent: postgresServer
+  name: allowAllAzureIpsRuleName
+  properties: {
+    startIpAddress: '0.0.0.0'
+    endIpAddress: '0.0.0.0'
+  }
+}
+
+resource containerEnvironment 'Microsoft.App/managedEnvironments@2025-07-01' = {
+  name: containerEnvironmentName
+  location: location
+  tags: tags
+  properties: {
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logAnalyticsWorkspace.properties.customerId
+        sharedKey: logAnalyticsWorkspace.listKeys().primarySharedKey
+      }
+    }
+  }
+}
+
+resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
+  name: containerAppName
+  location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${userAssignedIdentity.id}': {}
+    }
+  }
+  tags: union(tags, {
+    'azd-service-name': 'api'
+  })
+  properties: {
+    managedEnvironmentId: containerEnvironment.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        allowInsecure: false
+        corsPolicy: {
+          allowCredentials: false
+          allowedHeaders: [
+            'Content-Type'
+          ]
+          allowedMethods: [
+            'GET'
+            'OPTIONS'
+          ]
+          allowedOrigins: allowedCorsOrigins
+        }
+        external: true
+        targetPort: apiPort
+        traffic: [
+          {
+            latestRevision: true
+            weight: 100
+          }
+        ]
+        transport: 'Auto'
+      }
+      registries: [
+        {
+          identity: userAssignedIdentity.id
+          server: containerRegistry.properties.loginServer
+        }
+      ]
+      secrets: [
+        {
+          name: 'postgres-api-password'
+          identity: userAssignedIdentity.id
+          keyVaultUrl: postgresApiPasswordSecret.properties.secretUriWithVersion
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'api'
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          env: [
+            {
+              name: 'NETBALL_STATS_REPO_ROOT'
+              value: '/app'
+            }
+            {
+              name: 'NETBALL_STATS_HOST'
+              value: '0.0.0.0'
+            }
+            {
+              name: 'NETBALL_STATS_PORT'
+              value: string(apiPort)
+            }
+            {
+              name: 'NETBALL_STATS_ALLOWED_ORIGINS'
+              value: allowedCorsOriginsCsv
+            }
+            {
+              name: 'NETBALL_STATS_DB_BACKEND'
+              value: 'postgres'
+            }
+            {
+              name: 'NETBALL_STATS_DB_HOST'
+              value: postgresServer.properties.fullyQualifiedDomainName
+            }
+            {
+              name: 'NETBALL_STATS_DB_PORT'
+              value: '5432'
+            }
+            {
+              name: 'NETBALL_STATS_DB_NAME'
+              value: postgresDatabaseName
+            }
+            {
+              name: 'NETBALL_STATS_DB_USER'
+              value: postgresApiUsername
+            }
+            {
+              name: 'NETBALL_STATS_DB_PASSWORD'
+              secretRef: 'postgres-api-password'
+            }
+            {
+              name: 'NETBALL_STATS_DB_SSLMODE'
+              value: 'require'
+            }
+          ]
+          probes: [
+            {
+              type: 'Readiness'
+              httpGet: {
+                path: '/health'
+                port: apiPort
+                scheme: 'HTTP'
+              }
+              initialDelaySeconds: 5
+              periodSeconds: 15
+              timeoutSeconds: 5
+            }
+            {
+              type: 'Liveness'
+              httpGet: {
+                path: '/health'
+                port: apiPort
+                scheme: 'HTTP'
+              }
+              initialDelaySeconds: 15
+              periodSeconds: 30
+              timeoutSeconds: 5
+            }
+          ]
+          resources: {
+            cpu: apiCpu
+            memory: apiMemory
+          }
+        }
+      ]
+      scale: {
+        minReplicas: apiMinReplicas
+        maxReplicas: apiMaxReplicas
+      }
+    }
+  }
+  dependsOn: [
+    acrPullAssignment
+    keyVaultSecretsUserAssignment
+    postgresDatabase
+    postgresFirewallRule
+  ]
+}
+
+resource staticWebApp 'Microsoft.Web/staticSites@2025-03-01' = {
+  name: staticWebAppName
+  location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
+  tags: union(tags, {
+    'azd-service-name': 'web'
+  })
+  sku: {
+    name: staticWebAppSku
+    tier: staticWebAppSku
+  }
+  properties: {
+    allowConfigFileUpdates: true
+    stagingEnvironmentPolicy: 'Enabled'
+  }
+}
+
+resource staticWebAppLinkedBackend 'Microsoft.Web/staticSites/linkedBackends@2025-03-01' = {
+  parent: staticWebApp
+  name: 'api'
+  kind: 'ContainerApp'
+  properties: {
+    backendResourceId: apiContainerApp.id
+    region: location
+  }
+}
+
+output staticWebAppHostname string = staticWebApp.properties.defaultHostname
+output staticWebAppUrl string = 'https://${staticWebApp.properties.defaultHostname}'
+output apiContainerAppFqdn string = apiContainerApp.properties.configuration.ingress.fqdn
+output containerRegistryLoginServer string = containerRegistry.properties.loginServer
+output postgresServerFqdn string = postgresServer.properties.fullyQualifiedDomainName
+output postgresDatabase string = postgresDatabaseName
+output postgresAdminSecretUri string = postgresAdminPasswordSecret.properties.secretUriWithVersion
+output postgresApiUser string = postgresApiUsername

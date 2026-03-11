@@ -2,23 +2,10 @@
 
 suppressPackageStartupMessages({
   library(DBI)
-  library(RSQLite)
   library(dplyr)
   library(purrr)
   library(superNetballR)
 })
-
-`%||%` <- function(x, y) {
-  if (is.null(x) || length(x) == 0 || all(is.na(x))) {
-    return(y)
-  }
-
-  if (is.character(x) && !nzchar(x[1])) {
-    return(y)
-  }
-
-  x
-}
 
 script_path <- function() {
   file_arg <- grep("^--file=", commandArgs(), value = TRUE)
@@ -30,9 +17,9 @@ script_path <- function() {
 }
 
 repo_root <- normalizePath(file.path(dirname(script_path()), ".."), mustWork = FALSE)
+source(file.path(repo_root, "R", "database.R"), local = TRUE)
 config_path <- file.path(repo_root, "config", "competitions.csv")
-default_db_path <- file.path(repo_root, "storage", "netball_stats.sqlite")
-db_path <- Sys.getenv("NETBALL_STATS_DB", default_db_path)
+db_path <- Sys.getenv("NETBALL_STATS_DB", default_sqlite_db_path(repo_root))
 sample_mode <- identical(tolower(Sys.getenv("NETBALL_STATS_SAMPLE", "false")), "true")
 
 parse_numeric_value <- function(value) {
@@ -355,40 +342,106 @@ prepare_match_tables <- function(entries, competitions) {
   )
 }
 
-write_database <- function(tables, db_path, build_mode) {
-  dir.create(dirname(db_path), recursive = TRUE, showWarnings = FALSE)
-  if (file.exists(db_path)) {
-    file.remove(db_path)
+validate_db_identifier <- function(value, name) {
+  if (!grepl("^[A-Za-z][A-Za-z0-9_]*$", value)) {
+    stop(
+      name,
+      " must start with a letter and contain only letters, digits, and underscores.",
+      call. = FALSE
+    )
+  }
+}
+
+configure_postgres_api_user <- function(conn) {
+  if (database_backend() != "postgres") {
+    return(invisible(NULL))
   }
 
-  conn <- DBI::dbConnect(RSQLite::SQLite(), db_path)
-  on.exit(DBI::dbDisconnect(conn), add = TRUE)
+  api_username <- trimws(Sys.getenv("NETBALL_STATS_API_DB_USERNAME", ""))
+  api_password <- Sys.getenv("NETBALL_STATS_API_DB_PASSWORD", "")
+  if (!nzchar(api_username) && !nzchar(api_password)) {
+    return(invisible(NULL))
+  }
+  if (!nzchar(api_username) || !nzchar(api_password)) {
+    stop(
+      "NETBALL_STATS_API_DB_USERNAME and NETBALL_STATS_API_DB_PASSWORD must both be set for PostgreSQL API grants.",
+      call. = FALSE
+    )
+  }
 
-  DBI::dbWriteTable(conn, "competitions", tables$competitions, overwrite = TRUE)
-  DBI::dbWriteTable(conn, "matches", tables$matches, overwrite = TRUE)
-  DBI::dbWriteTable(conn, "teams", tables$teams, overwrite = TRUE)
-  DBI::dbWriteTable(conn, "players", tables$players, overwrite = TRUE)
-  DBI::dbWriteTable(conn, "player_aliases", tables$player_aliases, overwrite = TRUE)
-  DBI::dbWriteTable(conn, "team_period_stats", tables$team_period_stats, overwrite = TRUE)
-  DBI::dbWriteTable(conn, "player_period_stats", tables$player_period_stats, overwrite = TRUE)
+  validate_db_identifier(api_username, "NETBALL_STATS_API_DB_USERNAME")
 
-  metadata <- dplyr::tibble(
-    key = c("refreshed_at", "build_mode", "season_count", "match_count"),
-    value = c(
-      format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
-      build_mode,
-      as.character(length(unique(tables$matches$season))),
-      as.character(nrow(tables$matches))
+  quoted_username <- DBI::dbQuoteIdentifier(conn, api_username)
+  username_literal <- DBI::dbQuoteString(conn, api_username)
+  password_literal <- DBI::dbQuoteString(conn, api_password)
+  current_database <- DBI::dbGetQuery(conn, "SELECT current_database() AS db_name")$db_name[[1]]
+  quoted_database <- DBI::dbQuoteIdentifier(conn, current_database)
+
+  DBI::dbExecute(
+    conn,
+    paste0(
+      "DO $$ BEGIN ",
+      "IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = ", username_literal, ") THEN ",
+      "ALTER ROLE ", quoted_username, " WITH LOGIN PASSWORD ", password_literal, "; ",
+      "ELSE CREATE ROLE ", quoted_username, " LOGIN PASSWORD ", password_literal, "; ",
+      "END IF; END $$;"
     )
   )
-  DBI::dbWriteTable(conn, "metadata", metadata, overwrite = TRUE)
 
-  DBI::dbExecute(conn, "CREATE INDEX idx_matches_season_round ON matches(season, round_number, local_start_time)")
-  DBI::dbExecute(conn, "CREATE INDEX idx_team_stats_lookup ON team_period_stats(season, squad_id, stat)")
-  DBI::dbExecute(conn, "CREATE INDEX idx_player_stats_lookup ON player_period_stats(season, squad_id, player_id, stat)")
-  DBI::dbExecute(conn, "CREATE INDEX idx_players_name ON players(player_name)")
-  DBI::dbExecute(conn, "CREATE INDEX idx_players_search_name ON players(search_name)")
-  DBI::dbExecute(conn, "CREATE INDEX idx_player_aliases_search_name ON player_aliases(alias_search_name, player_id)")
+  DBI::dbExecute(conn, paste0("GRANT CONNECT ON DATABASE ", quoted_database, " TO ", quoted_username))
+  DBI::dbExecute(conn, paste0("GRANT USAGE ON SCHEMA public TO ", quoted_username))
+
+  for (table_name in c("competitions", "matches", "teams", "players", "player_aliases", "team_period_stats", "player_period_stats", "metadata")) {
+    quoted_table <- DBI::dbQuoteIdentifier(conn, DBI::Id(schema = "public", table = table_name))
+    DBI::dbExecute(conn, paste0("GRANT SELECT ON TABLE ", quoted_table, " TO ", quoted_username))
+  }
+
+  DBI::dbExecute(
+    conn,
+    paste0("ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO ", quoted_username)
+  )
+}
+
+write_database <- function(tables, db_path, build_mode) {
+  if (database_backend() == "sqlite") {
+    dir.create(dirname(db_path), recursive = TRUE, showWarnings = FALSE)
+    if (file.exists(db_path)) {
+      file.remove(db_path)
+    }
+  }
+
+  conn <- open_database_connection(db_path, require_existing_sqlite = FALSE)
+  on.exit(DBI::dbDisconnect(conn), add = TRUE)
+
+  DBI::dbWithTransaction(conn, {
+    DBI::dbWriteTable(conn, "competitions", tables$competitions, overwrite = TRUE)
+    DBI::dbWriteTable(conn, "matches", tables$matches, overwrite = TRUE)
+    DBI::dbWriteTable(conn, "teams", tables$teams, overwrite = TRUE)
+    DBI::dbWriteTable(conn, "players", tables$players, overwrite = TRUE)
+    DBI::dbWriteTable(conn, "player_aliases", tables$player_aliases, overwrite = TRUE)
+    DBI::dbWriteTable(conn, "team_period_stats", tables$team_period_stats, overwrite = TRUE)
+    DBI::dbWriteTable(conn, "player_period_stats", tables$player_period_stats, overwrite = TRUE)
+
+    metadata <- dplyr::tibble(
+      key = c("refreshed_at", "build_mode", "season_count", "match_count"),
+      value = c(
+        format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+        build_mode,
+        as.character(length(unique(tables$matches$season))),
+        as.character(nrow(tables$matches))
+      )
+    )
+    DBI::dbWriteTable(conn, "metadata", metadata, overwrite = TRUE)
+
+    DBI::dbExecute(conn, "CREATE INDEX idx_matches_season_round ON matches(season, round_number, local_start_time)")
+    DBI::dbExecute(conn, "CREATE INDEX idx_team_stats_lookup ON team_period_stats(season, squad_id, stat)")
+    DBI::dbExecute(conn, "CREATE INDEX idx_player_stats_lookup ON player_period_stats(season, squad_id, player_id, stat)")
+    DBI::dbExecute(conn, "CREATE INDEX idx_players_name ON players(player_name)")
+    DBI::dbExecute(conn, "CREATE INDEX idx_players_search_name ON players(search_name)")
+    DBI::dbExecute(conn, "CREATE INDEX idx_player_aliases_search_name ON player_aliases(alias_search_name, player_id)")
+
+    configure_postgres_api_user(conn)
+  })
 }
 
 competitions <- utils::read.csv(config_path, stringsAsFactors = FALSE)
@@ -404,5 +457,5 @@ if (!length(entries)) {
 }
 
 tables <- prepare_match_tables(entries, competitions)
-write_database(tables, db_path, if (sample_mode) "sample" else "production")
-message(sprintf("Database written to %s with %s matches.", db_path, nrow(tables$matches)))
+invisible(write_database(tables, db_path, if (sample_mode) "sample" else "production"))
+message(sprintf("Database written to %s with %s matches.", database_target_description(db_path), nrow(tables$matches)))

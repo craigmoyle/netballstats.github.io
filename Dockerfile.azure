@@ -12,18 +12,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN R -q -e "install.packages(c('DBI','RPostgres','RSQLite','dplyr','httr','jsonlite','plumber','purrr','remotes','tidyr'), repos='https://cloud.r-project.org')" \
   && R -q -e "remotes::install_github('craigmoyle/superNetballR_updated')"
 
-WORKDIR /opt/render/project/src
+WORKDIR /app
 
 COPY . .
 
-ENV NETBALL_STATS_REPO_ROOT=/opt/render/project/src
-ENV NETBALL_STATS_DB=/opt/render/project/src/storage/netball_stats.sqlite
+ENV NETBALL_STATS_REPO_ROOT=/app
 ENV NETBALL_STATS_HOST=0.0.0.0
-ENV NETBALL_STATS_PORT=10000
+ENV NETBALL_STATS_PORT=8000
 
-RUN mkdir -p /opt/render/project/src/storage \
-  && Rscript scripts/build_database.R
+EXPOSE 8000
 
-EXPOSE 10000
-
-CMD ["Rscript", "-e", "pr <- plumber::plumb('api/plumber.R'); pr$run(host = Sys.getenv('NETBALL_STATS_HOST', '0.0.0.0'), port = as.integer(Sys.getenv('PORT', Sys.getenv('NETBALL_STATS_PORT', '10000'))))"]
+CMD ["Rscript", "-e", "pr <- plumber::plumb('api/plumber.R'); pr$run(host = Sys.getenv('NETBALL_STATS_HOST', '0.0.0.0'), port = as.integer(Sys.getenv('PORT', Sys.getenv('NETBALL_STATS_PORT', '8000'))))"]

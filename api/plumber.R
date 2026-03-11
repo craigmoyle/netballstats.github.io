@@ -1,7 +1,6 @@
 suppressPackageStartupMessages({
   library(plumber)
   library(DBI)
-  library(RSQLite)
 })
 
 resolve_repo_root <- function() {
@@ -38,6 +37,7 @@ resolve_repo_root <- function() {
 
 repo_root_path <- resolve_repo_root()
 options(netballstats.repo_root = repo_root_path)
+source(file.path(repo_root_path, "R", "database.R"), local = TRUE)
 source(file.path(repo_root_path, "api", "R", "helpers.R"), local = TRUE)
 
 request_limiter <- local({
@@ -78,7 +78,7 @@ request_limiter <- local({
 })
 
 #* @apiTitle Netball Stats API
-#* @apiDescription Read-only Super Netball statistics API backed by a local SQLite database built with superNetballR.
+#* @apiDescription Read-only Super Netball statistics API backed by a SQLite or PostgreSQL database built with superNetballR.
 
 #* @filter security_headers
 function(req, res) {

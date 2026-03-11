@@ -3,6 +3,7 @@
 .Rhistory
 .env
 .env.*
+dist/
 *.sqlite
 *.sqlite-journal
 *.sqlite-shm
