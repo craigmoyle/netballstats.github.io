@@ -244,6 +244,12 @@ code {
   gap: 0.75rem 1rem;
 }
 
+.panel__meta-stack {
+  display: grid;
+  justify-items: end;
+  gap: 0.85rem;
+}
+
 .panel h2 {
   font-size: clamp(1.5rem, 2.8vw, 2.25rem);
   margin-bottom: 0;
@@ -481,6 +487,195 @@ button:hover {
   grid-column: 1 / -1;
 }
 
+.view-toggle {
+  display: inline-flex;
+  gap: 0.45rem;
+  padding: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(9, 17, 23, 0.55);
+}
+
+.view-toggle .button {
+  min-width: 6.2rem;
+  box-shadow: none;
+}
+
+.view-toggle .button.is-active,
+.view-toggle .button[aria-pressed="true"] {
+  background: linear-gradient(135deg, rgba(240, 198, 126, 0.96), rgba(255, 224, 165, 0.98));
+  color: #20160d;
+}
+
+.panel-view {
+  display: block;
+}
+
+.panel-view[hidden] {
+  display: none;
+}
+
+.chart-stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.chart-card {
+  position: relative;
+  overflow: hidden;
+  padding: 1rem;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+    rgba(9, 17, 23, 0.42);
+}
+
+.chart-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -2rem -2.5rem auto;
+  width: 7rem;
+  height: 7rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(121, 216, 208, 0.14), transparent 72%);
+  pointer-events: none;
+}
+
+.chart-card__header {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.25rem;
+  margin-bottom: 0.85rem;
+}
+
+.chart-card__eyebrow {
+  font-family: var(--display-font);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-cool);
+  font-size: 0.86rem;
+}
+
+.chart-card__title {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: clamp(1.45rem, 2.4vw, 1.85rem);
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chart-note {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.chart-shell {
+  position: relative;
+  min-height: 260px;
+  padding: 0.75rem;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01)),
+    rgba(10, 18, 25, 0.72);
+}
+
+.chart-shell[data-state="empty"] {
+  display: grid;
+  place-items: center;
+}
+
+.chart-empty {
+  max-width: 34ch;
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+}
+
+.chart-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart-label,
+.chart-value,
+.chart-axis,
+.chart-grid-label {
+  fill: var(--text);
+  font-family: var(--body-font);
+}
+
+.chart-label {
+  font-size: 14px;
+}
+
+.chart-value,
+.chart-axis,
+.chart-grid-label {
+  font-size: 12px;
+}
+
+.chart-grid-line {
+  stroke: rgba(255, 255, 255, 0.09);
+  stroke-dasharray: 4 8;
+}
+
+.chart-axis-line,
+.chart-track {
+  stroke: rgba(255, 255, 255, 0.12);
+}
+
+.chart-track {
+  fill: rgba(255, 255, 255, 0.04);
+}
+
+.chart-bar {
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.16));
+}
+
+.chart-dot {
+  stroke: rgba(9, 17, 23, 0.88);
+  stroke-width: 2;
+}
+
+.chart-series-line {
+  fill: none;
+  stroke-width: 3.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.2));
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+}
+
+.chart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.chart-legend__swatch {
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
 .table-wrapper {
   overflow-x: auto;
   border-radius: 22px;
@@ -569,6 +764,10 @@ body.is-ready .reveal:nth-of-type(4) {
     grid-template-columns: 1fr;
   }
 
+  .panel__meta-stack {
+    justify-items: start;
+  }
+
   .filter-summary {
     text-align: left;
   }
@@ -595,5 +794,18 @@ body.is-ready .reveal:nth-of-type(4) {
 
   table {
     min-width: 480px;
+  }
+
+  .view-toggle {
+    width: 100%;
+  }
+
+  .view-toggle .button {
+    flex: 1;
+  }
+
+  .chart-card,
+  .chart-shell {
+    padding: 0.85rem;
   }
 }

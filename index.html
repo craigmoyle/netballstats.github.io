@@ -193,21 +193,49 @@
               <p class="kicker">Team leaderboards</p>
               <h2>Cumulative club totals</h2>
             </div>
-            <p class="muted">Compare cumulative team output across seasons and eras.</p>
+            <div class="panel__meta-stack">
+              <p class="muted">Compare cumulative team output across seasons and eras.</p>
+              <div class="view-toggle" role="group" aria-label="Team leaderboard view">
+                <button type="button" class="button button--ghost button--small is-active" data-panel="team-leaders" data-view-mode="table" aria-pressed="true">Table</button>
+                <button type="button" class="button button--ghost button--small" data-panel="team-leaders" data-view-mode="chart" aria-pressed="false">Chart</button>
+              </div>
+            </div>
           </div>
-          <div class="table-wrapper">
-            <table id="team-leaders-table">
-              <thead>
-                <tr>
-                  <th scope="col">Rank</th>
-                  <th scope="col">Team</th>
-                  <th scope="col">Stat</th>
-                  <th scope="col">Total</th>
-                  <th scope="col">Matches</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+          <div class="panel-view" data-panel-view="team-leaders" data-panel-mode="table">
+            <div class="table-wrapper">
+              <table id="team-leaders-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Rank</th>
+                    <th scope="col">Team</th>
+                    <th scope="col">Stat</th>
+                    <th scope="col">Total</th>
+                    <th scope="col">Matches</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel-view panel-view--charts" data-panel-view="team-leaders" data-panel-mode="chart" hidden>
+            <div class="chart-stack">
+              <article class="chart-card">
+                <div class="chart-card__header">
+                  <span class="chart-card__eyebrow">Leaderboard bars</span>
+                  <h3 class="chart-card__title">Top clubs by total output</h3>
+                  <p id="team-bar-note" class="chart-note">The selected team stat, ranked across the active filters.</p>
+                </div>
+                <div id="team-leaders-chart" class="chart-shell" role="img" aria-label="Team leaderboard chart"></div>
+              </article>
+              <article class="chart-card">
+                <div class="chart-card__header">
+                  <span class="chart-card__eyebrow">Season trend lines</span>
+                  <h3 class="chart-card__title">How the leading clubs move by season</h3>
+                  <p id="team-trend-note" class="chart-note">Track the strongest clubs across the selected seasons.</p>
+                </div>
+                <div id="team-trend-chart" class="chart-shell" role="img" aria-label="Team season trend chart"></div>
+              </article>
+            </div>
           </div>
         </section>
 
@@ -217,21 +245,49 @@
               <p class="kicker">Player leaderboards</p>
               <h2>Cumulative player totals</h2>
             </div>
-            <p class="muted">Player aliases are consolidated under a single record.</p>
+            <div class="panel__meta-stack">
+              <p class="muted">Player aliases are consolidated under a single record.</p>
+              <div class="view-toggle" role="group" aria-label="Player leaderboard view">
+                <button type="button" class="button button--ghost button--small is-active" data-panel="player-leaders" data-view-mode="table" aria-pressed="true">Table</button>
+                <button type="button" class="button button--ghost button--small" data-panel="player-leaders" data-view-mode="chart" aria-pressed="false">Chart</button>
+              </div>
+            </div>
           </div>
-          <div class="table-wrapper">
-            <table id="player-leaders-table">
-              <thead>
-                <tr>
-                  <th scope="col">Rank</th>
-                  <th scope="col">Player</th>
-                  <th scope="col">Team</th>
-                  <th scope="col">Stat</th>
-                  <th scope="col">Total</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
+          <div class="panel-view" data-panel-view="player-leaders" data-panel-mode="table">
+            <div class="table-wrapper">
+              <table id="player-leaders-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Rank</th>
+                    <th scope="col">Player</th>
+                    <th scope="col">Team</th>
+                    <th scope="col">Stat</th>
+                    <th scope="col">Total</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel-view panel-view--charts" data-panel-view="player-leaders" data-panel-mode="chart" hidden>
+            <div class="chart-stack">
+              <article class="chart-card">
+                <div class="chart-card__header">
+                  <span class="chart-card__eyebrow">Leaderboard bars</span>
+                  <h3 class="chart-card__title">Top players by total output</h3>
+                  <p id="player-bar-note" class="chart-note">The selected player stat, ranked across the active filters.</p>
+                </div>
+                <div id="player-leaders-chart" class="chart-shell" role="img" aria-label="Player leaderboard chart"></div>
+              </article>
+              <article class="chart-card">
+                <div class="chart-card__header">
+                  <span class="chart-card__eyebrow">Season trend lines</span>
+                  <h3 class="chart-card__title">How the leading players move by season</h3>
+                  <p id="player-trend-note" class="chart-note">Track season-by-season movement for the strongest player totals.</p>
+                </div>
+                <div id="player-trend-chart" class="chart-shell" role="img" aria-label="Player season trend chart"></div>
+              </article>
+            </div>
           </div>
         </section>
 

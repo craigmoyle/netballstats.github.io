@@ -216,6 +216,28 @@ validate_stat <- function(conn, table_name, stat, default_stat = "goals") {
   chosen
 }
 
+apply_player_search_filter <- function(query, params, search, player_id_expr = "stats.player_id") {
+  parsed_search <- parse_search(search, name = "search")
+  if (is.null(parsed_search)) {
+    return(list(query = query, params = params))
+  }
+
+  normalized_search <- normalize_player_search_name(parsed_search)
+  params$search <- paste0("%", normalized_search, "%")
+
+  list(
+    query = paste0(
+      query,
+      " AND EXISTS (",
+      "SELECT 1 FROM player_aliases",
+      " WHERE player_aliases.player_id = ", player_id_expr,
+      " AND player_aliases.alias_search_name LIKE ?search",
+      ")"
+    ),
+    params = params
+  )
+}
+
 allowed_origins <- function() {
   value <- Sys.getenv(
     "NETBALL_STATS_ALLOWED_ORIGINS",

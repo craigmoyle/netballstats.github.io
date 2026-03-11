@@ -7,6 +7,7 @@ This repository now contains a secure-by-default Super Netball stats site backed
 The old site was a single HTML page showing a few 2020 static images. The rewrite introduces:
 
 - a modern query UI for seasons from 2017 onward, including multi-season comparisons and tunable row limits
+- table/chart toggles for the team and player leaderboards, including season trend lines for fast visual comparisons
 - a read-only R Plumber API with input validation, rate limiting, security headers, and parameterized SQL
 - a database build script that uses `superNetballR::downloadMatch()` plus the package tidiers to populate either SQLite or PostgreSQL
 - canonical player-name handling so leaderboard queries continue to work when players appear under multiple surnames over time
@@ -23,6 +24,13 @@ The old site was a single HTML page showing a few 2020 static images. The rewrit
 - `config/competitions.csv`: season-to-competition ID mapping
 - `storage/`: database output location (gitignored)
 - `azure.yaml` + `infra/`: Azure Developer CLI deployment files
+
+The current frontend highlights:
+
+- team leaderboard bar charts
+- player leaderboard bar charts
+- season-by-season trend lines for the leading teams and players
+- table/chart toggles so the detailed tables remain available
 
 ## Local setup
 

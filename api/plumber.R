@@ -351,8 +351,6 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", se
     round <- parse_optional_int(round, "round", minimum = 1L, maximum = 30L)
     limit <- parse_limit(limit, default = 12L, maximum = 50L)
     stat <- validate_stat(conn, "player_period_stats", stat, default_stat = "goals")
-    search <- parse_search(search, name = "search")
-    normalized_search <- if (is.null(search)) NULL else normalize_player_search_name(search)
 
     query <- paste(
       "SELECT stats.player_id, players.canonical_name AS player_name, stats.squad_name,",
@@ -362,23 +360,143 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", se
       "WHERE stats.stat = ?stat"
     )
     filters <- apply_stat_filters(query, list(stat = stat), seasons, team_id, round, table_alias = "stats")
-    if (!is.null(search)) {
-      filters$query <- paste0(
-        filters$query,
-        " AND EXISTS (",
-        "SELECT 1 FROM player_aliases",
-        " WHERE player_aliases.player_id = stats.player_id",
-        " AND player_aliases.alias_search_name LIKE ?search",
-        ")"
-      )
-      filters$params$search <- paste0("%", normalized_search, "%")
-    }
+    search_filters <- apply_player_search_filter(filters$query, filters$params, search, "stats.player_id")
+    filters$query <- search_filters$query
+    filters$params <- search_filters$params
     filters$query <- paste0(
       filters$query,
       " GROUP BY stats.player_id, players.canonical_name, stats.squad_name",
       " ORDER BY total_value DESC, players.canonical_name ASC LIMIT ?limit"
     )
     filters$params$limit <- limit
+
+    list(data = query_rows(conn, filters$query, filters$params))
+  }, error = function(error) {
+    json_error(res, 400, conditionMessage(error))
+  })
+}
+
+#* @get /team-season-series
+#* @get /api/team-season-series
+function(season = "", seasons = "", team_id = "", round = "", stat = "goals", limit = "5", res) {
+  conn <- tryCatch(open_db(), error = function(error) error)
+  if (inherits(conn, "error")) {
+    return(json_error(res, 503, conditionMessage(conn)))
+  }
+  on.exit(DBI::dbDisconnect(conn), add = TRUE)
+
+  tryCatch({
+    seasons <- parse_season_filter(season, seasons)
+    team_id <- parse_optional_int(team_id, "team_id", minimum = 1L)
+    round <- parse_optional_int(round, "round", minimum = 1L, maximum = 30L)
+    limit <- parse_limit(limit, default = 5L, maximum = 8L)
+    stat <- validate_stat(conn, "team_period_stats", stat, default_stat = "goals")
+
+    ranked_query <- paste(
+      "SELECT squad_id, ROUND(CAST(SUM(value_number) AS numeric), 2) AS grand_total",
+      "FROM team_period_stats WHERE stat = ?stat"
+    )
+    ranked_filters <- apply_stat_filters(ranked_query, list(stat = stat), seasons, team_id, round)
+    ranked_filters$query <- paste0(
+      ranked_filters$query,
+      " GROUP BY squad_id ORDER BY grand_total DESC, squad_id ASC"
+    )
+    if (is.null(team_id)) {
+      ranked_filters$query <- paste0(ranked_filters$query, " LIMIT ?limit")
+      ranked_filters$params$limit <- limit
+    }
+    ranked_ids <- query_rows(conn, ranked_filters$query, ranked_filters$params)$squad_id
+
+    query <- paste(
+      "SELECT stats.squad_id, stats.squad_name, teams.squad_colour, stats.season, ?stat AS stat,",
+      "ROUND(CAST(SUM(stats.value_number) AS numeric), 2) AS total_value,",
+      "COUNT(DISTINCT stats.match_id) AS matches_played",
+      "FROM team_period_stats AS stats",
+      "LEFT JOIN teams ON teams.squad_id = stats.squad_id",
+      "WHERE stats.stat = ?stat"
+    )
+    filters <- apply_stat_filters(query, list(stat = stat), seasons, team_id, round, table_alias = "stats")
+    if (is.null(team_id)) {
+      ranked_series_filters <- append_integer_in_filter(
+        filters$query,
+        filters$params,
+        "stats.squad_id",
+        ranked_ids,
+        "series_team"
+      )
+      filters$query <- ranked_series_filters$query
+      filters$params <- ranked_series_filters$params
+    }
+    filters$query <- paste0(
+      filters$query,
+      " GROUP BY stats.squad_id, stats.squad_name, teams.squad_colour, stats.season",
+      " ORDER BY stats.season ASC, total_value DESC, stats.squad_name ASC"
+    )
+
+    list(data = query_rows(conn, filters$query, filters$params))
+  }, error = function(error) {
+    json_error(res, 400, conditionMessage(error))
+  })
+}
+
+#* @get /player-season-series
+#* @get /api/player-season-series
+function(season = "", seasons = "", team_id = "", round = "", stat = "goals", search = "", limit = "5", res) {
+  conn <- tryCatch(open_db(), error = function(error) error)
+  if (inherits(conn, "error")) {
+    return(json_error(res, 503, conditionMessage(conn)))
+  }
+  on.exit(DBI::dbDisconnect(conn), add = TRUE)
+
+  tryCatch({
+    seasons <- parse_season_filter(season, seasons)
+    team_id <- parse_optional_int(team_id, "team_id", minimum = 1L)
+    round <- parse_optional_int(round, "round", minimum = 1L, maximum = 30L)
+    limit <- parse_limit(limit, default = 5L, maximum = 8L)
+    stat <- validate_stat(conn, "player_period_stats", stat, default_stat = "goals")
+
+    ranked_query <- paste(
+      "SELECT stats.player_id, ROUND(CAST(SUM(stats.value_number) AS numeric), 2) AS grand_total",
+      "FROM player_period_stats AS stats",
+      "WHERE stats.stat = ?stat"
+    )
+    ranked_filters <- apply_stat_filters(ranked_query, list(stat = stat), seasons, team_id, round, table_alias = "stats")
+    ranked_search_filters <- apply_player_search_filter(ranked_filters$query, ranked_filters$params, search, "stats.player_id")
+    ranked_filters$query <- ranked_search_filters$query
+    ranked_filters$params <- ranked_search_filters$params
+    ranked_filters$query <- paste0(
+      ranked_filters$query,
+      " GROUP BY stats.player_id ORDER BY grand_total DESC, stats.player_id ASC LIMIT ?limit"
+    )
+    ranked_filters$params$limit <- limit
+    ranked_ids <- query_rows(conn, ranked_filters$query, ranked_filters$params)$player_id
+
+    query <- paste(
+      "SELECT stats.player_id, players.canonical_name AS player_name, MAX(stats.squad_name) AS squad_name,",
+      "stats.season, ?stat AS stat, ROUND(CAST(SUM(stats.value_number) AS numeric), 2) AS total_value,",
+      "COUNT(DISTINCT stats.match_id) AS matches_played",
+      "FROM player_period_stats AS stats",
+      "INNER JOIN players ON players.player_id = stats.player_id",
+      "WHERE stats.stat = ?stat"
+    )
+    filters <- apply_stat_filters(query, list(stat = stat), seasons, team_id, round, table_alias = "stats")
+    search_filters <- apply_player_search_filter(filters$query, filters$params, search, "stats.player_id")
+    filters$query <- search_filters$query
+    filters$params <- search_filters$params
+    series_filters <- append_integer_in_filter(
+      filters$query,
+      filters$params,
+      "stats.player_id",
+      ranked_ids,
+      "series_player"
+    )
+    filters$query <- series_filters$query
+    filters$params <- series_filters$params
+    filters$query <- paste0(
+      filters$query,
+      " GROUP BY stats.player_id, players.canonical_name, stats.season",
+      " ORDER BY stats.season ASC, total_value DESC, players.canonical_name ASC"
+    )
 
     list(data = query_rows(conn, filters$query, filters$params))
   }, error = function(error) {
@@ -440,8 +558,6 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", se
     round <- parse_optional_int(round, "round", minimum = 1L, maximum = 30L)
     limit <- parse_limit(limit, default = 10L, maximum = 50L)
     stat <- validate_stat(conn, "player_period_stats", stat, default_stat = "goals")
-    search <- parse_search(search, name = "search")
-    normalized_search <- if (is.null(search)) NULL else normalize_player_search_name(search)
 
     query <- paste(
       "SELECT stats.player_id, players.canonical_name AS player_name, stats.squad_name,",
@@ -454,17 +570,9 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", se
       "WHERE stats.stat = ?stat"
     )
     filters <- apply_stat_filters(query, list(stat = stat), seasons, team_id, round, table_alias = "stats")
-    if (!is.null(search)) {
-      filters$query <- paste0(
-        filters$query,
-        " AND EXISTS (",
-        "SELECT 1 FROM player_aliases",
-        " WHERE player_aliases.player_id = stats.player_id",
-        " AND player_aliases.alias_search_name LIKE ?search",
-        ")"
-      )
-      filters$params$search <- paste0("%", normalized_search, "%")
-    }
+    search_filters <- apply_player_search_filter(filters$query, filters$params, search, "stats.player_id")
+    filters$query <- search_filters$query
+    filters$params <- search_filters$params
     filters$query <- paste0(
       filters$query,
       " GROUP BY stats.player_id, players.canonical_name, stats.squad_name, stats.season, stats.round_number, stats.match_id, matches.local_start_time",
