@@ -127,6 +127,17 @@ async function fetchJson(path, params = {}) {
   }
 }
 
+async function fetchOptionalJson(path, params = {}) {
+  try {
+    return await fetchJson(path, params);
+  } catch (error) {
+    return {
+      data: [],
+      error: error.message || "Optional request failed."
+    };
+  }
+}
+
 function formatNumber(value) {
   if (value === null || value === undefined || value === "") {
     return "-";
@@ -890,8 +901,6 @@ async function runQueries() {
       matchesPayload,
       teamLeadersPayload,
       playerLeadersPayload,
-      teamSeriesPayload,
-      playerSeriesPayload,
       teamHighsPayload,
       playerHighsPayload
     ] = await Promise.all([
@@ -908,17 +917,6 @@ async function runQueries() {
         search: state.filters.playerSearch,
         limit: state.filters.leadersLimit
       }),
-      fetchJson("/team-season-series", {
-        ...baseParams,
-        stat: state.filters.teamStat,
-        limit: TREND_SERIES_LIMIT
-      }),
-      fetchJson("/player-season-series", {
-        ...baseParams,
-        stat: state.filters.playerStat,
-        search: state.filters.playerSearch,
-        limit: TREND_SERIES_LIMIT
-      }),
       fetchJson("/team-game-highs", {
         ...baseParams,
         stat: state.filters.teamStat,
@@ -932,6 +930,22 @@ async function runQueries() {
       })
     ]);
 
+    const [teamSeriesPayload, playerSeriesPayload] = await Promise.all([
+      fetchOptionalJson("/team-season-series", {
+        ...baseParams,
+        stat: state.filters.teamStat,
+        limit: TREND_SERIES_LIMIT
+      }),
+      fetchOptionalJson("/player-season-series", {
+        ...baseParams,
+        stat: state.filters.playerStat,
+        search: state.filters.playerSearch,
+        limit: TREND_SERIES_LIMIT
+      })
+    ]);
+
+    const chartWarnings = [teamSeriesPayload.error, playerSeriesPayload.error].filter(Boolean);
+
     renderSummary(summary);
     renderMatches(matchesPayload.data || []);
     renderTeamLeaders(teamLeadersPayload.data || []);
@@ -940,7 +954,12 @@ async function runQueries() {
     renderPlayerCharts(playerLeadersPayload.data || [], playerSeriesPayload.data || []);
     renderTeamHighs(teamHighsPayload.data || []);
     renderPlayerHighs(playerHighsPayload.data || []);
-    showStatus("Query completed successfully.", "success");
+    showStatus(
+      chartWarnings.length
+        ? "Core stats loaded. Trend charts are temporarily unavailable while the API catches up."
+        : "Query completed successfully.",
+      chartWarnings.length ? "neutral" : "success"
+    );
     document.body.classList.add("is-ready");
   } catch (error) {
     showStatus(error.message || "The query failed.", "error");
