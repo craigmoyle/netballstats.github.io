@@ -34,7 +34,7 @@ remotes::install_github("craigmoyle/superNetballR_updated")
 Use the bundled `superNetballR` example data when you want to validate the site locally without calling Champion Data:
 
 ```sh
-cd /Users/craig/Git/netballstats.github.io
+cd /Users/craig/Git/netballstats
 NETBALL_STATS_SAMPLE=true Rscript scripts/build_database.R
 ```
 
@@ -43,7 +43,7 @@ NETBALL_STATS_SAMPLE=true Rscript scripts/build_database.R
 When you are on a machine with outbound internet access and valid Champion Data access, run:
 
 ```sh
-cd /Users/craig/Git/netballstats.github.io
+cd /Users/craig/Git/netballstats
 Rscript scripts/build_database.R
 ```
 
@@ -52,15 +52,21 @@ The database is written to `storage/netball_stats.sqlite` by default. Override t
 ### Run the API locally
 
 ```sh
-cd /Users/craig/Git/netballstats.github.io
+cd /Users/craig/Git/netballstats
 NETBALL_STATS_ALLOWED_ORIGINS=http://127.0.0.1:4173,http://localhost:4173 \
-Rscript -e "pr <- plumber::plumb('api/plumber.R'); pr$run(host = '127.0.0.1', port = 8000)"
+Rscript scripts/run_api.R
+```
+
+If you prefer the inline form, use single quotes so your shell does not expand `pr$run(...)`:
+
+```sh
+Rscript -e 'pr <- plumber::plumb("api/plumber.R"); pr$run(host = "127.0.0.1", port = 8000)'
 ```
 
 ### Serve the frontend locally
 
 ```sh
-cd /Users/craig/Git/netballstats.github.io
+cd /Users/craig/Git/netballstats
 python3 -m http.server 4173
 ```
 
@@ -116,7 +122,7 @@ To deploy:
 3. Set **`NETBALL_STATS_ALLOWED_ORIGINS`** to your actual frontend origins, for example:
 
 ```text
-https://your-project.pages.dev,https://netballstats.github.io
+https://your-project.pages.dev,https://netballstats.pages.dev
 ```
 
 Because the frontend config defaults to `https://netballstats-api.onrender.com`, the simplest path is to keep the Render service name as `netballstats-api`.

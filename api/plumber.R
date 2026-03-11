@@ -4,10 +4,39 @@ suppressPackageStartupMessages({
   library(RSQLite)
 })
 
-repo_root_path <- normalizePath(
-  Sys.getenv("NETBALL_STATS_REPO_ROOT", getwd()),
-  mustWork = FALSE
-)
+resolve_repo_root <- function() {
+  configured_root <- Sys.getenv("NETBALL_STATS_REPO_ROOT", "")
+  candidates <- unique(Filter(
+    nzchar,
+    c(
+      configured_root,
+      getwd(),
+      dirname(getwd())
+    )
+  ))
+
+  for (candidate in candidates) {
+    candidate <- normalizePath(candidate, mustWork = FALSE)
+
+    if (file.exists(file.path(candidate, "api", "R", "helpers.R"))) {
+      return(candidate)
+    }
+
+    if (
+      basename(candidate) == "api" &&
+      file.exists(file.path(candidate, "R", "helpers.R"))
+    ) {
+      return(dirname(candidate))
+    }
+  }
+
+  stop(
+    "Could not locate the repository root. Set NETBALL_STATS_REPO_ROOT explicitly.",
+    call. = FALSE
+  )
+}
+
+repo_root_path <- resolve_repo_root()
 options(netballstats.repo_root = repo_root_path)
 source(file.path(repo_root_path, "api", "R", "helpers.R"), local = TRUE)
 

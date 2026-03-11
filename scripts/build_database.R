@@ -57,6 +57,13 @@ match_not_found <- function(error) {
   inherits(error, "netball_match_not_found")
 }
 
+is_played_match_payload <- function(payload) {
+  is.list(payload) &&
+    is.list(payload$teamPeriodStats) &&
+    !is.null(payload$teamPeriodStats$team) &&
+    length(payload$teamPeriodStats$team) > 0
+}
+
 fetch_match_payload <- function(comp_id, round_number, game_number) {
   tryCatch(
     superNetballR::downloadMatch(as.character(comp_id), round_number, game_number),
@@ -105,6 +112,10 @@ collect_live_entries <- function(competitions) {
         payload <- fetch_match_payload(competition_id, round_number, game_number)
         if (match_not_found(payload)) {
           break
+        }
+
+        if (!is_played_match_payload(payload)) {
+          next
         }
 
         entry_index <- entry_index + 1L
