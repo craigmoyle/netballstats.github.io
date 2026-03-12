@@ -31,7 +31,6 @@ body {
   margin: 0;
   min-height: 100vh;
   position: relative;
-  overflow-x: hidden;
   background: linear-gradient(180deg, #091117 0%, #0b141b 38%, #111c25 100%);
   color: var(--text);
   font-family: var(--body-font);
@@ -117,6 +116,13 @@ code {
     radial-gradient(circle at top left, rgba(240, 198, 126, 0.16), transparent 40%),
     rgba(9, 17, 23, 0.85);
   backdrop-filter: blur(12px);
+}
+
+.hero-panel > *,
+.panel > *,
+.player-toolbar > *,
+.page-nav > * {
+  min-width: 0;
 }
 
 .eyebrow,
@@ -687,7 +693,10 @@ button:hover {
 }
 
 .table-wrapper {
+  max-width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
   border-radius: 22px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(9, 17, 23, 0.35);
@@ -892,12 +901,30 @@ tbody tr:hover {
 }
 
 .season-table {
-  min-width: 980px;
+  min-width: 860px;
+}
+
+.season-table td,
+.season-table th:first-child,
+.season-table th:nth-child(2),
+.season-table th:nth-child(3) {
+  white-space: nowrap;
+}
+
+.season-table th {
+  min-width: 7.25rem;
+  white-space: normal;
+  line-height: 1.1;
+  vertical-align: bottom;
+}
+
+.season-table td:nth-child(2) {
+  min-width: 10rem;
 }
 
 .season-table td,
 .season-table th {
-  white-space: nowrap;
+  word-break: normal;
 }
 
 .empty-state {
@@ -959,6 +986,22 @@ body.is-ready .reveal:nth-of-type(4) {
   .filter-summary {
     text-align: left;
   }
+
+  .player-toolbar {
+    align-items: stretch;
+  }
+
+  .player-toolbar .view-toggle {
+    width: 100%;
+  }
+
+  .player-toolbar .view-toggle .button {
+    flex: 1 1 0;
+  }
+
+  .season-table {
+    min-width: 760px;
+  }
 }
 
 @media (max-width: 640px) {
@@ -981,7 +1024,7 @@ body.is-ready .reveal:nth-of-type(4) {
   }
 
   table {
-    min-width: 480px;
+    min-width: 420px;
   }
 
   .view-toggle {
@@ -995,5 +1038,48 @@ body.is-ready .reveal:nth-of-type(4) {
   .chart-card,
   .chart-shell {
     padding: 0.85rem;
+  }
+
+  .page-nav {
+    gap: 0.5rem;
+  }
+
+  .page-nav__link {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .summary-card {
+    min-height: 126px;
+  }
+
+  .summary-card__value {
+    font-size: clamp(2.2rem, 10vw, 3rem);
+  }
+
+  .summary-card__value--small {
+    font-size: clamp(1.25rem, 6vw, 1.8rem);
+  }
+
+  .player-subtitle {
+    font-size: 0.88rem;
+  }
+
+  .season-table {
+    min-width: 680px;
+  }
+
+  .season-table th {
+    min-width: 6rem;
+    font-size: 0.84rem;
+  }
+
+  .season-table td,
+  .season-table th {
+    padding: 0.75rem 0.7rem;
+  }
+
+  .season-table td:nth-child(2) {
+    min-width: 8.5rem;
   }
 }
