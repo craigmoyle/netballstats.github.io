@@ -1,6 +1,7 @@
 const config = window.NETBALL_STATS_CONFIG || {};
 const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 12000;
+const SUPER_SHOT_START_SEASON = 2020;
 const PLAYER_STAT_DEFINITIONS = [
   ["netPoints", "NetPoints"],
   ["intercepts", "Intercepts"],
@@ -22,6 +23,10 @@ const PLAYER_STAT_DEFINITIONS = [
 ];
 const PLAYER_STAT_ORDER = PLAYER_STAT_DEFINITIONS.map(([key]) => key);
 const PLAYER_STAT_LABELS = new Map(PLAYER_STAT_DEFINITIONS);
+const LEGACY_STAT_ALIASES = new Map([
+  ["goal1", "goals"],
+  ["attempts1", "goalAttempts"]
+]);
 
 const state = {
   metric: "total",
@@ -115,19 +120,65 @@ function statLabel(statKey) {
   return PLAYER_STAT_LABELS.get(statKey) || statKey;
 }
 
-function selectedCareerStats(careerStats) {
-  const byStat = new Map((careerStats || []).map((entry) => [entry.stat, entry]));
+function statKeysForProfile(statKey) {
+  const legacyAlias = LEGACY_STAT_ALIASES.get(statKey);
+  return legacyAlias ? [statKey, legacyAlias] : [statKey];
+}
+
+function roundStatValue(value) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function normalizedSeasonStatMap(summary) {
+  const statMap = new Map((summary.stats || []).map((entry) => [entry.stat, entry]));
+  const season = Number(summary.season || 0);
+
+  if (season < SUPER_SHOT_START_SEASON) {
+    if (!statMap.has("goal1") && statMap.has("goals")) {
+      statMap.set("goal1", { ...statMap.get("goals"), stat: "goal1" });
+    }
+
+    if (!statMap.has("attempts1") && statMap.has("goalAttempts")) {
+      statMap.set("attempts1", { ...statMap.get("goalAttempts"), stat: "attempts1" });
+    }
+  }
+
+  return statMap;
+}
+
+function aggregateCareerStat(profile, statKey) {
+  const seasonEntries = (profile.season_summaries || [])
+    .map((summary) => normalizedSeasonStatMap(summary).get(statKey))
+    .filter(Boolean);
+
+  if (!seasonEntries.length) {
+    return null;
+  }
+
+  const totalValue = seasonEntries.reduce((sum, entry) => sum + Number(entry.total_value || 0), 0);
+  const matchesPlayed = seasonEntries.reduce((sum, entry) => sum + Number(entry.matches_played || 0), 0);
+
+  return {
+    stat: statKey,
+    total_value: roundStatValue(totalValue),
+    average_value: matchesPlayed > 0 ? roundStatValue(totalValue / matchesPlayed) : null,
+    matches_played: matchesPlayed
+  };
+}
+
+function selectedCareerStats(profile) {
   return PLAYER_STAT_ORDER
-    .filter((stat) => byStat.has(stat))
-    .map((stat) => byStat.get(stat));
+    .map((stat) => aggregateCareerStat(profile, stat))
+    .filter(Boolean);
 }
 
 function selectedStatsForProfile(profile) {
   const availableStats = new Set(profile.available_stats || []);
-  const careerStats = profile.career_stats || [];
+  const seasonSummaries = profile.season_summaries || [];
 
   return PLAYER_STAT_ORDER.filter((stat) =>
-    availableStats.has(stat) || careerStats.some((entry) => entry.stat === stat)
+    statKeysForProfile(stat).some((key) => availableStats.has(key)) ||
+    seasonSummaries.some((summary) => normalizedSeasonStatMap(summary).has(stat))
   );
 }
 
@@ -217,7 +268,7 @@ function renderSeasonTable(profile) {
   }
 
   seasonSummaries.forEach((summary) => {
-    const statMap = new Map((summary.stats || []).map((entry) => [entry.stat, entry]));
+    const statMap = normalizedSeasonStatMap(summary);
     const row = document.createElement("tr");
     row.className = "season-table__row";
     row.append(
@@ -253,7 +304,7 @@ function renderProfile(profile) {
 
   const playerName = profile.player?.canonical_name || profile.player?.player_name || "Unknown player";
   const overview = profile.overview || {};
-  const careerStats = selectedCareerStats(profile.career_stats || []);
+  const careerStats = selectedCareerStats(profile);
   const topCareerStat = careerStats
     .slice()
     .sort((left, right) => Number(right.total_value || 0) - Number(left.total_value || 0))[0];
