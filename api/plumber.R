@@ -852,23 +852,8 @@ function(question = "", limit = "12", res) {
       return(intent)
     }
 
-    seasons <- if (is.null(intent$season)) NULL else c(intent$season)
-    base_query <- build_player_match_query(
-      stat = intent$stat,
-      seasons = seasons,
-      player_id = intent$player_id,
-      opponent_id = intent$opponent_id,
-      comparison = intent$comparison,
-      threshold = intent$threshold
-    )
-
-    count_query <- paste0(
-      "SELECT COUNT(*) AS total_matches FROM (",
-      base_query$query,
-      ") AS performances"
-    )
-    total_matches <- as.integer(query_rows(conn, count_query, base_query$params)$total_matches[[1]] %||% 0L)
-
+    all_rows <- fetch_query_result_rows(conn, intent)
+    total_matches <- nrow(all_rows)
     order_direction <- if (identical(intent$intent_type, "lowest")) "ASC" else "DESC"
     row_limit <- if (identical(intent$intent_type, "count")) {
       min(intent$limit, 12L)
@@ -877,14 +862,11 @@ function(question = "", limit = "12", res) {
     } else {
       1L
     }
-
-    rows_query <- paste0(
-      base_query$query,
-      " ORDER BY total_value ", order_direction, ", season DESC, round_number DESC, player_name ASC LIMIT ?limit"
-    )
-    rows_params <- base_query$params
-    rows_params$limit <- row_limit
-    rows <- query_rows(conn, rows_query, rows_params)
+    rows <- if (nrow(all_rows)) {
+      all_rows[seq_len(min(nrow(all_rows), row_limit)), , drop = FALSE]
+    } else {
+      all_rows
+    }
 
     list(
       status = jsonlite::unbox("supported"),

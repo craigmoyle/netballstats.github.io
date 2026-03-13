@@ -1024,3 +1024,76 @@ build_query_answer <- function(intent, rows, total_matches) {
     filter_suffix
   )
 }
+
+available_match_seasons <- function(conn) {
+  query_rows(conn, "SELECT DISTINCT season FROM matches ORDER BY season DESC")$season
+}
+
+bind_query_result_rows <- function(rows_list) {
+  if (!length(rows_list)) {
+    return(data.frame())
+  }
+
+  non_empty <- Filter(function(rows) nrow(rows) > 0L, rows_list)
+  if (!length(non_empty)) {
+    return(rows_list[[1]][0, , drop = FALSE])
+  }
+  if (length(non_empty) == 1L) {
+    return(non_empty[[1]])
+  }
+
+  do.call(rbind, non_empty)
+}
+
+sort_query_result_rows <- function(rows, intent_type = "list") {
+  if (!nrow(rows)) {
+    return(rows)
+  }
+
+  rows$season <- suppressWarnings(as.integer(rows$season))
+  rows$round_number <- suppressWarnings(as.integer(rows$round_number))
+  rows$total_value <- suppressWarnings(as.numeric(rows$total_value))
+  rows$player_name <- as.character(rows$player_name)
+
+  order_index <- if (identical(intent_type, "lowest")) {
+    order(
+      rows$total_value,
+      -rows$season,
+      -rows$round_number,
+      rows$player_name,
+      na.last = TRUE
+    )
+  } else {
+    order(
+      -rows$total_value,
+      -rows$season,
+      -rows$round_number,
+      rows$player_name,
+      na.last = TRUE
+    )
+  }
+
+  rows[order_index, , drop = FALSE]
+}
+
+fetch_query_result_rows <- function(conn, intent) {
+  seasons_to_query <- if (!is.null(intent$season)) {
+    c(as.integer(intent$season))
+  } else {
+    available_match_seasons(conn)
+  }
+
+  rows_by_season <- lapply(seasons_to_query, function(season_value) {
+    base_query <- build_player_match_query(
+      stat = intent$stat,
+      seasons = c(as.integer(season_value)),
+      player_id = intent$player_id,
+      opponent_id = intent$opponent_id,
+      comparison = intent$comparison,
+      threshold = intent$threshold
+    )
+    query_rows(conn, base_query$query, base_query$params)
+  })
+
+  sort_query_result_rows(bind_query_result_rows(rows_by_season), intent$intent_type)
+}
