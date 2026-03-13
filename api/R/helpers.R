@@ -701,80 +701,55 @@ resolve_query_team <- function(conn, phrase) {
 }
 
 resolve_query_player <- function(conn, question) {
-  normalized_question <- normalize_player_search_name(question)
-  if (!nzchar(normalized_question)) {
+  normalized_phrase <- normalize_player_search_name(question)
+  if (!nzchar(normalized_phrase)) {
     return(NULL)
   }
 
-  alias_lookup <- query_rows(
+  direct_lookup <- query_rows(
     conn,
     paste(
-      "SELECT player_aliases.player_id, player_aliases.alias_name, player_aliases.alias_search_name,",
+      "SELECT DISTINCT players.player_id, player_aliases.alias_name, player_aliases.alias_search_name,",
       "players.canonical_name",
-      "FROM player_aliases",
-      "INNER JOIN players ON players.player_id = player_aliases.player_id",
+      "FROM players",
+      "LEFT JOIN player_aliases ON players.player_id = player_aliases.player_id",
+      "WHERE players.search_name LIKE ?search OR player_aliases.alias_search_name LIKE ?search",
       "ORDER BY players.canonical_name ASC"
-    )
+    ),
+    list(search = paste0("%", normalized_phrase, "%"))
   )
-  players <- query_rows(
-    conn,
-    "SELECT player_id, canonical_name, short_display_name FROM players ORDER BY canonical_name ASC"
-  )
-
-  derived_rows <- lapply(seq_len(nrow(players)), function(index) {
-    player <- players[index, , drop = FALSE]
-    tokens <- unlist(strsplit(as.character(player$canonical_name), "[^A-Za-z0-9]+"))
-    tokens <- tokens[nzchar(tokens)]
-    short_tokens <- unlist(strsplit(as.character(player$short_display_name), "[^A-Za-z0-9]+"))
-    short_tokens <- short_tokens[nzchar(short_tokens)]
-    aliases <- unique(c(
-      as.character(player$canonical_name),
-      as.character(player$short_display_name),
-      tokens,
-      short_tokens
-    ))
-    aliases <- aliases[nzchar(aliases)]
-
-    data.frame(
-      player_id = rep(player$player_id[[1]], length(aliases)),
-      alias_name = aliases,
-      alias_search_name = normalize_player_search_name(aliases),
-      canonical_name = rep(as.character(player$canonical_name[[1]]), length(aliases)),
-      stringsAsFactors = FALSE
-    )
-  })
-
-  lookup <- unique(rbind(alias_lookup, do.call(rbind, derived_rows)))
-  lookup <- lookup[nchar(lookup$alias_search_name) >= 3L, , drop = FALSE]
-  if (!nrow(lookup)) {
+  if (!nrow(direct_lookup)) {
     return(query_error_payload("unsupported", question, "No player lookup data is available."))
   }
 
-  matched <- lookup[
-    nzchar(lookup$alias_search_name) &
-      vapply(
-        lookup$alias_search_name,
-        grepl,
-        logical(1),
-        x = normalized_question,
-        fixed = TRUE
-      ),
-    ,
-    drop = FALSE
-  ]
+  direct_lookup$canonical_name <- as.character(direct_lookup$canonical_name)
+  direct_lookup$alias_search_name <- as.character(direct_lookup$alias_search_name)
+  direct_lookup$match_score <- ifelse(
+    direct_lookup$alias_search_name == normalized_phrase,
+    3L,
+    ifelse(
+      normalize_player_search_name(direct_lookup$canonical_name) == normalized_phrase,
+      3L,
+      ifelse(
+        grepl(normalized_phrase, direct_lookup$alias_search_name, fixed = TRUE) |
+          grepl(normalized_phrase, normalize_player_search_name(direct_lookup$canonical_name), fixed = TRUE),
+        2L,
+        1L
+      )
+    )
+  )
 
-  if (!nrow(matched)) {
+  best_score <- max(direct_lookup$match_score, na.rm = TRUE)
+  matched <- direct_lookup[direct_lookup$match_score == best_score, , drop = FALSE]
+  player_ids <- unique(matched$player_id[!is.na(matched$player_id)])
+  matched <- matched[!is.na(matched$player_id), , drop = FALSE]
+  if (!length(player_ids)) {
     return(query_error_payload(
       "unsupported",
       question,
       "I couldn't match a player name in that question."
     ))
   }
-
-  alias_lengths <- nchar(matched$alias_search_name)
-  longest <- max(alias_lengths)
-  matched <- matched[alias_lengths == longest, , drop = FALSE]
-  player_ids <- unique(matched$player_id)
   if (length(player_ids) > 1L) {
     return(query_error_payload(
       "ambiguous",
@@ -789,6 +764,32 @@ resolve_query_player <- function(conn, question) {
     player_id = as.integer(player_ids[[1]]),
     player_name = as.character(matched$canonical_name[[1]])
   )
+}
+
+extract_query_player_phrase <- function(question, intent_type) {
+  patterns <- switch(
+    intent_type,
+    count = c(
+      "(?i)^how many (?:times|matches) has\\s+(.+?)\\s+(?:scored|recorded|made|had|posted|notched|registered)\\b",
+      "(?i)^how many (?:times|matches) did\\s+(.+?)\\s+(?:score|record|make|have|post|notch|register)\\b"
+    ),
+    highest = c(
+      "(?i)^what is\\s+(.+?)(?:'s|’s)\\s+highest\\b"
+    ),
+    lowest = c(
+      "(?i)^what is\\s+(.+?)(?:'s|’s)\\s+lowest\\b"
+    ),
+    character()
+  )
+
+  for (pattern in patterns) {
+    captured <- extract_first_capture(question, pattern)
+    if (!is.null(captured)) {
+      return(captured)
+    }
+  }
+
+  NULL
 }
 
 parse_query_intent <- function(conn, question, limit = 12L) {
@@ -828,10 +829,15 @@ parse_query_intent <- function(conn, question, limit = 12L) {
   plural_list_query <- identical(intent_type, "list") &&
     grepl("^(which players|list players|show players|who)\\b", normalized_text)
 
+  player_search_phrase <- if (plural_list_query) {
+    NULL
+  } else {
+    extract_query_player_phrase(parsed_question, intent_type) %||% parsed_question
+  }
   player <- if (plural_list_query) {
     NULL
   } else {
-    resolve_query_player(conn, parsed_question)
+    resolve_query_player(conn, player_search_phrase)
   }
   if (is.list(player) && !is.null(player$status) && !identical(player$status, "supported")) {
     player$question <- parsed_question
