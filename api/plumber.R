@@ -304,7 +304,7 @@ function(res) {
 function(res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -332,7 +332,7 @@ function(res) {
 function(search = "", limit = "500", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -361,7 +361,7 @@ function(search = "", limit = "500", res) {
 
     list(data = query_rows(conn, query, params))
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 }
 
@@ -370,7 +370,7 @@ function(search = "", limit = "500", res) {
 function(player_id = "", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -406,7 +406,7 @@ function(player_id = "", res) {
 
     build_player_profile_payload(player, stats_rows)
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 }
 
@@ -415,7 +415,7 @@ function(player_id = "", res) {
 function(season = "", seasons = "", team_id = "", round = "", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -456,7 +456,7 @@ function(season = "", seasons = "", team_id = "", round = "", res) {
       build_mode = metadata_map[["build_mode"]] %||% "production"
     )
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 
   result
@@ -467,7 +467,7 @@ function(season = "", seasons = "", team_id = "", round = "", res) {
 function(season = "", seasons = "", team_id = "", round = "", limit = "12", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -491,7 +491,7 @@ function(season = "", seasons = "", team_id = "", round = "", limit = "12", res)
 
     list(data = query_rows(conn, filters$query, filters$params))
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 }
 
@@ -500,7 +500,7 @@ function(season = "", seasons = "", team_id = "", round = "", limit = "12", res)
 function(season = "", seasons = "", team_id = "", round = "", stat = "goals", metric = "total", limit = "8", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -529,7 +529,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", me
     rows <- query_rows(conn, filters$query, filters$params)
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 }
 
@@ -538,7 +538,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", me
 function(season = "", seasons = "", team_id = "", round = "", stat = "goals", search = "", metric = "total", limit = "12", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -564,7 +564,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", se
 
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 }
 
@@ -573,7 +573,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", se
 function(season = "", seasons = "", round = "", stat = "goals", metric = "total", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -598,7 +598,7 @@ function(season = "", seasons = "", round = "", stat = "goals", metric = "total"
     rows <- query_rows(conn, filters$query, filters$params)
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 }
 
@@ -607,7 +607,7 @@ function(season = "", seasons = "", round = "", stat = "goals", metric = "total"
 function(season = "", seasons = "", team_id = "", round = "", stat = "goals", metric = "total", limit = "10", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -668,7 +668,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", me
     rows <- query_rows(conn, filters$query, filters$params)
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 }
 
@@ -677,7 +677,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", me
 function(season = "", seasons = "", team_id = "", round = "", stat = "goals", search = "", metric = "total", limit = "10", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -706,7 +706,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", se
 
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 }
 
@@ -715,7 +715,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", se
 function(season = "", seasons = "", team_id = "", round = "", stat = "goals", limit = "10", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -745,7 +745,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", li
 
     list(data = query_rows(conn, filters$query, filters$params))
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 }
 
@@ -754,7 +754,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", li
 function(season = "", seasons = "", team_id = "", round = "", stat = "goals", search = "", limit = "10", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -774,7 +774,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", se
       limit = limit
     ))
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 }
 
@@ -783,7 +783,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "goals", se
 function(question = "", limit = "12", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(json_error(res, 503, conditionMessage(conn)))
+    return({ message("[API] DB connection error: ", conditionMessage(conn)); json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.") })
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -837,6 +837,6 @@ function(question = "", limit = "12", res) {
       rows = rows_to_records(rows)
     )
   }, error = function(error) {
-    json_error(res, 400, conditionMessage(error))
+    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
   })
 }
