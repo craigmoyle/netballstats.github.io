@@ -10,10 +10,6 @@
   x
 }
 
-default_sqlite_db_path <- function(base_path) {
-  normalizePath(file.path(base_path, "storage", "netball_stats.sqlite"), mustWork = FALSE)
-}
-
 database_url <- function() {
   trimws(Sys.getenv("NETBALL_STATS_DATABASE_URL", Sys.getenv("DATABASE_URL", "")))
 }
@@ -45,19 +41,7 @@ postgres_statement_timeout_ms <- function() {
 }
 
 database_backend <- function() {
-  configured <- tolower(trimws(Sys.getenv("NETBALL_STATS_DB_BACKEND", "")))
-  if (configured %in% c("postgres", "postgresql")) {
-    return("postgres")
-  }
-  if (configured == "sqlite") {
-    return("sqlite")
-  }
-
-  if (nzchar(database_url()) || nzchar(Sys.getenv("NETBALL_STATS_DB_HOST", ""))) {
-    return("postgres")
-  }
-
-  "sqlite"
+  "postgres"
 }
 
 parse_database_url <- function(url) {
@@ -116,29 +100,12 @@ postgres_connection_args <- function() {
   connection_args
 }
 
-database_target_description <- function(default_sqlite_path) {
-  if (database_backend() == "postgres") {
-    args <- postgres_connection_args()
-    sprintf("postgresql://%s:%s/%s", args$host, args$port, args$dbname)
-  } else {
-    default_sqlite_path
-  }
+database_target_description <- function() {
+  args <- postgres_connection_args()
+  sprintf("postgresql://%s:%s/%s", args$host, args$port, args$dbname)
 }
 
-open_database_connection <- function(default_sqlite_path, require_existing_sqlite = TRUE) {
-  if (database_backend() == "postgres") {
-    args <- postgres_connection_args()
-    return(do.call(DBI::dbConnect, c(list(drv = RPostgres::Postgres()), args)))
-  }
-
-  if (require_existing_sqlite && !file.exists(default_sqlite_path)) {
-    stop(
-      "Database file not found at ",
-      default_sqlite_path,
-      ". Run scripts/build_database.R first.",
-      call. = FALSE
-    )
-  }
-
-  DBI::dbConnect(RSQLite::SQLite(), default_sqlite_path)
+open_database_connection <- function() {
+  args <- postgres_connection_args()
+  do.call(DBI::dbConnect, c(list(drv = RPostgres::Postgres()), args))
 }

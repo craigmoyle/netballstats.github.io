@@ -9,8 +9,6 @@ services:
     envVars:
       - key: NETBALL_STATS_REPO_ROOT
         value: /opt/render/project/src
-      - key: NETBALL_STATS_DB
-        value: /opt/render/project/src/storage/netball_stats.sqlite
       - key: NETBALL_STATS_HOST
         value: 0.0.0.0
       - key: NETBALL_STATS_PORT

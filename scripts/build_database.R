@@ -20,10 +20,9 @@ repo_root_path <- normalizePath(file.path(dirname(script_path()), ".."), mustWor
 source(file.path(repo_root_path, "R", "database.R"), local = TRUE)
 source(file.path(repo_root_path, "api", "R", "helpers.R"), local = TRUE)
 config_path <- file.path(repo_root_path, "config", "competitions.csv")
-db_path <- Sys.getenv("NETBALL_STATS_DB", default_sqlite_db_path(repo_root_path))
 sample_mode <- identical(tolower(Sys.getenv("NETBALL_STATS_SAMPLE", "false")), "true")
 
-if (database_backend() == "postgres" && !nzchar(Sys.getenv("NETBALL_STATS_DB_STATEMENT_TIMEOUT_MS", ""))) {
+if (!nzchar(Sys.getenv("NETBALL_STATS_DB_STATEMENT_TIMEOUT_MS", ""))) {
   Sys.setenv(NETBALL_STATS_DB_STATEMENT_TIMEOUT_MS = "0")
 }
 
@@ -358,10 +357,6 @@ validate_db_identifier <- function(value, name) {
 }
 
 configure_postgres_api_user <- function(conn) {
-  if (database_backend() != "postgres") {
-    return(invisible(NULL))
-  }
-
   api_username <- trimws(Sys.getenv("NETBALL_STATS_API_DB_USERNAME", ""))
   api_password <- Sys.getenv("NETBALL_STATS_API_DB_PASSWORD", "")
   if (!nzchar(api_username) && !nzchar(api_password)) {
@@ -407,15 +402,8 @@ configure_postgres_api_user <- function(conn) {
   )
 }
 
-write_database <- function(tables, db_path, build_mode) {
-  if (database_backend() == "sqlite") {
-    dir.create(dirname(db_path), recursive = TRUE, showWarnings = FALSE)
-    if (file.exists(db_path)) {
-      file.remove(db_path)
-    }
-  }
-
-  conn <- open_database_connection(db_path, require_existing_sqlite = FALSE)
+write_database <- function(tables, build_mode) {
+  conn <- open_database_connection()
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
   DBI::dbWithTransaction(conn, {
@@ -466,10 +454,10 @@ write_database <- function(tables, db_path, build_mode) {
 
     configure_postgres_api_user(conn)
 
-    # Update planner statistics so the query optimiser uses accurate row estimates
-    # on freshly populated tables rather than PostgreSQL defaults.
-    if (database_backend() == "postgres") {
-      DBI::dbExecute(conn, "ANALYZE")
+    # Analyse only our tables (system catalogs require superuser; skip them).
+    for (tbl in c("competitions", "matches", "teams", "players", "player_aliases",
+                  "team_period_stats", "player_period_stats", "metadata")) {
+      DBI::dbExecute(conn, paste0("ANALYZE ", DBI::dbQuoteIdentifier(conn, tbl)))
     }
   })
 }
@@ -487,5 +475,5 @@ if (!length(entries)) {
 }
 
 tables <- prepare_match_tables(entries, competitions)
-invisible(write_database(tables, db_path, if (sample_mode) "sample" else "production"))
-message(sprintf("Database written to %s with %s matches.", database_target_description(db_path), nrow(tables$matches)))
+invisible(write_database(tables, if (sample_mode) "sample" else "production"))
+message(sprintf("Database written to %s with %s matches.", database_target_description(), nrow(tables$matches)))

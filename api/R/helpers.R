@@ -119,12 +119,8 @@ QUERY_SUPPORTED_EXAMPLES <- c(
   "Which players scored 40+ goals in 2025?"
 )
 
-default_db_path <- function() {
-  default_sqlite_db_path(repo_root())
-}
-
 open_db <- function() {
-  open_database_connection(default_db_path(), require_existing_sqlite = TRUE)
+  open_database_connection()
 }
 
 json_error <- function(res, status, message) {

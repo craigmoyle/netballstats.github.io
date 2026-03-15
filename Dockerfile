@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
   && rm -rf /var/lib/apt/lists/*
 
-RUN R -q -e "required <- c('DBI','RPostgres','RSQLite','dplyr','httr','jsonlite','plumber','purrr','remotes','tidyr'); install.packages(required, repos='https://cloud.r-project.org'); missing <- setdiff(required, rownames(installed.packages())); if (length(missing)) stop(sprintf('Missing R packages after install: %s', paste(missing, collapse=', ')))" \
+RUN R -q -e "required <- c('DBI','RPostgres','dplyr','httr','jsonlite','plumber','purrr','remotes','tidyr'); install.packages(required, repos='https://cloud.r-project.org'); missing <- setdiff(required, rownames(installed.packages())); if (length(missing)) stop(sprintf('Missing R packages after install: %s', paste(missing, collapse=', ')))" \
   && R -q -e "remotes::install_github('craigmoyle/superNetballR_updated@9898d3a03332a7402b1c3abb50493c50ac07d549')"
 
 WORKDIR /opt/render/project/src
@@ -21,12 +21,8 @@ WORKDIR /opt/render/project/src
 COPY . .
 
 ENV NETBALL_STATS_REPO_ROOT=/opt/render/project/src
-ENV NETBALL_STATS_DB=/opt/render/project/src/storage/netball_stats.sqlite
 ENV NETBALL_STATS_HOST=0.0.0.0
 ENV NETBALL_STATS_PORT=10000
-
-RUN mkdir -p /opt/render/project/src/storage \
-  && Rscript scripts/build_database.R
 
 RUN useradd -u 1000 -m -s /bin/false netballstats \
   && chown -R netballstats:netballstats /opt/render/project/src

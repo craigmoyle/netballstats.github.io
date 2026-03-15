@@ -78,7 +78,7 @@ request_limiter <- local({
 })
 
 #* @apiTitle Netball Stats API
-#* @apiDescription Read-only Super Netball statistics API backed by a SQLite or PostgreSQL database built with superNetballR.
+#* @apiDescription Read-only Super Netball statistics API backed by a PostgreSQL database built with superNetballR.
 
 #* @filter security_headers
 function(req, res) {

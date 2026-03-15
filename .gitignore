@@ -4,9 +4,3 @@
 .env
 .env.*
 dist/
-*.sqlite
-*.sqlite-journal
-*.sqlite-shm
-*.sqlite-wal
-storage/*
-!storage/.gitkeep

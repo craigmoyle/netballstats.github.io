@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install CRAN packages as pre-built binaries from Posit Package Manager (Ubuntu 24.04 Noble).
 # Binary packages skip all source compilation, cutting install time from ~7 min to ~30 s.
-# RSQLite is omitted — Azure deployment uses PostgreSQL (RPostgres) only.
+# Azure deployment uses PostgreSQL (RPostgres) only.
 RUN R -q -e " \
   options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
   required <- c('DBI','RPostgres','dplyr','httr','jsonlite','plumber','purrr','remotes','tidyr'); \
