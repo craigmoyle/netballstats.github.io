@@ -4,11 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Netball Stats Database</title>
-    <meta name="description" content="Super Netball statistics explorer for leaders, match results, and single-game highs.">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; script-src 'self'; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://netballstats-api.onrender.com http://127.0.0.1:8000 http://localhost:8000; base-uri 'none'; frame-ancestors 'none'; form-action 'none'">
+    <meta name="description" content="Super Netball statistics archive — leaders, season totals, and historical records from every season.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Teko:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="assets/styles.css">
-    <script src="assets/config.js"></script>
+    <script defer src="assets/config.js"></script>
     <script defer src="assets/app.js"></script>
   </head>
   <body>
@@ -24,34 +25,13 @@
           <p class="eyebrow">Super Netball archive</p>
           <h1>Super Netball statistical archive for leaders, records, and seasons.</h1>
           <p class="intro-copy">
-            Compare seasons side by side, widen the leaderboard, and surface the biggest
-            single-game spikes in one fast stats workspace.
+            Explore leaders, season totals, and historical records across every Super Netball season.
           </p>
           <div class="hero-pills" aria-label="Feature highlights">
-            <span class="hero-pill">Multi-season filters</span>
-            <span class="hero-pill">Single-game highs</span>
-            <span class="hero-pill">Query-depth controls</span>
             <a class="hero-pill hero-pill--link" href="/players/">Player profiles</a>
             <a class="hero-pill hero-pill--link" href="/query/">Ask the stats</a>
           </div>
         </div>
-
-        <aside class="hero-aside" aria-label="Explorer status">
-          <div class="hero-aside__card">
-            <span class="hero-aside__label">Explorer mode</span>
-            <strong>Live query board</strong>
-            <p>Built for rapid comparison, historical leaderboard checks, and one-game record hunting.</p>
-          </div>
-          <div class="hero-meta">
-            <div class="meta-pill">
-              <span>API</span>
-              <code id="api-base">/api</code>
-            </div>
-            <div class="meta-pill">
-              <span id="season-summary">Loading seasons…</span>
-            </div>
-          </div>
-        </aside>
       </section>
     </header>
 
@@ -67,19 +47,6 @@
         </div>
 
         <form id="filters-form" class="filters" novalidate>
-          <div class="field field--wide field--season-block">
-            <div class="field__label-row">
-              <span class="field-label">Seasons</span>
-              <div class="season-actions" role="group" aria-label="Season quick actions">
-                <button type="button" class="button button--ghost button--small" data-season-action="latest">Latest</button>
-                <button type="button" class="button button--ghost button--small" data-season-action="all">All</button>
-                <button type="button" class="button button--ghost button--small" data-season-action="clear">Clear</button>
-              </div>
-            </div>
-            <div id="season-choices" class="season-choices" role="group" aria-label="Season choices"></div>
-            <small class="field-hint">Pick one season for a focused snapshot or stack several for all-time comparisons.</small>
-          </div>
-
           <div class="field">
             <label for="team-id">Team</label>
             <select id="team-id" name="team-id"></select>
@@ -108,39 +75,6 @@
             <input id="player-search" name="player-search" type="search" maxlength="80" placeholder="e.g. Fowler, Harten, Koenen">
             <small class="field-hint">Historical surname changes still resolve to the same player record.</small>
           </div>
-          <div class="field">
-            <label for="matches-limit">Match rows</label>
-            <select id="matches-limit" name="matches-limit">
-              <option value="5">5</option>
-              <option value="10">10</option>
-              <option value="12" selected>12</option>
-              <option value="20">20</option>
-              <option value="30">30</option>
-              <option value="50">50</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="leaders-limit">Leaderboard rows</label>
-            <select id="leaders-limit" name="leaders-limit">
-              <option value="5">5</option>
-              <option value="8">8</option>
-              <option value="10" selected>10</option>
-              <option value="15">15</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="highs-limit">Game-high rows</label>
-            <select id="highs-limit" name="highs-limit">
-              <option value="5">5</option>
-              <option value="10" selected>10</option>
-              <option value="15">15</option>
-              <option value="25">25</option>
-              <option value="50">50</option>
-            </select>
-          </div>
-
           <div class="filter-actions field--wide">
             <button type="submit">Run query</button>
             <button type="button" id="reset-filters" class="button button--ghost">Reset</button>
@@ -342,56 +276,6 @@
           </div>
         </section>
 
-        <section class="panel results-panel reveal">
-          <div class="panel__heading panel__heading--split">
-            <div>
-              <p class="kicker">Team game records</p>
-              <h2>Highest single-match team totals</h2>
-            </div>
-            <p class="muted">Identify the highest single-match team outputs in the archive.</p>
-          </div>
-          <div class="table-wrapper">
-            <table id="team-highs-table">
-              <thead>
-                <tr>
-                  <th scope="col">Rank</th>
-                  <th scope="col">Team</th>
-                  <th scope="col">Opponent</th>
-                  <th scope="col">Season</th>
-                  <th scope="col">Round</th>
-                  <th scope="col">Total</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </section>
-
-        <section class="panel results-panel reveal">
-          <div class="panel__heading panel__heading--split">
-            <div>
-              <p class="kicker">Player game records</p>
-              <h2>Highest single-match player totals</h2>
-            </div>
-            <p class="muted">Identify the highest single-match player performances in the archive.</p>
-          </div>
-          <div class="table-wrapper">
-            <table id="player-highs-table">
-              <thead>
-                <tr>
-                  <th scope="col">Rank</th>
-                  <th scope="col">Player</th>
-                  <th scope="col">Team</th>
-                  <th scope="col">Opponent</th>
-                  <th scope="col">Season</th>
-                  <th scope="col">Round</th>
-                  <th scope="col">Total</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </section>
       </section>
     </main>
   </body>
