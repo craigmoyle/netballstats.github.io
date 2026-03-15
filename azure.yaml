@@ -5,6 +5,29 @@ infra:
   provider: bicep
   path: infra
   module: main
+hooks:
+  postdeploy:
+    shell: sh
+    run: |
+      # After deploying the API, sync the refresh job images to match.
+      # DB_REFRESH_JOB_SAT_NAME and DB_REFRESH_JOB_SUN_NAME come from
+      # Bicep outputs, surfaced as env vars by azd.
+      API_IMAGE=$(az containerapp show \
+        --name "$(az containerapp list \
+          --resource-group "$AZURE_RESOURCE_GROUP" \
+          --query "[?tags.\"azd-service-name\"=='api'].name | [0]" \
+          --output tsv)" \
+        --resource-group "$AZURE_RESOURCE_GROUP" \
+        --query "properties.template.containers[0].image" \
+        --output tsv)
+      az containerapp job update \
+        --name "$DB_REFRESH_JOB_SAT_NAME" \
+        --resource-group "$AZURE_RESOURCE_GROUP" \
+        --image "$API_IMAGE"
+      az containerapp job update \
+        --name "$DB_REFRESH_JOB_SUN_NAME" \
+        --resource-group "$AZURE_RESOURCE_GROUP" \
+        --image "$API_IMAGE"
 services:
   web:
     project: .

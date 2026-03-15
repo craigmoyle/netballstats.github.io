@@ -94,6 +94,8 @@ var postgresServerName = take('${normalizedPrefix}-${resourceToken}-pg', 63)
 var staticWebAppName = take('${namePrefix}-web-${resourceToken}', 40)
 var containerEnvironmentName = take('${namePrefix}-aca-env-${resourceToken}', 32)
 var containerAppName = take('${namePrefix}-api-${resourceToken}', 32)
+var dbRefreshJobSatName = take('${namePrefix}-db-sat-${resourceToken}', 32)
+var dbRefreshJobSunName = take('${namePrefix}-db-sun-${resourceToken}', 32)
 var keyVaultName = take('${normalizedPrefix}-${resourceToken}-kv', 24)
 var workspaceName = take('${namePrefix}-logs-${resourceToken}', 63)
 var userAssignedIdentityName = take('${namePrefix}-api-mi-${resourceToken}', 64)
@@ -419,6 +421,171 @@ resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
   ]
 }
 
+// Shared environment variable list for both database refresh jobs.
+// Jobs connect as the admin user (write access required for full rebuild).
+var dbRefreshEnv = [
+  {
+    name: 'NETBALL_STATS_REPO_ROOT'
+    value: '/app'
+  }
+  {
+    name: 'NETBALL_STATS_DB_BACKEND'
+    value: 'postgres'
+  }
+  {
+    name: 'NETBALL_STATS_DB_HOST'
+    value: postgresServer.properties.fullyQualifiedDomainName
+  }
+  {
+    name: 'NETBALL_STATS_DB_PORT'
+    value: '5432'
+  }
+  {
+    name: 'NETBALL_STATS_DB_NAME'
+    value: postgresDatabaseName
+  }
+  {
+    name: 'NETBALL_STATS_DB_USER'
+    value: postgresAdminUsername
+  }
+  {
+    name: 'NETBALL_STATS_DB_PASSWORD'
+    secretRef: 'postgres-admin-password'
+  }
+  {
+    name: 'NETBALL_STATS_DB_SSLMODE'
+    value: 'require'
+  }
+  {
+    name: 'NETBALL_STATS_DB_STATEMENT_TIMEOUT_MS'
+    value: '0'
+  }
+]
+
+// Saturday 21:00 AEST (UTC+10) = 11:00 UTC
+resource dbRefreshJobSat 'Microsoft.App/jobs@2025-02-02-preview' = {
+  name: dbRefreshJobSatName
+  location: location
+  tags: tags
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${userAssignedIdentity.id}': {}
+    }
+  }
+  properties: {
+    environmentId: containerEnvironment.id
+    configuration: {
+      triggerType: 'Schedule'
+      scheduleTriggerConfig: {
+        cronExpression: '0 11 * * 6'
+        replicaCompletionCount: 1
+        parallelism: 1
+      }
+      replicaTimeout: 3600
+      replicaRetryLimit: 1
+      registries: [
+        {
+          identity: userAssignedIdentity.id
+          server: containerRegistry.properties.loginServer
+        }
+      ]
+      secrets: [
+        {
+          name: 'postgres-admin-password'
+          identity: userAssignedIdentity.id
+          keyVaultUrl: postgresAdminPasswordSecret.properties.secretUriWithVersion
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'db-refresh'
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          command: [
+            'Rscript'
+            'scripts/build_database.R'
+          ]
+          env: dbRefreshEnv
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+        }
+      ]
+    }
+  }
+  dependsOn: [
+    acrPullAssignment
+    keyVaultSecretsUserAssignment
+    postgresDatabase
+    postgresFirewallRule
+  ]
+}
+
+// Sunday 18:00 AEST (UTC+10) = 08:00 UTC
+resource dbRefreshJobSun 'Microsoft.App/jobs@2025-02-02-preview' = {
+  name: dbRefreshJobSunName
+  location: location
+  tags: tags
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${userAssignedIdentity.id}': {}
+    }
+  }
+  properties: {
+    environmentId: containerEnvironment.id
+    configuration: {
+      triggerType: 'Schedule'
+      scheduleTriggerConfig: {
+        cronExpression: '0 8 * * 0'
+        replicaCompletionCount: 1
+        parallelism: 1
+      }
+      replicaTimeout: 3600
+      replicaRetryLimit: 1
+      registries: [
+        {
+          identity: userAssignedIdentity.id
+          server: containerRegistry.properties.loginServer
+        }
+      ]
+      secrets: [
+        {
+          name: 'postgres-admin-password'
+          identity: userAssignedIdentity.id
+          keyVaultUrl: postgresAdminPasswordSecret.properties.secretUriWithVersion
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'db-refresh'
+          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          command: [
+            'Rscript'
+            'scripts/build_database.R'
+          ]
+          env: dbRefreshEnv
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+        }
+      ]
+    }
+  }
+  dependsOn: [
+    acrPullAssignment
+    keyVaultSecretsUserAssignment
+    postgresDatabase
+    postgresFirewallRule
+  ]
+}
+
 resource staticWebApp 'Microsoft.Web/staticSites@2025-03-01' = {
   name: staticWebAppName
   location: staticWebAppLocation
@@ -456,3 +623,5 @@ output postgresServerFqdn string = postgresServer.properties.fullyQualifiedDomai
 output postgresDatabase string = postgresDatabaseName
 output postgresAdminSecretUri string = postgresAdminPasswordSecret.properties.secretUriWithVersion
 output postgresApiUser string = postgresApiUsername
+output dbRefreshJobSatName string = dbRefreshJobSat.name
+output dbRefreshJobSunName string = dbRefreshJobSun.name

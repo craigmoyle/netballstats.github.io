@@ -137,3 +137,5 @@ output postgresServerFqdn string = appStack.outputs.postgresServerFqdn
 output postgresDatabase string = appStack.outputs.postgresDatabase
 output postgresAdminSecretUri string = appStack.outputs.postgresAdminSecretUri
 output postgresApiUser string = appStack.outputs.postgresApiUser
+output dbRefreshJobSatName string = appStack.outputs.dbRefreshJobSatName
+output dbRefreshJobSunName string = appStack.outputs.dbRefreshJobSunName
