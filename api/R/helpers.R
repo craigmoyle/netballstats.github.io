@@ -1084,6 +1084,14 @@ available_match_seasons <- function(conn) {
   query_rows(conn, "SELECT DISTINCT season FROM matches ORDER BY season DESC")$season
 }
 
+requested_or_available_seasons <- function(conn, seasons = NULL) {
+  if (!is.null(seasons) && length(seasons)) {
+    return(unique(as.integer(seasons)))
+  }
+
+  available_match_seasons(conn)
+}
+
 bind_query_result_rows <- function(rows_list) {
   if (!length(rows_list)) {
     return(data.frame())
@@ -1129,6 +1137,161 @@ sort_query_result_rows <- function(rows, intent_type = "list") {
   }
 
   rows[order_index, , drop = FALSE]
+}
+
+fetch_player_season_metric_rows <- function(conn, seasons = NULL, team_id = NULL, round = NULL, stat = "goals", search = "") {
+  seasons_to_query <- requested_or_available_seasons(conn, seasons)
+  rows_by_season <- lapply(seasons_to_query, function(season_value) {
+    query <- paste(
+      "SELECT stats.player_id, players.canonical_name AS player_name, MAX(stats.squad_name) AS squad_name,",
+      "stats.season, ?stat AS stat, ROUND(CAST(SUM(stats.value_number) AS numeric), 2) AS total_value,",
+      "COUNT(DISTINCT stats.match_id) AS matches_played,",
+      "ROUND(CAST(SUM(stats.value_number) AS numeric) / NULLIF(COUNT(DISTINCT stats.match_id), 0), 2) AS average_value",
+      "FROM player_period_stats AS stats",
+      "INNER JOIN players ON players.player_id = stats.player_id",
+      "WHERE stats.stat = ?stat"
+    )
+    filters <- apply_stat_filters(
+      query,
+      list(stat = stat),
+      seasons = c(as.integer(season_value)),
+      team_id = team_id,
+      round_number = round,
+      table_alias = "stats"
+    )
+    search_filters <- apply_player_search_filter(filters$query, filters$params, search, "stats.player_id")
+    filters$query <- search_filters$query
+    filters$params <- search_filters$params
+    filters$query <- paste0(
+      filters$query,
+      " GROUP BY stats.player_id, players.canonical_name, stats.season"
+    )
+
+    query_rows(conn, filters$query, filters$params)
+  })
+
+  bind_query_result_rows(rows_by_season)
+}
+
+summarize_player_metric_rows <- function(rows) {
+  if (!nrow(rows)) {
+    return(rows)
+  }
+
+  rows$player_id <- suppressWarnings(as.integer(rows$player_id))
+  rows$player_name <- as.character(rows$player_name)
+  rows$squad_name <- as.character(rows$squad_name)
+  rows$season <- suppressWarnings(as.integer(rows$season))
+  rows$total_value <- suppressWarnings(as.numeric(rows$total_value))
+  rows$matches_played <- suppressWarnings(as.integer(rows$matches_played))
+
+  group_keys <- interaction(
+    as.character(rows$player_id),
+    rows$player_name,
+    drop = TRUE,
+    lex.order = TRUE
+  )
+
+  combined_rows <- lapply(split(seq_len(nrow(rows)), group_keys), function(indices) {
+    part <- rows[indices, , drop = FALSE]
+    latest_index <- order(-part$season, part$squad_name, na.last = TRUE)[[1]]
+    total_value <- round(sum(part$total_value, na.rm = TRUE), 2)
+    matches_played <- sum(part$matches_played, na.rm = TRUE)
+
+    data.frame(
+      player_id = part$player_id[[1]],
+      player_name = part$player_name[[1]],
+      squad_name = part$squad_name[[latest_index]],
+      stat = part$stat[[1]],
+      total_value = total_value,
+      matches_played = matches_played,
+      average_value = round(total_value / ifelse(matches_played == 0, NA_real_, matches_played), 2),
+      stringsAsFactors = FALSE
+    )
+  })
+
+  combined <- do.call(rbind, combined_rows)
+  rownames(combined) <- NULL
+  combined
+}
+
+sort_player_leader_rows <- function(rows, metric = "total") {
+  if (!nrow(rows)) {
+    return(rows)
+  }
+
+  order_column <- if (identical(metric, "average")) "average_value" else "total_value"
+  rows$total_value <- suppressWarnings(as.numeric(rows$total_value))
+  rows$average_value <- suppressWarnings(as.numeric(rows$average_value))
+  rows$player_name <- as.character(rows$player_name)
+
+  rows[order(-rows[[order_column]], rows$player_name, na.last = TRUE), , drop = FALSE]
+}
+
+top_player_ids_from_series_rows <- function(rows, metric = "total", limit = 10L) {
+  if (!nrow(rows)) {
+    return(integer())
+  }
+
+  summarized <- summarize_player_metric_rows(rows)
+  ranked <- sort_player_leader_rows(summarized, metric)
+  head(as.integer(ranked$player_id), limit)
+}
+
+sort_player_series_rows <- function(rows, metric = "total") {
+  if (!nrow(rows)) {
+    return(rows)
+  }
+
+  order_column <- if (identical(metric, "average")) "average_value" else "total_value"
+  rows$season <- suppressWarnings(as.integer(rows$season))
+  rows$total_value <- suppressWarnings(as.numeric(rows$total_value))
+  rows$average_value <- suppressWarnings(as.numeric(rows$average_value))
+  rows$player_name <- as.character(rows$player_name)
+
+  rows[order(rows$season, -rows[[order_column]], rows$player_name, na.last = TRUE), , drop = FALSE]
+}
+
+fetch_player_game_high_rows <- function(conn, seasons = NULL, team_id = NULL, round = NULL, stat = "goals", search = "", limit = 10L) {
+  seasons_to_query <- requested_or_available_seasons(conn, seasons)
+  rows_by_season <- lapply(seasons_to_query, function(season_value) {
+    query <- paste(
+      "SELECT stats.player_id, players.canonical_name AS player_name, stats.squad_name,",
+      "MAX(CASE WHEN matches.home_squad_id = stats.squad_id THEN matches.away_squad_name ELSE matches.home_squad_name END) AS opponent,",
+      "stats.season, stats.round_number, stats.match_id, matches.local_start_time,",
+      "?stat AS stat, ROUND(CAST(SUM(stats.value_number) AS numeric), 2) AS total_value",
+      "FROM player_period_stats AS stats",
+      "INNER JOIN players ON players.player_id = stats.player_id",
+      "INNER JOIN matches ON matches.match_id = stats.match_id",
+      "WHERE stats.stat = ?stat"
+    )
+    filters <- apply_stat_filters(
+      query,
+      list(stat = stat),
+      seasons = c(as.integer(season_value)),
+      team_id = team_id,
+      round_number = round,
+      table_alias = "stats"
+    )
+    search_filters <- apply_player_search_filter(filters$query, filters$params, search, "stats.player_id")
+    filters$query <- search_filters$query
+    filters$params <- search_filters$params
+    filters$query <- paste0(
+      filters$query,
+      " GROUP BY stats.player_id, players.canonical_name, stats.squad_name, stats.season, stats.round_number, stats.match_id, matches.local_start_time",
+      " ORDER BY total_value DESC, stats.round_number DESC, players.canonical_name ASC LIMIT ?limit"
+    )
+    filters$params$limit <- limit
+
+    query_rows(conn, filters$query, filters$params)
+  })
+
+  rows <- sort_query_result_rows(bind_query_result_rows(rows_by_season), "list")
+  if (!nrow(rows)) {
+    return(rows)
+  }
+
+  rows[seq_len(min(nrow(rows), limit)), , drop = FALSE]
 }
 
 fetch_query_result_rows <- function(conn, intent) {
