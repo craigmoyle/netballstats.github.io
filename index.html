@@ -47,6 +47,18 @@
         </div>
 
         <form id="filters-form" class="filters" novalidate>
+          <div class="field field--wide field--season-block">
+            <div class="field__label-row">
+              <span class="field-label">Seasons</span>
+              <div class="season-actions" role="group" aria-label="Season quick actions">
+                <button type="button" class="button button--ghost button--small" data-season-action="latest">Latest</button>
+                <button type="button" class="button button--ghost button--small" data-season-action="all">All</button>
+                <button type="button" class="button button--ghost button--small" data-season-action="clear">Clear</button>
+              </div>
+            </div>
+            <div id="season-choices" class="season-choices" role="group" aria-label="Season choices"></div>
+          </div>
+
           <div class="field">
             <label for="team-id">Team</label>
             <select id="team-id" name="team-id"></select>

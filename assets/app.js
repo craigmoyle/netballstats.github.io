@@ -34,6 +34,7 @@ const state = {
 const elements = {
   statusBanner: document.getElementById("status-banner"),
   filtersForm: document.getElementById("filters-form"),
+  seasonChoices: document.getElementById("season-choices"),
   activeFilterSummary: document.getElementById("active-filter-summary"),
   teamId: document.getElementById("team-id"),
   round: document.getElementById("round"),
@@ -64,7 +65,8 @@ const elements = {
   competitionValueHeading: document.getElementById("competition-value-heading"),
   teamValueHeading: document.getElementById("team-value-heading"),
   playerValueHeading: document.getElementById("player-value-heading"),
-  panelViewButtons: document.querySelectorAll("[data-panel][data-view-mode]")
+  panelViewButtons: document.querySelectorAll("[data-panel][data-view-mode]"),
+  seasonActionButtons: document.querySelectorAll("[data-season-action]")
 };
 
 document.body.classList.remove("is-ready");
@@ -250,6 +252,38 @@ function populateSelect(select, options, placeholder) {
   }
 }
 
+function setSelectedSeasons(values) {
+  const selected = new Set(values.map((value) => `${value}`));
+  elements.seasonChoices.querySelectorAll("input[type='checkbox']").forEach((input) => {
+    input.checked = selected.has(input.value);
+  });
+}
+
+function getSelectedSeasons() {
+  return [...elements.seasonChoices.querySelectorAll("input[type='checkbox']:checked")]
+    .map((input) => input.value)
+    .sort((left, right) => Number(right) - Number(left));
+}
+
+function renderSeasonChoices(seasons) {
+  elements.seasonChoices.replaceChildren();
+  seasons.forEach((season) => {
+    const label = document.createElement("label");
+    label.className = "season-choice";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = `${season}`;
+    input.name = "season-choice";
+
+    const text = document.createElement("span");
+    text.textContent = `${season}`;
+
+    label.append(input, text);
+    elements.seasonChoices.appendChild(label);
+  });
+}
+
 function seasonSummaryLabel(seasons) {
   if (!state.meta || !state.meta.seasons.length) {
     return "No seasons available";
@@ -317,7 +351,7 @@ function updateValueHeadings() {
 
 function syncFiltersFromForm() {
   state.filters = {
-    seasons: [],
+    seasons: getSelectedSeasons(),
     teamId: elements.teamId.value,
     round: elements.round.value,
     teamStat: elements.teamStat.value,
@@ -330,6 +364,7 @@ function syncFiltersFromForm() {
 function renderFilterSummary() {
   syncFiltersFromForm();
   const segments = [
+    seasonSummaryLabel(state.filters.seasons),
     teamLabel(state.filters.teamId),
     state.filters.round ? `Round ${state.filters.round}` : "All rounds",
     statModeDescriptor(),
@@ -347,6 +382,7 @@ function renderFilterSummary() {
 
 function applyMeta(meta) {
   state.meta = meta;
+  renderSeasonChoices(meta.seasons || []);
 
   populateSelect(
     elements.teamId,
@@ -364,6 +400,8 @@ function applyMeta(meta) {
     "Choose a player stat"
   );
 
+  const defaultSeason = meta.default_season ? `${meta.default_season}` : "";
+  setSelectedSeasons(defaultSeason ? [defaultSeason] : []);
   elements.teamId.value = "";
   elements.round.value = "";
   elements.playerSearch.value = "";
@@ -993,6 +1031,7 @@ async function runQueries() {
   const leaderboardFetchLimit = Math.max(LEADERS_LIMIT, CHART_RANK_LIMIT);
 
   const baseParams = {
+    seasons: state.filters.seasons,
     team_id: state.filters.teamId,
     round: state.filters.round
   };
@@ -1023,6 +1062,7 @@ async function runQueries() {
         limit: leaderboardFetchLimit
       }),
       fetchOptionalJson("/competition-season-series", {
+        seasons: state.filters.seasons,
         round: state.filters.round,
         stat: state.filters.teamStat,
         metric: state.filters.statMode
@@ -1113,6 +1153,25 @@ elements.filtersForm.addEventListener("input", () => {
 
 elements.filtersForm.addEventListener("change", () => {
   renderFilterSummary();
+});
+
+elements.seasonActionButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!state.meta) {
+      return;
+    }
+
+    const action = button.dataset.seasonAction;
+    if (action === "all") {
+      setSelectedSeasons((state.meta.seasons || []).map((season) => `${season}`));
+    } else if (action === "clear") {
+      setSelectedSeasons([]);
+    } else if (action === "latest") {
+      setSelectedSeasons(state.meta.default_season ? [`${state.meta.default_season}`] : []);
+    }
+
+    renderFilterSummary();
+  });
 });
 
 elements.resetFilters.addEventListener("click", () => {
