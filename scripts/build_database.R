@@ -255,7 +255,7 @@ prepare_match_tables <- function(entries, competitions) {
       )
 
     scores <- team_stats %>%
-      dplyr::filter(stat == "goals") %>%
+      dplyr::filter(stat == "points") %>%
       dplyr::group_by(squad_id) %>%
       dplyr::summarise(score = sum(value_number, na.rm = TRUE), .groups = "drop")
 
