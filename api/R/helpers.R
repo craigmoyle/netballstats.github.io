@@ -1303,17 +1303,18 @@ fetch_query_result_rows <- function(conn, intent) {
     available_match_seasons(conn)
   }
 
-  rows_by_season <- lapply(seasons_to_query, function(season_value) {
-    base_query <- build_player_match_query(
-      stat = intent$stat,
-      seasons = c(as.integer(season_value)),
-      player_id = intent$player_id,
-      opponent_id = intent$opponent_id,
-      comparison = intent$comparison,
-      threshold = intent$threshold
-    )
-    query_rows(conn, base_query$query, base_query$params)
-  })
+  # Issue a single query for all seasons using an IN clause rather than one
+  # round-trip per season; this is significantly faster and avoids timeouts
+  # when the user requests data across the full history (9+ seasons).
+  base_query <- build_player_match_query(
+    stat = intent$stat,
+    seasons = seasons_to_query,
+    player_id = intent$player_id,
+    opponent_id = intent$opponent_id,
+    comparison = intent$comparison,
+    threshold = intent$threshold
+  )
+  rows <- query_rows(conn, base_query$query, base_query$params)
 
-  sort_query_result_rows(bind_query_result_rows(rows_by_season), intent$intent_type)
+  sort_query_result_rows(rows, intent$intent_type)
 }

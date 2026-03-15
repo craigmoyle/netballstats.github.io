@@ -374,7 +374,7 @@ resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
             }
             {
               name: 'NETBALL_STATS_DB_STATEMENT_TIMEOUT_MS'
-              value: '5000'
+              value: '15000'
             }
           ]
           probes: [

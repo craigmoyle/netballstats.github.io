@@ -837,6 +837,12 @@ function(question = "", limit = "12", res) {
       rows = rows_to_records(rows)
     )
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    msg <- conditionMessage(error)
+    message("[API] Request error: ", msg)
+    if (grepl("statement timeout|canceling statement|query_canceled", msg, ignore.case = TRUE)) {
+      json_error(res, 503, "The query took too long. Try narrowing to a specific season or player.")
+    } else {
+      json_error(res, 400, "Invalid request parameters.")
+    }
   })
 }

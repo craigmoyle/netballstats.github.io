@@ -447,6 +447,8 @@ write_database <- function(tables, db_path, build_mode) {
     DBI::dbExecute(conn, "CREATE INDEX idx_matches_season_round ON matches(season, round_number, local_start_time)")
     DBI::dbExecute(conn, "CREATE INDEX idx_team_stats_lookup ON team_period_stats(season, squad_id, stat)")
     DBI::dbExecute(conn, "CREATE INDEX idx_player_stats_lookup ON player_period_stats(season, squad_id, player_id, stat)")
+    # Stat-first index for the /query endpoint which filters by stat across all seasons
+    DBI::dbExecute(conn, "CREATE INDEX idx_player_stats_stat_season ON player_period_stats(stat, season, player_id)")
     DBI::dbExecute(conn, "CREATE INDEX idx_players_name ON players(player_name)")
     DBI::dbExecute(conn, "CREATE INDEX idx_players_search_name ON players(search_name)")
     DBI::dbExecute(conn, "CREATE INDEX idx_player_aliases_search_name ON player_aliases(alias_search_name, player_id)")
