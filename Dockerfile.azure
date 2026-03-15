@@ -1,20 +1,28 @@
 FROM rocker/r-ver:4.5.2
 
+# Runtime system libraries only — compilers (g++/make) are already in the base
+# image and not needed here because we install pre-built R binary packages below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
     libcurl4-openssl-dev \
     libpq-dev \
     libssl-dev \
     libsodium-dev \
     libxml2-dev \
-    pkg-config \
-    make \
-    zlib1g-dev \
-    g++ \
   && rm -rf /var/lib/apt/lists/*
 
-RUN R -q -e "required <- c('DBI','RPostgres','RSQLite','dplyr','httr','jsonlite','plumber','purrr','remotes','tidyr'); install.packages(required, repos='https://cloud.r-project.org'); missing <- setdiff(required, rownames(installed.packages())); if (length(missing)) stop(sprintf('Missing R packages after install: %s', paste(missing, collapse=', ')))" \
-  && R -q -e "remotes::install_github('craigmoyle/superNetballR_updated@9898d3a03332a7402b1c3abb50493c50ac07d549')"
+# Install CRAN packages as pre-built binaries from Posit Package Manager (Ubuntu 24.04 Noble).
+# Binary packages skip all source compilation, cutting install time from ~7 min to ~30 s.
+# RSQLite is omitted — Azure deployment uses PostgreSQL (RPostgres) only.
+RUN R -q -e " \
+  options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
+  required <- c('DBI','RPostgres','dplyr','httr','jsonlite','plumber','purrr','remotes','tidyr'); \
+  install.packages(required); \
+  missing <- setdiff(required, rownames(installed.packages())); \
+  if (length(missing)) stop(sprintf('Missing R packages: %s', paste(missing, collapse=', ')))"
+
+# Install GitHub-hosted package in a separate layer so the CRAN layer above is
+# reused on rebuilds when only the app code (or this commit pin) changes.
+RUN R -q -e "remotes::install_github('craigmoyle/superNetballR_updated@9898d3a03332a7402b1c3abb50493c50ac07d549')"
 
 WORKDIR /app
 
