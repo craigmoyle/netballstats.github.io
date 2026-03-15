@@ -16,11 +16,11 @@ script_path <- function() {
   normalizePath(sub("^--file=", "", file_arg[[1]]), mustWork = FALSE)
 }
 
-repo_root <- normalizePath(file.path(dirname(script_path()), ".."), mustWork = FALSE)
-source(file.path(repo_root, "R", "database.R"), local = TRUE)
-source(file.path(repo_root, "api", "R", "helpers.R"), local = TRUE)
-config_path <- file.path(repo_root, "config", "competitions.csv")
-db_path <- Sys.getenv("NETBALL_STATS_DB", default_sqlite_db_path(repo_root))
+repo_root_path <- normalizePath(file.path(dirname(script_path()), ".."), mustWork = FALSE)
+source(file.path(repo_root_path, "R", "database.R"), local = TRUE)
+source(file.path(repo_root_path, "api", "R", "helpers.R"), local = TRUE)
+config_path <- file.path(repo_root_path, "config", "competitions.csv")
+db_path <- Sys.getenv("NETBALL_STATS_DB", default_sqlite_db_path(repo_root_path))
 sample_mode <- identical(tolower(Sys.getenv("NETBALL_STATS_SAMPLE", "false")), "true")
 
 if (database_backend() == "postgres" && !nzchar(Sys.getenv("NETBALL_STATS_DB_STATEMENT_TIMEOUT_MS", ""))) {
