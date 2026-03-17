@@ -16,17 +16,17 @@ hooks:
       # hardcoding an unsupported API version.
       API_IMAGE=$(az rest \
         --method get \
-        --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$AZURE_RESOURCE_GROUP/providers/Microsoft.App/containerApps?api-version=2025-07-01" \
+        --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$AZURE_RESOURCE_GROUP/providers/Microsoft.App/containerApps?api-version=2024-03-01" \
         --query "value[?tags.\"azd-service-name\"=='api'].properties.template.containers[0].image | [0]" \
         --output tsv)
       BODY="{\"properties\":{\"template\":{\"containers\":[{\"image\":\"$API_IMAGE\",\"name\":\"main\"}]}}}"
       az rest \
         --method patch \
-        --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$AZURE_RESOURCE_GROUP/providers/Microsoft.App/jobs/$DB_REFRESH_JOB_SAT_NAME?api-version=2025-07-01" \
+        --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$AZURE_RESOURCE_GROUP/providers/Microsoft.App/jobs/$DB_REFRESH_JOB_SAT_NAME?api-version=2025-01-01" \
         --body "$BODY"
       az rest \
         --method patch \
-        --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$AZURE_RESOURCE_GROUP/providers/Microsoft.App/jobs/$DB_REFRESH_JOB_SUN_NAME?api-version=2025-07-01" \
+        --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$AZURE_RESOURCE_GROUP/providers/Microsoft.App/jobs/$DB_REFRESH_JOB_SUN_NAME?api-version=2025-01-01" \
         --body "$BODY"
 services:
   web:
