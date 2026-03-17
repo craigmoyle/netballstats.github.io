@@ -1,6 +1,6 @@
 const config = window.NETBALL_STATS_CONFIG || {};
 const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
-const DEFAULT_TIMEOUT_MS = 12000;
+const DEFAULT_TIMEOUT_MS = 30000;
 const MATCHES_LIMIT = 12;
 const LEADERS_LIMIT = 10;
 const CHART_RANK_LIMIT = 10;
@@ -122,6 +122,11 @@ async function fetchJson(path, params = {}) {
     }
 
     return payload;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("The request timed out.");
+    }
+    throw error;
   } finally {
     window.clearTimeout(timeoutId);
   }
@@ -1127,18 +1132,22 @@ async function initialise() {
   clearAllCharts("Loading chart data…");
 
   try {
-    const meta = await fetchJson("/meta");
+    let meta;
+    try {
+      meta = await fetchJson("/meta");
+    } catch (firstError) {
+      // Retry once to handle cold-start delays (R/Plumber can take 20-30s to start).
+      showStatus("API is starting up, retrying…", "info");
+      await new Promise((resolve) => window.setTimeout(resolve, 5000));
+      meta = await fetchJson("/meta");
+    }
     applyMeta(meta);
     await runQueries();
   } catch (error) {
-    const baseMessage = error.message || "Unable to load the API metadata.";
     const hint = isLocalApiConfigured()
       ? " Build the database and run the API before using the site."
       : " The statistics API is currently unavailable. Please try again shortly.";
-    showStatus(
-      `${baseMessage}${hint}`,
-      "error"
-    );
+    showStatus(hint.trim(), "error");
     clearAllTables("API metadata is unavailable.");
     clearAllCharts("API metadata is unavailable.");
     document.body.classList.add("is-ready");

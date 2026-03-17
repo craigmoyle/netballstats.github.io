@@ -1,6 +1,6 @@
 const config = window.NETBALL_STATS_CONFIG || {};
 const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
-const DEFAULT_TIMEOUT_MS = 12000;
+const DEFAULT_TIMEOUT_MS = 30000;
 
 const state = {
   players: []
@@ -43,6 +43,11 @@ async function fetchJson(path, params = {}) {
     }
 
     return payload;
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("The request timed out.");
+    }
+    throw error;
   } finally {
     window.clearTimeout(timeoutId);
   }

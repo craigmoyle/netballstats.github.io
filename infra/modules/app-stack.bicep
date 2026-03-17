@@ -379,6 +379,18 @@ resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
           ]
           probes: [
             {
+              type: 'Startup'
+              httpGet: {
+                path: '/health'
+                port: apiPort
+                scheme: 'HTTP'
+              }
+              initialDelaySeconds: 10
+              periodSeconds: 5
+              timeoutSeconds: 3
+              failureThreshold: 18
+            }
+            {
               type: 'Readiness'
               httpGet: {
                 path: '/ready'
@@ -396,7 +408,7 @@ resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
                 port: apiPort
                 scheme: 'HTTP'
               }
-              initialDelaySeconds: 15
+              initialDelaySeconds: 90
               periodSeconds: 30
               timeoutSeconds: 5
             }
