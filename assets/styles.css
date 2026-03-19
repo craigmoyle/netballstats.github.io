@@ -1335,7 +1335,9 @@ caption.table-caption {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .summary-card span {@media (max-width: 1200px) {
+}
+
+@media (max-width: 1200px) {
   .season-table {
     min-width: 0;
     width: 100%;
@@ -1422,9 +1424,12 @@ caption.table-caption {
 
 @media (max-width: 900px) {
   .panel__heading--split,
-  .results-grid,
-  .summary-band {
+  .results-grid {
     grid-template-columns: 1fr;
+  }
+
+  .summary-band {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .panel__meta-stack {
@@ -1476,7 +1481,7 @@ caption.table-caption {
   }
 
   table {
-    min-width: 420px;
+    min-width: 360px;
   }
 
   .view-toggle {
@@ -1501,8 +1506,17 @@ caption.table-caption {
     justify-content: center;
   }
 
+  .theme-toggle {
+    align-self: flex-end;
+    margin-left: auto;
+  }
+
+  .summary-band {
+    grid-template-columns: 1fr;
+  }
+
   .summary-card {
-    min-height: 126px;
+    min-height: 120px;
   }
 
   .summary-card__value {
@@ -1528,6 +1542,43 @@ caption.table-caption {
 
   .answer-stage__headline {
     font-size: clamp(1.9rem, 9vw, 2.8rem);
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-panel,
+  .panel {
+    padding: 0.85rem;
+  }
+
+  .panel h2 {
+    font-size: clamp(1.35rem, 6vw, 1.75rem);
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(1.85rem, 10vw, 2.6rem);
+  }
+
+  .summary-card {
+    min-height: auto;
+    padding: 0.9rem 1rem;
+  }
+
+  .field input,
+  .field select {
+    padding: 0.8rem 0.9rem;
+  }
+
+  .chart-card__title {
+    font-size: clamp(1.25rem, 5.5vw, 1.6rem);
+  }
+
+  .answer-stage__headline {
+    font-size: clamp(1.65rem, 10vw, 2.4rem);
+  }
+
+  .query-input-shell {
+    padding: 0.75rem;
   }
 }
 
