@@ -161,8 +161,6 @@ async function initialise() {
     showStatus(error.message || "Unable to load the player directory.", "error");
     elements.directoryResultsMeta.textContent = "Player directory unavailable.";
     elements.directoryGrid.innerHTML = '<div class="empty-state">The player directory is temporarily unavailable.</div>';
-  } finally {
-    document.body.classList.add("is-ready");
   }
 }
 

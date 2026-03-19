@@ -18,4 +18,19 @@
     },
     window.NETBALL_STATS_CONFIG || {}
   );
+
+  // Reveal animations: use IntersectionObserver so content is visible
+  // immediately — not gated on API calls completing.
+  var revealObserver = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("is-visible");
+        revealObserver.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.04, rootMargin: "0px 0px 80px 0px" });
+
+  document.querySelectorAll(".reveal").forEach(function (el) {
+    revealObserver.observe(el);
+  });
 })();

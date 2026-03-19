@@ -28,7 +28,7 @@ const elements = {
   queryRowsBody: document.getElementById("query-rows-body")
 };
 
-document.body.classList.remove("is-ready");
+
 elements.apiBase.textContent = API_BASE_URL;
 
 function buildUrl(path, params = {}) {
@@ -355,8 +355,6 @@ async function init() {
     elements.questionInput.value = initialQuestion;
     await runQuestion(initialQuestion);
   }
-
-  document.body.classList.add("is-ready");
 }
 
 elements.queryForm.addEventListener("submit", async (event) => {

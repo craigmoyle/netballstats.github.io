@@ -342,7 +342,6 @@ async function initialise() {
   const playerId = parsePlayerId();
   if (!Number.isFinite(playerId)) {
     showStatus("No player ID was found in the page URL.", "error");
-    document.body.classList.add("is-ready");
     return;
   }
 
@@ -354,8 +353,6 @@ async function initialise() {
     showStatus("Player profile loaded.", "success");
   } catch (error) {
     showStatus(error.message || "Unable to load the player profile.", "error");
-  } finally {
-    document.body.classList.add("is-ready");
   }
 }
 

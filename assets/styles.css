@@ -266,6 +266,7 @@ code {
   border-radius: 28px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
   backdrop-filter: blur(10px);
+  contain: layout paint;
 }
 
 .panel__heading {
@@ -754,7 +755,7 @@ th {
 }
 
 tbody tr {
-  transition: background 0.2s ease, transform 0.2s ease;
+  transition: background 0.2s ease;
 }
 
 tbody tr:hover {
@@ -1207,21 +1208,39 @@ tbody tr:hover {
   transition: opacity 0.6s ease, transform 0.6s ease;
 }
 
-body.is-ready .reveal {
+.reveal.is-visible {
   opacity: 1;
   transform: translateY(0);
 }
 
-body.is-ready .reveal:nth-of-type(2) {
-  transition-delay: 0.08s;
+/* No-JS fallback: reveal immediately when scripting is unavailable */
+@media (scripting: none) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
 }
 
-body.is-ready .reveal:nth-of-type(3) {
-  transition-delay: 0.14s;
-}
-
-body.is-ready .reveal:nth-of-type(4) {
-  transition-delay: 0.2s;
+/* Respect user motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal.is-visible {
+    transition: none;
+    transform: none;
+  }
+  .hero-pill--link,
+  .directory-card,
+  .season-choice span,
+  .button,
+  button,
+  .example-chip {
+    transition: none !important;
+    transform: none !important;
+  }
+  tbody tr {
+    transition: none;
+  }
 }
 
 @media (max-width: 1100px) {

@@ -69,7 +69,6 @@ const elements = {
   seasonActionButtons: document.querySelectorAll("[data-season-action]")
 };
 
-document.body.classList.remove("is-ready");
 
 function isLocalApiConfigured() {
   try {
@@ -1118,12 +1117,10 @@ async function runQueries() {
         : "Query completed successfully.",
       chartWarnings.length ? "neutral" : "success"
     );
-    document.body.classList.add("is-ready");
   } catch (error) {
     showStatus(error.message || "The query failed.", "error");
     clearAllTables("Unable to load data from the API.");
     clearAllCharts("Unable to load chart data from the API.");
-    document.body.classList.add("is-ready");
   }
 }
 
@@ -1150,7 +1147,6 @@ async function initialise() {
     showStatus(hint.trim(), "error");
     clearAllTables("API metadata is unavailable.");
     clearAllCharts("API metadata is unavailable.");
-    document.body.classList.add("is-ready");
   }
 }
 
