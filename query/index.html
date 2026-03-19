@@ -177,10 +177,11 @@
       (function () {
         var btn = document.getElementById('theme-toggle');
         var root = document.documentElement;
+        if (!btn) return;
         function applyTheme(t) {
           if (t === 'light') {
             root.setAttribute('data-theme', 'light');
-            btn.textContent = '◑';
+            btn.textContent = '◗';
             btn.setAttribute('aria-label', 'Switch to dark theme');
           } else {
             root.removeAttribute('data-theme');

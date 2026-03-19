@@ -124,6 +124,7 @@
           <div>
             <h2>Recent results</h2>
           </div>
+          <p class="muted">Latest matches for the selected seasons.</p>
         </div>
         <div class="table-wrapper table-wrapper--spotlight">
           <table id="matches-table">
@@ -281,10 +282,11 @@
       (function () {
         var btn = document.getElementById('theme-toggle');
         var root = document.documentElement;
+        if (!btn) return;
         function applyTheme(t) {
           if (t === 'light') {
             root.setAttribute('data-theme', 'light');
-            btn.textContent = '◑';
+            btn.textContent = '◗';
             btn.setAttribute('aria-label', 'Switch to dark theme');
           } else {
             root.removeAttribute('data-theme');
