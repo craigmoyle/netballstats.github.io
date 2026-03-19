@@ -10,22 +10,29 @@ hooks:
     shell: sh
     run: |
       # After deploying the API, sync the refresh job images to match.
-      # DB_REFRESH_JOB_SAT_NAME and DB_REFRESH_JOB_SUN_NAME come from
-      # Bicep outputs, surfaced as env vars by azd.
-      # AZURE_RESOURCE_GROUP is not exported by azd; fall back to the known value.
+      # Discover job names from the resource group rather than relying on
+      # Bicep outputs (which may not be present in .env after partial deploys).
       RG="${AZURE_RESOURCE_GROUP:-rg-netballstats-audljf}"
       API_IMAGE=$(az rest \
         --method get \
         --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$RG/providers/Microsoft.App/containerApps?api-version=2024-03-01" \
         --query "value[?tags.\"azd-service-name\"=='api'].properties.template.containers[0].image | [0]" \
         --output tsv)
+      SAT_JOB=$(az containerapp job list \
+        --resource-group "$RG" \
+        --query "[?contains(name, '-db-sat-')].name | [0]" \
+        --output tsv)
+      SUN_JOB=$(az containerapp job list \
+        --resource-group "$RG" \
+        --query "[?contains(name, '-db-sun-')].name | [0]" \
+        --output tsv)
       az containerapp job update \
-        --name "$DB_REFRESH_JOB_SAT_NAME" \
+        --name "$SAT_JOB" \
         --resource-group "$RG" \
         --image "$API_IMAGE" \
         --container-name main
       az containerapp job update \
-        --name "$DB_REFRESH_JOB_SUN_NAME" \
+        --name "$SUN_JOB" \
         --resource-group "$RG" \
         --image "$API_IMAGE" \
         --container-name main
