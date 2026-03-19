@@ -3,12 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <script>
-      (function () {
-        var t = localStorage.getItem('ns-theme');
-        if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
-      }());
-    </script>
+    <script src="/assets/theme.js"></script>
     <title>Player Profiles | Netball Stats Database</title>
     <meta name="description" content="Browse Super Netball player profiles with games played, career summaries, and season-by-season statistics.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -69,29 +64,5 @@
         <div id="directory-grid" class="directory-grid" aria-live="polite"></div>
       </section>
     </main>
-    <script>
-      (function () {
-        var btn = document.getElementById('theme-toggle');
-        var root = document.documentElement;
-        if (!btn) return;
-        function applyTheme(t) {
-          if (t === 'light') {
-            root.setAttribute('data-theme', 'light');
-            btn.textContent = '◗';
-            btn.setAttribute('aria-label', 'Switch to dark theme');
-          } else {
-            root.removeAttribute('data-theme');
-            btn.textContent = '☀';
-            btn.setAttribute('aria-label', 'Switch to light theme');
-          }
-        }
-        applyTheme(localStorage.getItem('ns-theme') || 'dark');
-        btn.addEventListener('click', function () {
-          var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-          localStorage.setItem('ns-theme', next);
-          applyTheme(next);
-        });
-      }());
-    </script>
   </body>
 </html>
