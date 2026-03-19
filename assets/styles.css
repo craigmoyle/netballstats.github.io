@@ -366,7 +366,7 @@ code {
 .field input,
 .field select {
   width: 100%;
-  border-radius: 16px;
+  border-radius: var(--radius-sm);
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(22, 37, 49, 0.9);
   color: var(--text);
@@ -375,14 +375,15 @@ code {
 }
 
 .field input::placeholder {
-  color: rgba(244, 239, 229, 0.45);
+  color: rgba(244, 239, 229, 0.6);
 }
 
 .field input:focus-visible,
 .field select:focus-visible,
-button:focus-visible {
-  outline: 2px solid rgba(240, 198, 126, 0.55);
-  outline-offset: 2px;
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid rgba(240, 198, 126, 0.8);
+  outline-offset: 3px;
 }
 
 /* Season choice keyboard focus — the input is visually hidden so we
@@ -494,7 +495,7 @@ button:hover {
 }
 
 .button--small {
-  padding: 0.65rem 0.95rem;
+  padding: 0.75rem 0.95rem;
   font-size: var(--type-sm);
 }
 
@@ -502,7 +503,7 @@ button:hover {
   display: inline-flex;
   align-items: center;
   gap: 0.3em;
-  padding: 0.55rem 0.85rem;
+  padding: 0.75rem 1rem;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -514,6 +515,7 @@ button:hover {
   text-transform: none;
   cursor: pointer;
   transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+  min-block-size: 44px;
 }
 
 .theme-toggle:hover {
@@ -1676,4 +1678,34 @@ caption.table-caption {
 
 [data-theme="light"] .answer-accent-bar {
   background: linear-gradient(90deg, rgba(184, 112, 32, 0.7), rgba(184, 112, 32, 0));
+}
+
+/* ----- Light theme: form fields ----- */
+[data-theme="light"] .field label,
+[data-theme="light"] .field-label {
+  color: var(--text);
+}
+
+[data-theme="light"] .field input,
+[data-theme="light"] .field select {
+  background: rgba(255, 252, 245, 0.95);
+  border-color: rgba(130, 90, 30, 0.25);
+  color: var(--text);
+}
+
+[data-theme="light"] .field input::placeholder {
+  color: rgba(90, 68, 42, 0.55);
+}
+
+[data-theme="light"] .field--season-block {
+  background: linear-gradient(180deg, rgba(80, 170, 162, 0.06), rgba(80, 170, 162, 0.02));
+  border-color: rgba(80, 140, 130, 0.3);
+}
+
+/* ----- Light theme: focus ring (amber darkened for visibility on cream) ----- */
+[data-theme="light"] .field input:focus-visible,
+[data-theme="light"] .field select:focus-visible,
+[data-theme="light"] button:focus-visible,
+[data-theme="light"] a:focus-visible {
+  outline-color: rgba(160, 95, 10, 0.85);
 }
