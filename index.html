@@ -3,6 +3,12 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+      (function () {
+        var t = localStorage.getItem('ns-theme');
+        if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      }());
+    </script>
     <title>Netball Stats Database</title>
     <meta name="description" content="Super Netball statistics archive — leaders, season totals, and historical records from every season.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,11 +30,13 @@
       <nav class="page-nav" aria-label="Site navigation">
         <a class="page-nav__link" href="/players/">Player profiles</a>
         <a class="page-nav__link" href="/query/">Ask the stats</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light theme">☀</button>
       </nav>
 
       <section class="hero-panel">
         <div class="hero-copy">
-          <h1>Super Netball statistical archive for leaders, records, and seasons.</h1>
+          <h1>Super Netball Stats</h1>
+          <p class="hero-tagline">Every season. Every player.</p>
         </div>
       </section>
     </header>
@@ -165,7 +173,7 @@
           <div class="panel-view panel-view--charts" data-panel-view="competition-season" data-panel-mode="chart" hidden>
             <article class="chart-card">
               <div class="chart-card__header">
-                <h3 class="chart-card__title">How the whole competition moves by season</h3>
+                <h3 class="chart-card__title">Competition trend by season</h3>
               </div>
               <div id="competition-season-chart" class="chart-shell" role="img" aria-label="Competition season totals chart"></div>
             </article>
@@ -211,7 +219,7 @@
               </article>
               <article class="chart-card">
                 <div class="chart-card__header">
-                  <h3 class="chart-card__title">How the leading clubs move by season</h3>
+                  <h3 class="chart-card__title">Season trend for top clubs</h3>
                 </div>
                 <div id="team-trend-chart" class="chart-shell" role="img" aria-label="Team season trend chart"></div>
               </article>
@@ -225,7 +233,7 @@
               <h2>Player leaderboard</h2>
             </div>
             <div class="panel__meta-stack">
-              <p class="muted">Player aliases are consolidated under a single record.</p>
+              <p class="muted">Cross-season totals combined, even when a player changed teams or names.</p>
               <div class="view-toggle" role="group" aria-label="Player leaderboard view">
                 <button type="button" class="button button--ghost button--small is-active" data-panel="player-leaders" data-view-mode="table" aria-pressed="true">Table</button>
                 <button type="button" class="button button--ghost button--small" data-panel="player-leaders" data-view-mode="chart" aria-pressed="false">Chart</button>
@@ -259,7 +267,7 @@
               </article>
               <article class="chart-card">
                 <div class="chart-card__header">
-                  <h3 class="chart-card__title">How the leading players move by season</h3>
+                  <h3 class="chart-card__title">Season trend for top players</h3>
                 </div>
                 <div id="player-trend-chart" class="chart-shell" role="img" aria-label="Player season trend chart"></div>
               </article>
@@ -269,5 +277,28 @@
 
       </section>
     </main>
+    <script>
+      (function () {
+        var btn = document.getElementById('theme-toggle');
+        var root = document.documentElement;
+        function applyTheme(t) {
+          if (t === 'light') {
+            root.setAttribute('data-theme', 'light');
+            btn.textContent = '◑';
+            btn.setAttribute('aria-label', 'Switch to dark theme');
+          } else {
+            root.removeAttribute('data-theme');
+            btn.textContent = '☀';
+            btn.setAttribute('aria-label', 'Switch to light theme');
+          }
+        }
+        applyTheme(localStorage.getItem('ns-theme') || 'dark');
+        btn.addEventListener('click', function () {
+          var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+          localStorage.setItem('ns-theme', next);
+          applyTheme(next);
+        });
+      }());
+    </script>
   </body>
 </html>

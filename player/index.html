@@ -3,6 +3,12 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+      (function () {
+        var t = localStorage.getItem('ns-theme');
+        if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+      }());
+    </script>
     <title>Player Profile | Netball Stats Database</title>
     <meta name="description" content="Super Netball player profile with games played, career totals, and season-by-season statistics.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -24,6 +30,7 @@
       <nav class="page-nav" aria-label="Player profile navigation">
         <a class="page-nav__link" href="/">Back to explorer</a>
         <a class="page-nav__link page-nav__link--accent" href="/players/">All players</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light theme">☀</button>
       </nav>
 
       <section class="hero-panel player-hero">
@@ -118,5 +125,28 @@
         </div>
       </section>
     </main>
+    <script>
+      (function () {
+        var btn = document.getElementById('theme-toggle');
+        var root = document.documentElement;
+        function applyTheme(t) {
+          if (t === 'light') {
+            root.setAttribute('data-theme', 'light');
+            btn.textContent = '◑';
+            btn.setAttribute('aria-label', 'Switch to dark theme');
+          } else {
+            root.removeAttribute('data-theme');
+            btn.textContent = '☀';
+            btn.setAttribute('aria-label', 'Switch to light theme');
+          }
+        }
+        applyTheme(localStorage.getItem('ns-theme') || 'dark');
+        btn.addEventListener('click', function () {
+          var next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+          localStorage.setItem('ns-theme', next);
+          applyTheme(next);
+        });
+      }());
+    </script>
   </body>
 </html>
