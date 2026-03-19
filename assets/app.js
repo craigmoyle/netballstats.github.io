@@ -82,6 +82,7 @@ function isLocalApiConfigured() {
 function showStatus(message, tone = "neutral") {
   elements.statusBanner.textContent = message;
   elements.statusBanner.dataset.tone = tone;
+  elements.statusBanner.role = tone === "error" ? "alert" : "status";
   elements.statusBanner.hidden = !message;
 }
 

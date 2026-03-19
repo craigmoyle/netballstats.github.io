@@ -56,6 +56,7 @@ async function fetchJson(path, params = {}) {
 function showStatus(message, tone = "neutral") {
   elements.directoryStatus.textContent = message;
   elements.directoryStatus.dataset.tone = tone;
+  elements.directoryStatus.role = tone === "error" ? "alert" : "status";
   elements.directoryStatus.hidden = !message;
 }
 

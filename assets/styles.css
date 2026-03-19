@@ -372,11 +372,44 @@ code {
   color: rgba(244, 239, 229, 0.45);
 }
 
-.field input:focus,
-.field select:focus,
-button:focus {
+.field input:focus-visible,
+.field select:focus-visible,
+button:focus-visible {
   outline: 2px solid rgba(240, 198, 126, 0.55);
   outline-offset: 2px;
+}
+
+/* Season choice keyboard focus — the input is visually hidden so we
+   style the visible sibling span when the hidden input is focused */
+.season-choice input:focus-visible + span {
+  outline: 2px solid rgba(240, 198, 126, 0.7);
+  outline-offset: 3px;
+  border-color: rgba(240, 198, 126, 0.5);
+}
+
+/* Skip-to-content link (hidden until focused) */
+.skip-link {
+  position: absolute;
+  top: -100%;
+  left: 1rem;
+  z-index: 9999;
+  padding: 0.7rem 1.2rem;
+  border-radius: 0 0 12px 12px;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  font-family: var(--display-font);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus-visible {
+  top: 0;
+  outline: 2px solid var(--text-on-accent);
+  outline-offset: -3px;
 }
 
 .season-choices {
@@ -950,9 +983,13 @@ tbody tr:hover {
   margin-bottom: 1rem;
 }
 
-.table-caption {
+.table-caption,
+caption.table-caption {
   margin: 0 0 0.85rem;
+  padding: 0.5rem 1rem 0;
   color: var(--muted);
+  text-align: left;
+  caption-side: top;
 }
 
 .season-table {

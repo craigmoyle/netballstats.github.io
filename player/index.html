@@ -13,6 +13,7 @@
     <script defer src="/assets/player.js"></script>
   </head>
   <body>
+    <a href="#main-content" class="skip-link">Skip to content</a>
     <div class="page-backdrop" aria-hidden="true">
       <div class="backdrop-glow backdrop-glow--one"></div>
       <div class="backdrop-glow backdrop-glow--two"></div>
@@ -46,9 +47,9 @@
       </section>
     </header>
 
-    <main class="page-shell page-main">
+    <main id="main-content" class="page-shell page-main">
       <section class="panel reveal">
-        <div id="player-status" class="status-banner" hidden></div>
+        <div id="player-status" class="status-banner" role="status" aria-live="polite" hidden></div>
         <div class="panel__heading">
           <p class="kicker">Overview</p>
           <h2>Career snapshot</h2>
@@ -82,9 +83,9 @@
           <p class="kicker">Career totals</p>
           <h2>Selected impact stats across the full career.</h2>
         </div>
-        <p class="table-caption">Totals and per-game averages for the curated player stat set.</p>
         <div class="table-wrapper table-wrapper--spotlight">
-          <table>
+          <table aria-describedby="career-stats-caption">
+            <caption id="career-stats-caption" class="table-caption">Totals and per-game averages for the curated player stat set.</caption>
             <thead>
               <tr>
                 <th scope="col">Stat</th>
@@ -109,9 +110,9 @@
             <button type="button" class="button button--small button--ghost" data-metric="average" aria-pressed="false">Avg/game</button>
           </div>
         </div>
-        <p id="season-table-caption" class="table-caption">Season totals for the selected impact stats.</p>
         <div class="table-wrapper">
-          <table class="season-table">
+          <table class="season-table" aria-describedby="season-table-caption">
+            <caption id="season-table-caption" class="table-caption">Season totals for the selected impact stats.</caption>
             <thead>
               <tr id="season-stats-head"></tr>
             </thead>
