@@ -222,6 +222,38 @@ function createLinkCell(href, text, className) {
   return cell;
 }
 
+function createTeamCell(name, colour) {
+  const cell = document.createElement("td");
+  const swatch = document.createElement("span");
+  swatch.className = "team-swatch";
+  swatch.setAttribute("aria-hidden", "true");
+  swatch.style.setProperty("--swatch-color", colour || "var(--muted)");
+  cell.appendChild(swatch);
+  cell.appendChild(document.createTextNode(name));
+  return cell;
+}
+
+function createMatchResultCell(match) {
+  const cell = document.createElement("td");
+  const homeScore = Number(match.home_score);
+  const awayScore = Number(match.away_score);
+  const homeWon = homeScore > awayScore;
+  const awayWon = awayScore > homeScore;
+
+  const homeSpan = document.createElement("span");
+  homeSpan.textContent = `${match.home_squad_name} ${formatNumber(homeScore)}`;
+  homeSpan.className = homeWon ? "result-winner" : "result-loser";
+
+  const sep = document.createTextNode(" – ");
+
+  const awaySpan = document.createElement("span");
+  awaySpan.textContent = `${formatNumber(awayScore)} ${match.away_squad_name}`;
+  awaySpan.className = awayWon ? "result-winner" : "result-loser";
+
+  cell.append(homeSpan, sep, awaySpan);
+  return cell;
+}
+
 function createSvgElement(tagName, attributes = {}, textContent = "") {
   const element = document.createElementNS("http://www.w3.org/2000/svg", tagName);
   Object.entries(attributes).forEach(([key, value]) => {
@@ -441,7 +473,7 @@ function renderMatches(matches) {
     row.append(
       createCell(`${match.season} ${match.competition_phase}`),
       createCell(`R${match.round_number} G${match.game_number}`),
-      createCell(`${match.home_squad_name} ${formatNumber(match.home_score)} - ${formatNumber(match.away_score)} ${match.away_squad_name}`),
+      createMatchResultCell(match),
       createCell(match.venue_name || "-"),
       createCell(formatDate(match.local_start_time))
     );
@@ -457,10 +489,12 @@ function renderTeamLeaders(rows) {
 
   elements.teamLeadersBody.replaceChildren();
   rows.forEach((rowData, index) => {
+    const colour = resolveTeamColour(rowData.squad_name, rowData.squad_colour, index);
     const row = document.createElement("tr");
+    row.style.setProperty("--row-accent", colour);
     row.append(
       createCell(`${index + 1}`),
-      createCell(rowData.squad_name),
+      createTeamCell(rowData.squad_name, colour),
       createCell(rowData.stat),
       createCell(formatNumber(statValue(rowData))),
       createCell(formatNumber(rowData.matches_played))
@@ -477,11 +511,13 @@ function renderPlayerLeaders(rows) {
 
   elements.playerLeadersBody.replaceChildren();
   rows.forEach((rowData, index) => {
+    const colour = resolvePlayerColour(rowData.player_name, rowData.squad_name, index);
     const row = document.createElement("tr");
+    row.style.setProperty("--row-accent", colour);
     row.append(
       createCell(`${index + 1}`),
       createLinkCell(playerProfileUrl(rowData.player_id), rowData.player_name),
-      createCell(rowData.squad_name || "-"),
+      createTeamCell(rowData.squad_name || "-", colour),
       createCell(rowData.stat),
       createCell(formatNumber(statValue(rowData))),
       createCell(formatNumber(rowData.matches_played))

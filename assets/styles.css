@@ -2,6 +2,7 @@
   color-scheme: dark;
   --bg: #091117;
   --bg-soft: #111c25;
+  --bg-mid: #0b141b;
   --panel: rgba(13, 22, 31, 0.78);
   --panel-solid: #111b24;
   --panel-alt: #162531;
@@ -14,6 +15,7 @@
   --accent-cool: #79d8d0;
   --danger: #ff9e9e;
   --success: #a5efc1;
+  --text-on-accent: #20160d;
   --shadow: 0 30px 60px rgba(0, 0, 0, 0.28);
   --display-font: "Teko", sans-serif;
   --body-font: "Fraunces", Georgia, serif;
@@ -80,11 +82,13 @@ code {
 .backdrop-grid {
   position: absolute;
   inset: 0;
+  /* Netball court-inspired concentric arcs, as if looking down the court from above */
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.8), transparent 85%);
+    radial-gradient(circle at 50% -8%, transparent 30%, rgba(255, 255, 255, 0.03) 31%, rgba(255, 255, 255, 0.03) 32%, transparent 33%),
+    radial-gradient(circle at 50% -8%, transparent 49%, rgba(255, 255, 255, 0.022) 50%, rgba(255, 255, 255, 0.022) 51%, transparent 52%),
+    radial-gradient(circle at 50% -8%, transparent 67%, rgba(255, 255, 255, 0.016) 68%, rgba(255, 255, 255, 0.016) 69%, transparent 70%),
+    radial-gradient(circle at 50% -8%, transparent 85%, rgba(255, 255, 255, 0.01) 86%, rgba(255, 255, 255, 0.01) 87%, transparent 88%);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85), transparent 82%);
 }
 
 .page-shell {
@@ -414,7 +418,7 @@ button {
   border: 0;
   border-radius: 999px;
   background: linear-gradient(135deg, var(--accent) 0%, #ffdca4 100%);
-  color: #20160d;
+  color: var(--text-on-accent);
   cursor: pointer;
   font-family: var(--display-font);
   font-size: 1rem;
@@ -541,7 +545,7 @@ button:hover {
 .view-toggle .button.is-active,
 .view-toggle .button[aria-pressed="true"] {
   background: linear-gradient(135deg, rgba(240, 198, 126, 0.96), rgba(255, 224, 165, 0.98));
-  color: #20160d;
+  color: var(--text-on-accent);
 }
 
 .panel-view {
@@ -760,6 +764,34 @@ tbody tr {
 
 tbody tr:hover {
   background: rgba(255, 255, 255, 0.035);
+}
+
+/* Team accent: colored left-bar using the row's --row-accent custom property */
+#team-leaders-table tbody td:first-child,
+#player-leaders-table tbody td:first-child {
+  box-shadow: inset 3px 0 0 var(--row-accent, transparent);
+}
+
+/* Match result win/loss semantic coloring */
+.result-winner {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.result-loser {
+  color: var(--muted);
+}
+
+/* Team name with color swatch */
+.team-swatch {
+  display: inline-block;
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+  background: var(--swatch-color, var(--muted));
+  vertical-align: middle;
+  margin-right: 0.55rem;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 .table-link,
