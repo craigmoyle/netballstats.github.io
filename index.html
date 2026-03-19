@@ -28,15 +28,7 @@
 
       <section class="hero-panel">
         <div class="hero-copy">
-          <p class="eyebrow" aria-hidden="true">Super Netball archive</p>
           <h1>Super Netball statistical archive for leaders, records, and seasons.</h1>
-          <p class="intro-copy" aria-hidden="true">
-            Explore leaders, season totals, and historical records across every Super Netball season.
-          </p>
-          <div class="hero-pills" aria-label="Feature highlights">
-            <a class="hero-pill hero-pill--link" href="/players/">Player profiles</a>
-            <a class="hero-pill hero-pill--link" href="/query/">Ask the stats</a>
-          </div>
         </div>
       </section>
     </header>
@@ -46,8 +38,7 @@
         <div id="status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
         <div class="panel__heading panel__heading--split">
           <div>
-            <p class="kicker">Query controls</p>
-            <h2>Set the statistical view, filters, and result range.</h2>
+            <h2>Filters</h2>
           </div>
           <p id="active-filter-summary" class="muted filter-summary">Loading query options…</p>
         </div>
@@ -117,19 +108,14 @@
           <span class="summary-card__label">Points</span>
           <span id="summary-goals" class="summary-card__value">-</span>
         </article>
-        <article class="summary-card summary-card--wide">
-          <span class="summary-card__label">Last refresh</span>
-          <span id="summary-refreshed" class="summary-card__value summary-card__value--small">-</span>
-        </article>
       </section>
+      <p id="summary-refreshed" class="muted refresh-note"></p>
 
       <section class="panel results-panel results-panel--wide reveal">
         <div class="panel__heading panel__heading--split">
           <div>
-            <p class="kicker">Recent fixtures</p>
-            <h2>Competition summary</h2>
+            <h2>Recent results</h2>
           </div>
-          <p class="muted">Latest match results under the current filter set.</p>
         </div>
         <div class="table-wrapper table-wrapper--spotlight">
           <table id="matches-table">
@@ -151,8 +137,7 @@
         <section class="panel results-panel reveal">
           <div class="panel__heading panel__heading--split">
             <div>
-              <p class="kicker">Competition totals</p>
-              <h2>Season-by-season league output</h2>
+              <h2>Season totals</h2>
             </div>
             <div class="panel__meta-stack">
               <p class="muted">Track competition-wide values by season for the selected team stat.</p>
@@ -180,9 +165,7 @@
           <div class="panel-view panel-view--charts" data-panel-view="competition-season" data-panel-mode="chart" hidden>
             <article class="chart-card">
               <div class="chart-card__header">
-                <span class="chart-card__eyebrow">Season totals</span>
                 <h3 class="chart-card__title">How the whole competition moves by season</h3>
-                <p id="competition-season-note" class="chart-note">Competition-wide season totals for the active team stat.</p>
               </div>
               <div id="competition-season-chart" class="chart-shell" role="img" aria-label="Competition season totals chart"></div>
             </article>
@@ -192,8 +175,7 @@
         <section class="panel results-panel reveal">
           <div class="panel__heading panel__heading--split">
             <div>
-              <p class="kicker">Team leaderboards</p>
-              <h2>Club leaderboard view</h2>
+              <h2>Team leaderboard</h2>
             </div>
             <div class="panel__meta-stack">
               <p class="muted">Compare team output across seasons and eras.</p>
@@ -223,17 +205,13 @@
             <div class="chart-stack">
               <article class="chart-card">
                 <div class="chart-card__header">
-                  <span class="chart-card__eyebrow">Leaderboard bars</span>
                   <h3 class="chart-card__title">Top clubs by the selected stat</h3>
-                  <p id="team-bar-note" class="chart-note">The selected team stat, ranked across the active filters.</p>
                 </div>
                 <div id="team-leaders-chart" class="chart-shell" role="img" aria-label="Team leaderboard chart"></div>
               </article>
               <article class="chart-card">
                 <div class="chart-card__header">
-                  <span class="chart-card__eyebrow">Season trend lines</span>
                   <h3 class="chart-card__title">How the leading clubs move by season</h3>
-                  <p id="team-trend-note" class="chart-note">Track the strongest clubs across the selected seasons.</p>
                 </div>
                 <div id="team-trend-chart" class="chart-shell" role="img" aria-label="Team season trend chart"></div>
               </article>
@@ -244,8 +222,7 @@
         <section class="panel results-panel reveal">
           <div class="panel__heading panel__heading--split">
             <div>
-              <p class="kicker">Player leaderboards</p>
-              <h2>Player leaderboard view</h2>
+              <h2>Player leaderboard</h2>
             </div>
             <div class="panel__meta-stack">
               <p class="muted">Player aliases are consolidated under a single record.</p>
@@ -276,17 +253,13 @@
             <div class="chart-stack">
               <article class="chart-card">
                 <div class="chart-card__header">
-                  <span class="chart-card__eyebrow">Leaderboard bars</span>
                   <h3 class="chart-card__title">Top players by the selected stat</h3>
-                  <p id="player-bar-note" class="chart-note">The selected player stat, ranked across the active filters.</p>
                 </div>
                 <div id="player-leaders-chart" class="chart-shell" role="img" aria-label="Player leaderboard chart"></div>
               </article>
               <article class="chart-card">
                 <div class="chart-card__header">
-                  <span class="chart-card__eyebrow">Season trend lines</span>
                   <h3 class="chart-card__title">How the leading players move by season</h3>
-                  <p id="player-trend-note" class="chart-note">Track season-by-season movement for the strongest player totals.</p>
                 </div>
                 <div id="player-trend-chart" class="chart-shell" role="img" aria-label="Player season trend chart"></div>
               </article>

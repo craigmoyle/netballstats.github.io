@@ -36,11 +36,7 @@
             and list-style stat filters. Every answer stays auditable with the parsed interpretation
             and matching rows underneath.
           </p>
-          <div class="hero-pills" aria-label="Feature highlights">
-            <span class="hero-pill">Count questions</span>
-            <span class="hero-pill">Highest / lowest</span>
-            <span class="hero-pill">Visible parsed filters</span>
-          </div>
+
         </div>
 
         <aside class="hero-aside" aria-label="Query feature scope">
@@ -49,15 +45,7 @@
             <strong>Structured natural language</strong>
             <p id="query-season-summary">Loading available seasons and supported scope…</p>
           </div>
-          <div class="hero-meta">
-            <div class="meta-pill">
-              <span>API</span>
-              <code id="api-base">/api</code>
-            </div>
-            <div class="meta-pill">
-              <span id="query-mode">Deterministic parser</span>
-            </div>
-          </div>
+
         </aside>
       </section>
     </header>
@@ -68,13 +56,8 @@
         <div class="query-board">
           <div class="query-board__header">
             <div class="panel__heading">
-              <p class="kicker">Question console</p>
-              <h2>Ask a supported stats question.</h2>
+              <h2>Ask a question</h2>
             </div>
-            <p class="query-board__lede">
-              Try a player threshold question, a highest or lowest question, or a list query.
-              If the parser cannot map the request confidently, it will say so instead of guessing.
-            </p>
           </div>
 
           <form id="query-form" class="query-form" novalidate>
@@ -99,7 +82,6 @@
             </div>
 
             <div>
-              <p class="kicker">Example prompts</p>
               <div class="example-strip" id="example-strip" aria-label="Example question prompts">
                 <button type="button" class="example-chip" data-example="How many times has Fowler scored 50 goals or more against the Vixens?">Fowler 50+ against Vixens</button>
                 <button type="button" class="example-chip" data-example="What is Fowler's highest goals total against the Swifts?">Fowler highest against Swifts</button>
@@ -133,7 +115,6 @@
         <section class="panel">
           <div class="answer-stage">
             <div class="answer-stage__card">
-              <span class="answer-stage__eyebrow">Answer</span>
               <h2 id="answer-headline" class="answer-stage__headline">Run a question to see the parsed answer here.</h2>
               <p id="answer-meta" class="answer-stage__meta">
                 The answer sentence is generated from a fixed query template and the matching rows below.
@@ -157,8 +138,7 @@
         <section class="panel">
           <div class="panel__heading panel__heading--split">
             <div>
-              <p class="kicker">Supporting rows</p>
-              <h2>Match-level evidence behind the answer.</h2>
+              <h2>Supporting evidence</h2>
             </div>
             <p id="table-meta" class="table-meta">No rows loaded yet.</p>
           </div>

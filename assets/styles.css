@@ -143,7 +143,6 @@ code {
 }
 
 .eyebrow,
-.kicker,
 .field-label,
 .field label,
 .hero-aside__label {
@@ -153,7 +152,6 @@ code {
 }
 
 .eyebrow,
-.kicker,
 .hero-aside__label {
   color: var(--accent-cool);
   font-size: var(--type-label);
@@ -195,8 +193,6 @@ code {
   color: var(--muted);
 }
 
-.hero-pills,
-.hero-meta,
 .season-actions,
 .filter-actions {
   display: flex;
@@ -204,28 +200,10 @@ code {
   gap: 0.75rem;
 }
 
-.hero-pill,
-.meta-pill,
 .season-choice span {
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.035);
-}
-
-.hero-pill {
-  padding: 0.7rem 0.95rem;
-  color: var(--accent-strong);
-  font-size: var(--type-sm);
-}
-
-.hero-pill--link {
-  text-decoration: none;
-  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-}
-
-.hero-pill--link:hover {
-  border-color: rgba(240, 198, 126, 0.35);
-  background: rgba(240, 198, 126, 0.08);
 }
 
 .hero-aside {
@@ -253,18 +231,6 @@ code {
 .muted,
 .field-hint {
   color: var(--muted);
-}
-
-.meta-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.8rem 1rem;
-  color: var(--muted);
-}
-
-.meta-pill code {
-  color: var(--text);
 }
 
 .page-main {
@@ -511,7 +477,13 @@ button:hover {
 .summary-band {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.refresh-note {
+  margin: -0.5rem 0 0;
+  font-size: var(--type-sm);
+  text-align: right;
 }
 
 .summary-card {
@@ -539,10 +511,6 @@ button:hover {
   background:
     linear-gradient(135deg, rgba(121, 216, 208, 0.18), rgba(240, 198, 126, 0.08)),
     rgba(17, 28, 37, 0.88);
-}
-
-.summary-card--wide {
-  grid-column: span 2;
 }
 
 .summary-card span {
@@ -643,14 +611,6 @@ button:hover {
   margin-bottom: 0.85rem;
 }
 
-.chart-card__eyebrow {
-  font-family: var(--display-font);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--accent-cool);
-  font-size: var(--type-xs);
-}
-
 .chart-card__title {
   margin: 0;
   font-family: var(--display-font);
@@ -658,11 +618,6 @@ button:hover {
   line-height: 0.95;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-.chart-note {
-  margin-bottom: 0;
-  color: var(--muted);
 }
 
 .chart-shell {
@@ -1076,11 +1031,6 @@ caption.table-caption {
   gap: 0.75rem;
 }
 
-.query-board__lede {
-  max-width: 62ch;
-  color: var(--muted);
-}
-
 .query-form {
   display: grid;
   gap: 1rem;
@@ -1200,14 +1150,6 @@ caption.table-caption {
   background: linear-gradient(90deg, rgba(240, 198, 126, 0.8), rgba(240, 198, 126, 0));
 }
 
-.answer-stage__eyebrow {
-  color: var(--accent-cool);
-  font-family: var(--display-font);
-  font-size: 0.9rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
 .answer-stage__headline {
   margin: 0.45rem 0 0;
   font-family: var(--display-font);
@@ -1321,7 +1263,6 @@ caption.table-caption {
     transition: none;
     transform: none;
   }
-  .hero-pill--link,
   .directory-card,
   .season-choice span,
   .button,
@@ -1344,12 +1285,7 @@ caption.table-caption {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .summary-card--wide {
-    grid-column: span 1;
-  }
-}
-
-@media (max-width: 1200px) {
+  .summary-card span {@media (max-width: 1200px) {
   .season-table {
     min-width: 0;
     width: 100%;
