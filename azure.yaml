@@ -19,19 +19,23 @@ hooks:
         --query "value[?tags.\"azd-service-name\"=='api'].properties.template.containers[0].image | [0]" \
         --output tsv)
       SAT_JOB=$(az containerapp job list \
+        --subscription "$AZURE_SUBSCRIPTION_ID" \
         --resource-group "$RG" \
         --query "[?contains(name, '-db-sat-')].name | [0]" \
         --output tsv)
       SUN_JOB=$(az containerapp job list \
+        --subscription "$AZURE_SUBSCRIPTION_ID" \
         --resource-group "$RG" \
         --query "[?contains(name, '-db-sun-')].name | [0]" \
         --output tsv)
       az containerapp job update \
+        --subscription "$AZURE_SUBSCRIPTION_ID" \
         --name "$SAT_JOB" \
         --resource-group "$RG" \
         --image "$API_IMAGE" \
         --container-name main
       az containerapp job update \
+        --subscription "$AZURE_SUBSCRIPTION_ID" \
         --name "$SUN_JOB" \
         --resource-group "$RG" \
         --image "$API_IMAGE" \

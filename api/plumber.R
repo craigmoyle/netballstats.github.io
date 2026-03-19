@@ -154,6 +154,16 @@ database_health_check <- function(include_metadata = FALSE) {
   list(ok = TRUE, metadata = metadata)
 }
 
+handle_request_error <- function(error, res) {
+  msg <- conditionMessage(error)
+  message("[API] Request error: ", msg)
+  if (grepl("statement timeout|canceling statement|query_canceled", msg, ignore.case = TRUE)) {
+    json_error(res, 503, "The query took too long. Try narrowing to a specific season or player.")
+  } else {
+    json_error(res, 400, "Invalid request parameters.")
+  }
+}
+
 json_scalar <- function(value) {
   if (!is.list(value) && length(value) == 1L) {
     return(jsonlite::unbox(value))
@@ -361,7 +371,7 @@ function(search = "", limit = "500", res) {
 
     list(data = query_rows(conn, query, params))
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    handle_request_error(error, res)
   })
 }
 
@@ -406,7 +416,7 @@ function(player_id = "", res) {
 
     build_player_profile_payload(player, stats_rows)
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    handle_request_error(error, res)
   })
 }
 
@@ -456,7 +466,7 @@ function(season = "", seasons = "", team_id = "", round = "", res) {
       build_mode = metadata_map[["build_mode"]] %||% "production"
     )
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    handle_request_error(error, res)
   })
 
   result
@@ -491,7 +501,7 @@ function(season = "", seasons = "", team_id = "", round = "", limit = "12", res)
 
     list(data = query_rows(conn, filters$query, filters$params))
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    handle_request_error(error, res)
   })
 }
 
@@ -529,7 +539,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", m
     rows <- query_rows(conn, filters$query, filters$params)
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    handle_request_error(error, res)
   })
 }
 
@@ -564,7 +574,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", s
 
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    handle_request_error(error, res)
   })
 }
 
@@ -598,7 +608,7 @@ function(season = "", seasons = "", round = "", stat = "points", metric = "total
     rows <- query_rows(conn, filters$query, filters$params)
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    handle_request_error(error, res)
   })
 }
 
@@ -668,7 +678,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", m
     rows <- query_rows(conn, filters$query, filters$params)
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    handle_request_error(error, res)
   })
 }
 
@@ -706,7 +716,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", s
 
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    handle_request_error(error, res)
   })
 }
 
@@ -745,7 +755,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", l
 
     list(data = query_rows(conn, filters$query, filters$params))
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    handle_request_error(error, res)
   })
 }
 
@@ -774,7 +784,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", s
       limit = limit
     ))
   }, error = function(error) {
-    { message("[API] Request error: ", conditionMessage(error)); json_error(res, 400, "Invalid request parameters.") }
+    handle_request_error(error, res)
   })
 }
 
@@ -837,12 +847,6 @@ function(question = "", limit = "12", res) {
       rows = rows_to_records(rows)
     )
   }, error = function(error) {
-    msg <- conditionMessage(error)
-    message("[API] Request error: ", msg)
-    if (grepl("statement timeout|canceling statement|query_canceled", msg, ignore.case = TRUE)) {
-      json_error(res, 503, "The query took too long. Try narrowing to a specific season or player.")
-    } else {
-      json_error(res, 400, "Invalid request parameters.")
-    }
+    handle_request_error(error, res)
   })
 }

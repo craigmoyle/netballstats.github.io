@@ -1327,8 +1327,27 @@ fetch_query_result_rows <- function(conn, intent) {
     return(query_rows(conn, limited_query, base_query$params))
   }
 
+  # For list intents push ORDER BY + LIMIT into SQL so we only transfer the
+  # rows the caller will actually display, not the full match history.
+  if (identical(intent$intent_type, "list")) {
+    list_limit <- min(intent$limit %||% 25L, 25L)
+    limited_query <- paste0(
+      base_query$query,
+      " ORDER BY total_value DESC",
+      ", stats.season DESC, stats.round_number DESC, players.canonical_name ASC",
+      " LIMIT ", list_limit
+    )
+    return(sort_query_result_rows(
+      query_rows(conn, limited_query, base_query$params),
+      "list"
+    ))
+  }
+
+  # For count intents we need all matching rows to compute total_matches, but
+  # cap at 2000 to guard against unbounded scans. No single player has more
+  # than ~1000 matches in the dataset.
   sort_query_result_rows(
-    query_rows(conn, base_query$query, base_query$params),
+    query_rows(conn, paste0(base_query$query, " LIMIT 2000"), base_query$params),
     intent$intent_type
   )
 }
