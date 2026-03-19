@@ -19,6 +19,10 @@
   --shadow: 0 30px 60px rgba(0, 0, 0, 0.28);
   --display-font: "Teko", sans-serif;
   --body-font: "Fraunces", Georgia, serif;
+  /* Type scale — 3-point sub-1rem hierarchy */
+  --type-xs: 0.8125rem;   /* 13px — charts, mobile labels */
+  --type-sm: 0.875rem;    /* 14px — captions, legend, pills */
+  --type-label: 0.9375rem; /* 15px — table headers, buttons, kickers */
 }
 
 * {
@@ -36,7 +40,10 @@ body {
   background: linear-gradient(180deg, #091117 0%, #0b141b 38%, #111c25 100%);
   color: var(--text);
   font-family: var(--body-font);
-  line-height: 1.5;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.65;
+  font-kerning: normal;
 }
 
 h1,
@@ -145,7 +152,7 @@ code {
 .kicker,
 .hero-aside__label {
   color: var(--accent-cool);
-  font-size: 0.92rem;
+  font-size: var(--type-label);
 }
 
 .hero-copy {
@@ -180,6 +187,7 @@ code {
 .intro-copy {
   max-width: 56ch;
   font-size: 1.02rem;
+  line-height: 1.7;
   color: var(--muted);
 }
 
@@ -203,7 +211,7 @@ code {
 .hero-pill {
   padding: 0.7rem 0.95rem;
   color: var(--accent-strong);
-  font-size: 0.9rem;
+  font-size: var(--type-sm);
 }
 
 .hero-pill--link {
@@ -299,7 +307,7 @@ code {
 .filter-summary {
   max-width: 38ch;
   text-align: right;
-  font-size: 0.94rem;
+  font-size: var(--type-label);
 }
 
 .status-banner {
@@ -354,7 +362,7 @@ code {
 .field label,
 .field-label {
   color: var(--accent-strong);
-  font-size: 0.92rem;
+  font-size: var(--type-label);
 }
 
 .field input,
@@ -435,6 +443,10 @@ button:focus-visible {
   min-width: 4.7rem;
   padding: 0.75rem 1rem;
   color: var(--muted);
+  font-family: var(--display-font);
+  font-size: var(--type-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
   transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
 }
@@ -487,7 +499,7 @@ button:hover {
 
 .button--small {
   padding: 0.65rem 0.95rem;
-  font-size: 0.88rem;
+  font-size: var(--type-sm);
 }
 
 .summary-band {
@@ -535,7 +547,7 @@ button:hover {
 
 .summary-card__label {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: var(--type-sm);
 }
 
 .summary-card__value {
@@ -544,6 +556,7 @@ button:hover {
   line-height: 0.9;
   letter-spacing: 0.04em;
   margin-top: 0.65rem;
+  font-variant-numeric: tabular-nums lnum;
 }
 
 .summary-card__value--small {
@@ -629,7 +642,7 @@ button:hover {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--accent-cool);
-  font-size: 0.86rem;
+  font-size: var(--type-xs);
 }
 
 .chart-card__title {
@@ -684,7 +697,7 @@ button:hover {
 }
 
 .chart-label {
-  font-size: 14px;
+  font-size: var(--type-sm);
 }
 
 .chart-value,
@@ -740,7 +753,7 @@ button:hover {
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: var(--type-sm);
 }
 
 .chart-legend__swatch {
@@ -783,9 +796,13 @@ td {
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+td {
+  font-variant-numeric: tabular-nums;
+}
+
 th {
   font-family: var(--display-font);
-  font-size: 0.92rem;
+  font-size: var(--type-label);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--accent-strong);
@@ -909,7 +926,7 @@ tbody tr:hover {
 .directory-card__eyebrow {
   color: var(--accent-cool);
   font-family: var(--display-font);
-  font-size: 0.86rem;
+  font-size: var(--type-xs);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -925,7 +942,7 @@ tbody tr:hover {
 
 .directory-card__meta {
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: var(--type-label);
 }
 
 .directory-card__footer {
@@ -1087,7 +1104,7 @@ caption.table-caption {
 .query-input-shell label {
   color: var(--accent-cool);
   font-family: var(--display-font);
-  font-size: 0.92rem;
+  font-size: var(--type-label);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -1117,7 +1134,7 @@ caption.table-caption {
 
 .query-hint {
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: var(--type-label);
 }
 
 .example-strip {
@@ -1375,7 +1392,7 @@ caption.table-caption {
     margin-bottom: 0.2rem;
     color: var(--accent-strong);
     font-family: var(--display-font);
-    font-size: 0.82rem;
+    font-size: var(--type-xs);
     letter-spacing: 0.08em;
     line-height: 1.05;
     text-transform: uppercase;
@@ -1505,7 +1522,7 @@ caption.table-caption {
   }
 
   .player-subtitle {
-    font-size: 0.88rem;
+    font-size: var(--type-sm);
   }
 
   table:not(.season-table) td,
