@@ -531,6 +531,7 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   min-width: 4.7rem;
+  min-block-size: 44px;
   padding: 0.75rem 1rem;
   color: var(--muted);
   font-family: var(--display-font);
@@ -599,6 +600,7 @@ button[aria-busy="true"] {
 
 .button--small {
   padding: 0.75rem 0.95rem;
+  min-block-size: 44px;
   font-size: var(--type-sm);
 }
 
@@ -916,8 +918,10 @@ tbody tr {
   transition: background 0.2s ease-out;
 }
 
-tbody tr:hover {
-  background: color-mix(in srgb, var(--text) 4%, transparent);
+@media (hover: hover) {
+  tbody tr:hover {
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+  }
 }
 
 /* Rank highlights — top 3 in any leaderboard */
@@ -1036,12 +1040,14 @@ tr[data-rank="3"] td:first-child {
   transition: transform 0.2s ease-out, border-color 0.2s ease-out, background 0.2s ease-out;
 }
 
-.directory-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(240, 198, 126, 0.28);
-  background:
-    linear-gradient(180deg, rgba(240, 198, 126, 0.08), transparent),
-    rgba(9, 17, 23, 0.52);
+@media (hover: hover) {
+  .directory-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(240, 198, 126, 0.28);
+    background:
+      linear-gradient(180deg, rgba(240, 198, 126, 0.08), transparent),
+      rgba(9, 17, 23, 0.52);
+  }
 }
 
 .directory-card__eyebrow {
@@ -1264,7 +1270,7 @@ caption.table-caption {
 .example-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 2.6rem;
+  min-block-size: 44px;
   padding: 0.65rem 0.9rem;
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
@@ -1603,13 +1609,9 @@ caption.table-caption {
   }
 
   .page-nav__link {
-    width: 100%;
+    flex: 1 1 auto;
+    min-width: 0;
     justify-content: center;
-  }
-
-  .theme-toggle {
-    align-self: flex-end;
-    margin-left: auto;
   }
 
   .summary-band {
@@ -1743,11 +1745,13 @@ caption.table-caption {
     var(--panel);
 }
 
-[data-theme="light"] .directory-card:hover {
-  border-color: var(--border-strong);
-  background:
-    linear-gradient(180deg, rgba(255, 248, 235, 0.9), rgba(255, 240, 210, 0.7)),
-    var(--panel);
+@media (hover: hover) {
+  [data-theme="light"] .directory-card:hover {
+    border-color: var(--border-strong);
+    background:
+      linear-gradient(180deg, rgba(255, 248, 235, 0.9), rgba(255, 240, 210, 0.7)),
+      var(--panel);
+  }
 }
 
 [data-theme="light"] .season-choice span {
@@ -1843,4 +1847,64 @@ caption.table-caption {
 [data-theme="light"] button:focus-visible,
 [data-theme="light"] a:focus-visible {
   outline-color: rgba(160, 95, 10, 0.85);
+}
+
+/* ----- Print ----- */
+@media print {
+  .skip-link,
+  .page-nav,
+  .hero-shell,
+  .filters-form,
+  .filter-summary,
+  .season-choices,
+  .season-actions,
+  .filter-actions,
+  .view-toggle,
+  .chart-card,
+  .chart-shell,
+  .status-banner,
+  .example-strip,
+  .query-page .hero-aside,
+  footer {
+    display: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    background: white !important;
+    color: black !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  a[href]::after {
+    content: none;
+  }
+
+  .panel,
+  .results-card {
+    border: 1px solid #ccc !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th,
+  td {
+    border: 1px solid #ccc;
+    padding: 0.4rem 0.6rem;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr {
+    page-break-inside: avoid;
+  }
 }
