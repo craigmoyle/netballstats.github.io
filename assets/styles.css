@@ -65,8 +65,8 @@
   --type-label: 0.9375rem; /* 15px — table headers, buttons, kickers */
   /* Border-radius scale */
   --radius-sm: 1.125rem;   /* 18px — banners, badges */
-  --radius-card: 1.5rem;   /* 24px — cards, hero, secondary containers */
-  --radius-panel: 1.75rem; /* 28px — main content panels */
+  --radius-card: 1.125rem; /* 18px — cards, hero, secondary containers */
+  --radius-panel: 1.375rem; /* 22px — main content panels */
 }
 
 [data-theme="light"] {
@@ -127,42 +127,6 @@ code {
   pointer-events: none;
   overflow: hidden;
 }
-
-.backdrop-glow {
-  position: absolute;
-  border-radius: 999px;
-  filter: blur(18px);
-  opacity: 0.5;
-}
-
-.backdrop-glow--one {
-  width: 26rem;
-  height: 26rem;
-  top: -4rem;
-  right: -6rem;
-  background: radial-gradient(circle, rgba(240, 198, 126, 0.42) 0%, rgba(240, 198, 126, 0) 72%);
-}
-
-.backdrop-glow--two {
-  width: 24rem;
-  height: 24rem;
-  bottom: 8rem;
-  left: -8rem;
-  background: radial-gradient(circle, rgba(121, 216, 208, 0.22) 0%, rgba(121, 216, 208, 0) 74%);
-}
-
-.backdrop-grid {
-  position: absolute;
-  inset: 0;
-  /* Netball court-inspired concentric arcs, as if looking down the court from above */
-  background-image:
-    radial-gradient(circle at 50% -8%, transparent 30%, rgba(255, 255, 255, 0.03) 31%, rgba(255, 255, 255, 0.03) 32%, transparent 33%),
-    radial-gradient(circle at 50% -8%, transparent 49%, rgba(255, 255, 255, 0.022) 50%, rgba(255, 255, 255, 0.022) 51%, transparent 52%),
-    radial-gradient(circle at 50% -8%, transparent 67%, rgba(255, 255, 255, 0.016) 68%, rgba(255, 255, 255, 0.016) 69%, transparent 70%),
-    radial-gradient(circle at 50% -8%, transparent 85%, rgba(255, 255, 255, 0.01) 86%, rgba(255, 255, 255, 0.01) 87%, transparent 88%);
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.85), transparent 82%);
-}
-
 .page-shell {
   width: min(1240px, calc(100% - 2rem));
   margin: 0 auto;
@@ -230,6 +194,16 @@ code {
   display: none;
 }
 
+.query-page .hero-copy {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.query-page .hero-copy .eyebrow {
+  display: block;
+}
+
 
 .panel h2 {
   font-family: var(--display-font);
@@ -257,6 +231,40 @@ code {
   font-size: 1.02rem;
   line-height: 1.7;
   color: var(--muted);
+}
+
+.filter-divider {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--display-font);
+  font-size: var(--type-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.7;
+  margin: 0.25rem 0 -0.25rem;
+}
+
+.filter-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.field--secondary label {
+  font-size: var(--type-sm);
+  color: var(--muted);
+}
+
+.field--secondary input,
+.field--secondary select {
+  padding: 0.7rem 0.85rem;
+  font-size: var(--type-sm);
+  border-color: rgba(255, 255, 255, 0.07);
+  background: rgba(22, 37, 49, 0.6);
 }
 
 .season-actions,
@@ -570,7 +578,7 @@ button:hover {
 .summary-band {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .refresh-note {
@@ -1371,10 +1379,6 @@ caption.table-caption {
     border-radius: var(--radius-sm);
   }
 
-  .summary-band {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
 }
 
 @media (max-width: 1200px) {
@@ -1466,10 +1470,6 @@ caption.table-caption {
   .panel__heading--split,
   .results-grid {
     grid-template-columns: 1fr;
-  }
-
-  .summary-band {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .panel__meta-stack {
@@ -1628,20 +1628,6 @@ caption.table-caption {
 
 [data-theme="light"] body {
   background: linear-gradient(180deg, var(--bg) 0%, var(--bg-mid) 38%, var(--bg-soft) 100%);
-}
-
-[data-theme="light"] .backdrop-glow--one {
-  background: radial-gradient(circle, rgba(184, 112, 32, 0.1) 0%, rgba(184, 112, 32, 0) 72%);
-  opacity: 0.5;
-}
-
-[data-theme="light"] .backdrop-glow--two {
-  background: radial-gradient(circle, rgba(26, 138, 122, 0.07) 0%, rgba(26, 138, 122, 0) 74%);
-  opacity: 0.4;
-}
-
-[data-theme="light"] .backdrop-grid {
-  opacity: 0.15;
 }
 
 [data-theme="light"] .hero-panel {

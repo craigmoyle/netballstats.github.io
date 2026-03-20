@@ -451,7 +451,7 @@ function applyMeta(meta) {
 
 function renderSummary(summary) {
   elements.summaryMatches.textContent = formatNumber(summary.total_matches);
-  elements.summaryTeams.textContent = formatNumber(summary.total_teams);
+  if (elements.summaryTeams) elements.summaryTeams.textContent = formatNumber(summary.total_teams);
   elements.summaryPlayers.textContent = formatNumber(summary.total_players);
   elements.summaryGoals.textContent = formatNumber(summary.total_goals);
   elements.summaryRefreshed.textContent = formatDate(summary.refreshed_at);

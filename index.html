@@ -14,11 +14,6 @@
   </head>
   <body>
     <a href="#main-content" class="skip-link">Skip to content</a>
-    <div class="page-backdrop" aria-hidden="true">
-      <div class="backdrop-glow backdrop-glow--one"></div>
-      <div class="backdrop-glow backdrop-glow--two"></div>
-      <div class="backdrop-grid"></div>
-    </div>
 
     <header class="page-shell hero-shell reveal">
       <nav class="page-nav" aria-label="Site navigation">
@@ -30,7 +25,7 @@
       <section class="hero-panel">
         <div class="hero-copy">
           <h1>Super Netball Stats</h1>
-          <p class="hero-tagline">Every season. Every player.</p>
+          <p class="hero-tagline">Every season. Every player. 2017–2025.</p>
         </div>
       </section>
     </header>
@@ -59,14 +54,6 @@
           </div>
 
           <div class="field">
-            <label for="team-id">Team</label>
-            <select id="team-id" name="team-id"></select>
-          </div>
-          <div class="field">
-            <label for="round">Round</label>
-            <input id="round" name="round" type="number" min="1" max="30" inputmode="numeric" placeholder="Any round">
-          </div>
-          <div class="field">
             <label for="team-stat">Team stat</label>
             <select id="team-stat" name="team-stat"></select>
           </div>
@@ -74,7 +61,18 @@
             <label for="player-stat">Player stat</label>
             <select id="player-stat" name="player-stat"></select>
           </div>
-          <div class="field">
+
+          <div class="filter-divider field--wide" aria-hidden="true">Narrow results</div>
+
+          <div class="field field--secondary">
+            <label for="team-id">Team</label>
+            <select id="team-id" name="team-id"></select>
+          </div>
+          <div class="field field--secondary">
+            <label for="round">Round</label>
+            <input id="round" name="round" type="number" min="1" max="30" inputmode="numeric" placeholder="Any round">
+          </div>
+          <div class="field field--secondary">
             <label for="stat-mode">Stat mode</label>
             <select id="stat-mode" name="stat-mode">
               <option value="total" selected>Total</option>
@@ -87,7 +85,7 @@
             <small class="field-hint">Historical surname changes still resolve to the same player record.</small>
           </div>
           <div class="filter-actions field--wide">
-            <button type="submit">Run query</button>
+            <button type="submit">Apply filters</button>
             <button type="button" id="reset-filters" class="button button--ghost">Reset</button>
           </div>
         </form>
@@ -99,15 +97,11 @@
           <span id="summary-matches" class="summary-card__value">-</span>
         </article>
         <article class="summary-card">
-          <span class="summary-card__label">Teams</span>
-          <span id="summary-teams" class="summary-card__value">-</span>
-        </article>
-        <article class="summary-card">
           <span class="summary-card__label">Players</span>
           <span id="summary-players" class="summary-card__value">-</span>
         </article>
         <article class="summary-card">
-          <span class="summary-card__label">Points</span>
+          <span class="summary-card__label">Points scored</span>
           <span id="summary-goals" class="summary-card__value">-</span>
         </article>
       </section>
@@ -143,7 +137,7 @@
               <h2>Season totals</h2>
             </div>
             <div class="panel__meta-stack">
-              <p class="muted">Track competition-wide values by season for the selected team stat.</p>
+              <p class="muted">Season totals for the selected stat.</p>
               <div class="view-toggle" role="group" aria-label="Competition season totals view">
                 <button type="button" class="button button--ghost button--small is-active" data-panel="competition-season" data-view-mode="table" aria-pressed="true">Table</button>
                 <button type="button" class="button button--ghost button--small" data-panel="competition-season" data-view-mode="chart" aria-pressed="false">Chart</button>
@@ -228,7 +222,7 @@
               <h2>Player leaderboard</h2>
             </div>
             <div class="panel__meta-stack">
-              <p class="muted">Cross-season totals combined, even when a player changed teams or names.</p>
+              <p class="muted">Cross-season totals, including moves and name changes.</p>
               <div class="view-toggle" role="group" aria-label="Player leaderboard view">
                 <button type="button" class="button button--ghost button--small is-active" data-panel="player-leaders" data-view-mode="table" aria-pressed="true">Table</button>
                 <button type="button" class="button button--ghost button--small" data-panel="player-leaders" data-view-mode="chart" aria-pressed="false">Chart</button>

@@ -12,11 +12,11 @@ document.addEventListener('DOMContentLoaded', function () {
   function applyTheme(t) {
     if (t === 'light') {
       root.setAttribute('data-theme', 'light');
-      btn.textContent = '\u25d7';
+      btn.textContent = 'Dark';
       btn.setAttribute('aria-label', 'Switch to dark theme');
     } else {
       root.removeAttribute('data-theme');
-      btn.textContent = '\u2600';
+      btn.textContent = 'Light';
       btn.setAttribute('aria-label', 'Switch to light theme');
     }
   }
