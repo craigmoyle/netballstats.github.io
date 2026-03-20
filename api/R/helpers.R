@@ -1192,6 +1192,45 @@ sort_query_result_rows <- function(rows, intent_type = "list") {
   rows[order_index, , drop = FALSE]
 }
 
+# Fetches player leaderboard rows aggregated across all requested seasons in SQL.
+# Returns one row per player with cross-season totals. ORDER BY and LIMIT are
+# pushed to the database so only the top-N rows are transferred.
+fetch_player_leader_rows <- function(conn, seasons = NULL, team_id = NULL, round = NULL, stat = "points", search = "", metric = "total", limit = 12L) {
+  seasons_filter <- if (!is.null(seasons) && length(seasons)) as.integer(seasons) else NULL
+  stats_table <- if (has_player_match_stats(conn)) "player_match_stats" else "player_period_stats"
+  value_col   <- if (identical(stats_table, "player_match_stats")) "match_value" else "value_number"
+  order_column <- if (identical(metric, "average")) "average_value" else "total_value"
+
+  query <- paste(
+    "SELECT stats.player_id, players.canonical_name AS player_name, MAX(stats.squad_name) AS squad_name,",
+    paste0("?stat AS stat, ROUND(CAST(SUM(stats.", value_col, ") AS numeric), 2) AS total_value,"),
+    "COUNT(DISTINCT stats.match_id) AS matches_played,",
+    paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric) / NULLIF(COUNT(DISTINCT stats.match_id), 0), 2) AS average_value"),
+    paste0("FROM ", stats_table, " AS stats"),
+    "INNER JOIN players ON players.player_id = stats.player_id",
+    "WHERE stats.stat = ?stat"
+  )
+  filters <- apply_stat_filters(
+    query,
+    list(stat = stat),
+    seasons = seasons_filter,
+    team_id = team_id,
+    round_number = round,
+    table_alias = "stats"
+  )
+  search_filters <- apply_player_search_filter(filters$query, filters$params, search, "stats.player_id")
+  filters$query <- paste0(
+    search_filters$query,
+    " GROUP BY stats.player_id, players.canonical_name",
+    " ORDER BY ", order_column, " DESC, players.canonical_name ASC",
+    " LIMIT ?limit"
+  )
+  filters$params <- search_filters$params
+  filters$params$limit <- as.integer(limit)
+
+  query_rows(conn, filters$query, filters$params)
+}
+
 fetch_player_season_metric_rows <- function(conn, seasons = NULL, team_id = NULL, round = NULL, stat = "points", search = "") {
   # Single query over all requested seasons; avoids one round-trip per season.
   # When seasons is NULL (no filter), omit the IN clause so the planner can do

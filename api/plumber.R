@@ -559,18 +559,16 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", s
     limit <- parse_limit(limit, default = 12L, maximum = 50L)
     stat <- validate_stat(conn, "player_period_stats", stat, default_stat = "points")
     metric <- parse_metric(metric)
-    season_rows <- fetch_player_season_metric_rows(
+    rows <- fetch_player_leader_rows(
       conn,
       seasons = seasons,
       team_id = team_id,
       round = round,
       stat = stat,
-      search = search
+      search = search,
+      metric = metric,
+      limit = limit
     )
-    rows <- sort_player_leader_rows(summarize_player_metric_rows(season_rows), metric)
-    if (nrow(rows)) {
-      rows <- rows[seq_len(min(nrow(rows), limit)), , drop = FALSE]
-    }
 
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {
