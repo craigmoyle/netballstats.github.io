@@ -2,6 +2,8 @@ const config = window.NETBALL_STATS_CONFIG || {};
 const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30000;
 
+const fmtInt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
+
 const state = {
   players: []
 };
@@ -66,13 +68,19 @@ function formatNumber(value) {
     return value ?? "-";
   }
 
-  return new Intl.NumberFormat("en-AU", {
-    maximumFractionDigits: 0
-  }).format(numeric);
+  return fmtInt.format(numeric);
 }
 
 function playerProfileUrl(playerId) {
   return `/player/${encodeURIComponent(playerId)}/`;
+}
+
+function debounce(fn, ms) {
+  let timer;
+  return function (...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), ms);
+  };
 }
 
 function renderPlayers(players) {
@@ -86,19 +94,18 @@ function renderPlayers(players) {
   });
 
   elements.directoryResultsMeta.textContent = query
-    ? `${formatNumber(filteredPlayers.length)} players match “${query}”.`
+    ? `${formatNumber(filteredPlayers.length)} players match "${query}".`
     : `${formatNumber(players.length)} player profiles available.`;
-
-  elements.directoryGrid.replaceChildren();
 
   if (!filteredPlayers.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     empty.textContent = "No players matched that search.";
-    elements.directoryGrid.appendChild(empty);
+    elements.directoryGrid.replaceChildren(empty);
     return;
   }
 
+  const fragment = document.createDocumentFragment();
   filteredPlayers.forEach((player) => {
     const card = document.createElement("a");
     card.href = playerProfileUrl(player.player_id);
@@ -144,8 +151,9 @@ function renderPlayers(players) {
       footer.append(spanTag);
     }
     card.append(eyebrow, title, meta, footer);
-    elements.directoryGrid.appendChild(card);
+    fragment.appendChild(card);
   });
+  elements.directoryGrid.replaceChildren(fragment);
 }
 
 async function initialise() {
@@ -165,8 +173,8 @@ async function initialise() {
   }
 }
 
-elements.directorySearchInput.addEventListener("input", () => {
+elements.directorySearchInput.addEventListener("input", debounce(() => {
   renderPlayers(state.players);
-});
+}, 150));
 
 initialise();

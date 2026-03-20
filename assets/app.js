@@ -140,6 +140,16 @@ async function fetchOptionalJson(path, params = {}) {
   }
 }
 
+const fmtInt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
+const fmtDecimal = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 2 });
+const fmtDate = new Intl.DateTimeFormat("en-AU", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit"
+});
+
 function formatNumber(value) {
   if (value === null || value === undefined || value === "") {
     return "-";
@@ -150,9 +160,7 @@ function formatNumber(value) {
     return value;
   }
 
-  return new Intl.NumberFormat("en-AU", {
-    maximumFractionDigits: Number.isInteger(numeric) ? 0 : 2
-  }).format(numeric);
+  return (Number.isInteger(numeric) ? fmtInt : fmtDecimal).format(numeric);
 }
 
 function formatDate(value) {
@@ -165,13 +173,7 @@ function formatDate(value) {
     return value;
   }
 
-  return new Intl.DateTimeFormat("en-AU", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  }).format(date);
+  return fmtDate.format(date);
 }
 
 function clearTable(tableBody, message) {
@@ -467,7 +469,7 @@ function renderMatches(matches) {
     return;
   }
 
-  elements.matchesTableBody.replaceChildren();
+  const fragment = document.createDocumentFragment();
   matches.forEach((match) => {
     const row = document.createElement("tr");
     row.append(
@@ -477,8 +479,9 @@ function renderMatches(matches) {
       createCell(match.venue_name || "-"),
       createCell(formatDate(match.local_start_time))
     );
-    elements.matchesTableBody.appendChild(row);
+    fragment.appendChild(row);
   });
+  elements.matchesTableBody.replaceChildren(fragment);
 }
 
 function renderTeamLeaders(rows) {
@@ -487,7 +490,7 @@ function renderTeamLeaders(rows) {
     return;
   }
 
-  elements.teamLeadersBody.replaceChildren();
+  const fragment = document.createDocumentFragment();
   rows.forEach((rowData, index) => {
     const colour = resolveTeamColour(rowData.squad_name, rowData.squad_colour, index);
     const row = document.createElement("tr");
@@ -500,8 +503,9 @@ function renderTeamLeaders(rows) {
       createCell(formatNumber(statValue(rowData))),
       createCell(formatNumber(rowData.matches_played))
     );
-    elements.teamLeadersBody.appendChild(row);
+    fragment.appendChild(row);
   });
+  elements.teamLeadersBody.replaceChildren(fragment);
 }
 
 function renderPlayerLeaders(rows) {
@@ -510,7 +514,7 @@ function renderPlayerLeaders(rows) {
     return;
   }
 
-  elements.playerLeadersBody.replaceChildren();
+  const fragment = document.createDocumentFragment();
   rows.forEach((rowData, index) => {
     const colour = resolvePlayerColour(rowData.player_name, rowData.squad_name, index);
     const row = document.createElement("tr");
@@ -524,8 +528,9 @@ function renderPlayerLeaders(rows) {
       createCell(formatNumber(statValue(rowData))),
       createCell(formatNumber(rowData.matches_played))
     );
-    elements.playerLeadersBody.appendChild(row);
+    fragment.appendChild(row);
   });
+  elements.playerLeadersBody.replaceChildren(fragment);
 }
 
 function renderCompetitionSeasonTable(rows, errorMessage) {
@@ -539,7 +544,7 @@ function renderCompetitionSeasonTable(rows, errorMessage) {
     return;
   }
 
-  elements.competitionSeasonBody.replaceChildren();
+  const fragment = document.createDocumentFragment();
   rows.forEach((rowData) => {
     const row = document.createElement("tr");
     row.append(
@@ -548,8 +553,9 @@ function renderCompetitionSeasonTable(rows, errorMessage) {
       createCell(formatNumber(statValue(rowData))),
       createCell(formatNumber(rowData.matches_played))
     );
-    elements.competitionSeasonBody.appendChild(row);
+    fragment.appendChild(row);
   });
+  elements.competitionSeasonBody.replaceChildren(fragment);
 }
 
 function clearAllTables(message) {
