@@ -459,6 +459,7 @@ write_database <- function(tables, build_mode) {
     # Pre-aggregate period-level stats to match level.  Reduces per-stat row
     # count by ~4x and allows /query and /game-high endpoints to use simple JOINs
     # instead of GROUP BY across period rows — critical on the B1ms server.
+    DBI::dbExecute(conn, "DROP TABLE IF EXISTS player_match_stats")
     DBI::dbExecute(conn, paste(
       "CREATE TABLE player_match_stats AS",
       "SELECT stats.player_id, stats.match_id, stats.season, stats.round_number,",
