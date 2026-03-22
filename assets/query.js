@@ -2,8 +2,14 @@ const config = window.NETBALL_STATS_CONFIG || {};
 const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30000;
 const {
+  cycleStatusBanner = () => {},
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
+const QUERY_LOADING_MESSAGES = [
+  "Parsing the question…",
+  "Checking the supporting match totals…",
+  "Drafting an answer from the archive…"
+];
 const QUERY_STATUS_LABELS = {
   count: "Count",
   highest: "Highest",
@@ -75,11 +81,19 @@ async function fetchJson(path, params = {}) {
   }
 }
 
-function showStatus(message, tone = "neutral") {
-  elements.queryStatus.textContent = message;
-  elements.queryStatus.dataset.tone = tone;
-  elements.queryStatus.role = tone === "error" ? "alert" : "status";
-  elements.queryStatus.hidden = !message;
+function showStatus(message, tone = "neutral", options = {}) {
+  if (!message) {
+    window.NetballStatsUI?.showStatusBanner?.(elements.queryStatus, "");
+    return;
+  }
+  window.NetballStatsUI?.showStatusBanner?.(elements.queryStatus, message, tone, options);
+}
+
+function showLoadingStatus(messages, kicker) {
+  cycleStatusBanner(elements.queryStatus, messages, {
+    tone: "loading",
+    kicker
+  });
 }
 
 function formatNumber(value) {
@@ -334,7 +348,7 @@ async function runQuestion(question) {
     submitBtn.setAttribute("aria-busy", "true");
   }
 
-  showStatus("Parsing and running the question…");
+  showLoadingStatus(QUERY_LOADING_MESSAGES, "Reading the archive");
   setSummaryCards("…", "…", "…", "Running");
 
   try {
@@ -343,9 +357,12 @@ async function runQuestion(question) {
     updateUrl(trimmed);
     showStatus(
       result.status === "supported"
-        ? ""
+        ? "Answer ready. Supporting rows are listed below."
         : "The parser could not safely support that wording yet.",
-      result.status === "supported" ? "success" : "error"
+      result.status === "supported" ? "success" : "error",
+      result.status === "supported"
+        ? { kicker: "Question resolved", autoHideMs: 2200 }
+        : { kicker: "Parser boundary" }
     );
   } catch (error) {
     renderUnsupported({
@@ -357,7 +374,7 @@ async function runQuestion(question) {
         "Which players scored 40+ goals in 2025?"
       ]
     });
-    showStatus(error.message || "Something went wrong. Try again.", "error");
+    showStatus(error.message || "Something went wrong. Try again.", "error", { kicker: "Question interrupted" });
   } finally {
     questionRunning = false;
     if (submitBtn) {

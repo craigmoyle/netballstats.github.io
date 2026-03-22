@@ -1,8 +1,7 @@
 FROM rocker/r-ver:4.5.2
 
-# Runtime system libraries only — compilers (g++/make) are already in the base
-# image and not needed here because we install pre-built R binary packages below.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
     libcurl4-openssl-dev \
     libpq-dev \
     libssl-dev \
@@ -10,23 +9,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2-dev \
   && rm -rf /var/lib/apt/lists/*
 
-# Install CRAN packages as pre-built binaries from Posit Package Manager (Ubuntu 24.04 Noble).
-# Binary packages skip all source compilation, cutting install time from ~7 min to ~30 s.
-# Azure deployment uses PostgreSQL (RPostgres) only.
-RUN R -q -e " \
-  options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
-  required <- c('DBI','RPostgres','dplyr','httr','jsonlite','plumber','purrr','remotes','tidyr'); \
-  install.packages(required); \
-  missing <- setdiff(required, rownames(installed.packages())); \
-  if (length(missing)) stop(sprintf('Missing R packages: %s', paste(missing, collapse=', ')))"
-
-# Install GitHub-hosted package in a separate layer so the CRAN layer above is
-# reused on rebuilds when only the app code (or this commit pin) changes.
-RUN R -q -e "remotes::install_github('craigmoyle/superNetballR_updated@9898d3a03332a7402b1c3abb50493c50ac07d549')"
-
 WORKDIR /app
 
-COPY . .
+COPY .Rprofile renv.lock /app/
+COPY renv /app/renv
+
+RUN R -q -e " \
+  options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
+  install.packages('renv'); \
+  renv::consent(provided = TRUE); \
+  renv::restore(prompt = FALSE)"
+
+COPY . /app
 
 ENV NETBALL_STATS_REPO_ROOT=/app
 ENV NETBALL_STATS_HOST=0.0.0.0

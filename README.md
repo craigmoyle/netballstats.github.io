@@ -1,56 +1,73 @@
 # Netball Stats Website
 
-This repository now contains a secure-by-default Super Netball stats site backed by a read-only API and a database populated with the `superNetballR` package. It supports local SQLite for simple development and managed PostgreSQL for hosted deployments such as Azure.
+`netballstats` is an editorial Super Netball archive: a static frontend on Azure Static Web Apps, a read-only R Plumber API on Azure Container Apps, and a PostgreSQL database refreshed by scheduled Container Apps jobs using `superNetballR`.
 
-## What changed
+The production operating model is now **Azure + PostgreSQL first**. Legacy Render/Cloudflare deployment notes remain below as an alternative, but the repo, docs, and runtime defaults are centred on the Azure stack.
 
-The old site was a single HTML page showing a few 2020 static images. The rewrite introduces:
+## What’s in the app
 
-- a modern query UI for seasons from 2017 onward, including multi-season comparisons and tunable row limits
-- a stat mode toggle so leaderboard-style queries can switch between totals and average per game
-- table/chart toggles for the team and player leaderboards, including top-10 season trend lines for fast visual comparisons
-- competition-wide season totals so you can query and chart league output such as total goals by season
-- player directory and profile pages with career totals, games played, and season-by-season stat tables
-- a read-only R Plumber API with input validation, rate limiting, security headers, and parameterized SQL
-- a database build script that uses `superNetballR::downloadMatch()` plus the package tidiers to populate either SQLite or PostgreSQL
-- canonical player-name handling so leaderboard queries continue to work when players appear under multiple surnames over time
-- additional high-value query views for single-game team and player highs
-- Azure deployment files for Static Web Apps + Container Apps + PostgreSQL Flexible Server
-- an explicit season competition manifest for Super Netball regular season and finals from 2017 to 2026
+- multi-season leaderboard and comparison views from 2017 onward
+- team and player leaderboard charts plus season trend lines
+- natural-language “Ask the stats” queries with parsed query explanations
+- player directory and player profile pages with career and season summaries
+- read-only API endpoints with validation, rate limiting, security headers, and parameterized SQL
+- scheduled database refresh jobs that rebuild the archive from Champion Data via `superNetballR`
 
 ## Repository layout
 
 - `index.html` + `assets/`: static frontend
-- `player/` + `players/`: shared player profile and directory page shells
-- `api/plumber.R`: read-only API
-- `api/R/helpers.R`: validation, database, and CORS helpers
-- `scripts/build_database.R`: data ingestion and SQLite/PostgreSQL build
-- `config/competitions.csv`: season-to-competition ID mapping
-- `storage/`: database output location (gitignored)
-- `azure.yaml` + `infra/`: Azure Developer CLI deployment files
+- `query/`, `compare/`, `players/`, `player/`: page shells for the major frontend flows
+- `api/plumber.R`: read-only API entry point
+- `api/R/helpers.R`: validation, query-building, and response helpers
+- `R/database.R`: PostgreSQL connection helpers and runtime DB config
+- `scripts/build_database.R`: PostgreSQL ingestion / rebuild script
+- `scripts/run_api.R`: local API runner
+- `scripts/test_api_regression.R`: endpoint smoke/regression checks
+- `config/competitions.csv`: season-to-competition manifest
+- `azure.yaml` + `infra/`: Azure Developer CLI and Bicep deployment files
+- `renv.lock` + `renv/`: reproducible R dependency management
 
-The current frontend highlights:
+## Local development
 
-- team leaderboard bar charts
-- player leaderboard bar charts
-- competition-wide season total tables and charts for the selected team stat
-- total or average-per-game modes across the leaderboard and season-series views
-- season-by-season trend lines for the leading teams and players
-- a browsable player directory plus linked player profile pages
-- table/chart toggles so the detailed tables remain available
+### Restore R dependencies
 
-## Local setup
+Install `renv` once, then restore the pinned package set for this repo:
 
-Install the required R packages and the updated fork of `superNetballR`:
+```sh
+cd /Users/craig/Git/netballstats
+Rscript -e "install.packages('renv', repos = 'https://cloud.r-project.org')"
+Rscript -e "renv::restore(prompt = FALSE)"
+```
 
-```r
-install.packages(c("DBI", "RPostgres", "RSQLite", "plumber", "dplyr", "purrr"))
-remotes::install_github("craigmoyle/superNetballR_updated")
+### Start a local PostgreSQL instance
+
+The app now runs against PostgreSQL only. For quick local work, a disposable Docker container is the simplest option:
+
+```sh
+docker run --rm --name netballstats-postgres \
+  -e POSTGRES_DB=netballstats \
+  -e POSTGRES_USER=netballstatsadmin \
+  -e POSTGRES_PASSWORD=netballstatsadmin \
+  -p 5432:5432 \
+  postgres:16
+```
+
+In a second shell, export the connection settings used by the build and API scripts:
+
+```sh
+export NETBALL_STATS_DB_HOST=127.0.0.1
+export NETBALL_STATS_DB_PORT=5432
+export NETBALL_STATS_DB_NAME=netballstats
+export NETBALL_STATS_DB_USER=netballstatsadmin
+export NETBALL_STATS_DB_PASSWORD=netballstatsadmin
+export NETBALL_STATS_DB_SSLMODE=disable
+export NETBALL_STATS_API_DB_USERNAME=netballstats_api
+export NETBALL_STATS_API_DB_PASSWORD=netballstats_api_password
 ```
 
 ### Build a sample database
 
-Use the bundled `superNetballR` example data when you want to validate the site locally without calling Champion Data:
+Use the bundled `superNetballR` example data when you want to validate the app without calling Champion Data:
 
 ```sh
 cd /Users/craig/Git/netballstats
@@ -59,28 +76,14 @@ NETBALL_STATS_SAMPLE=true Rscript scripts/build_database.R
 
 ### Build the full database from Champion Data
 
-When you are on a machine with outbound internet access and valid Champion Data access, run:
+When you have outbound access and valid Champion Data credentials, run:
 
 ```sh
 cd /Users/craig/Git/netballstats
 Rscript scripts/build_database.R
 ```
 
-The database is written to `storage/netball_stats.sqlite` by default.
-
-To target PostgreSQL instead, set either `NETBALL_STATS_DATABASE_URL` / `DATABASE_URL`, or the split settings below before running the build:
-
-```sh
-NETBALL_STATS_DB_BACKEND=postgres
-NETBALL_STATS_DB_HOST=...
-NETBALL_STATS_DB_PORT=5432
-NETBALL_STATS_DB_NAME=netballstats
-NETBALL_STATS_DB_USER=...
-NETBALL_STATS_DB_PASSWORD=...
-NETBALL_STATS_DB_SSLMODE=require
-```
-
-If you also set `NETBALL_STATS_API_DB_USERNAME` and `NETBALL_STATS_API_DB_PASSWORD` during a PostgreSQL build, the script will create or rotate a read-only API role and grant `SELECT` on the application tables.
+The build script writes directly to PostgreSQL and, when `NETBALL_STATS_API_DB_USERNAME` / `NETBALL_STATS_API_DB_PASSWORD` are set, rotates the read-only API role used at runtime.
 
 ### Run the API locally
 
@@ -90,7 +93,7 @@ NETBALL_STATS_ALLOWED_ORIGINS=http://127.0.0.1:4173,http://localhost:4173 \
 Rscript scripts/run_api.R
 ```
 
-If you prefer the inline form, use single quotes so your shell does not expand `pr$run(...)`:
+If you prefer the inline form, keep the single quotes so your shell does not expand `pr$run(...)`:
 
 ```sh
 Rscript -e 'pr <- plumber::plumb("api/plumber.R"); pr$run(host = "127.0.0.1", port = 8000)'
@@ -103,131 +106,60 @@ cd /Users/craig/Git/netballstats
 python3 -m http.server 4173
 ```
 
-If your API is hosted elsewhere, edit `assets/config.js` and set `apiBaseUrl` to the deployed API origin.
+For non-local hosts the frontend defaults to `/api`, which matches the Azure Static Web Apps linked-backend path.
+
+### Run the API regression suite
+
+With the API running locally:
+
+```sh
+cd /Users/craig/Git/netballstats
+Rscript scripts/test_api_regression.R
+```
+
+To target another environment, pass a base URL or set `NETBALL_STATS_API_BASE_URL`:
+
+```sh
+Rscript scripts/test_api_regression.R --base-url=https://your-api.example.com
+```
 
 ## Security model
 
-The site is designed to minimise risk:
+The application is intentionally conservative:
 
 - **No public write endpoints**: the API is read-only.
-- **Offline refreshes**: the database should be refreshed by a scheduled job, not through a public admin endpoint.
-- **Prepared SQL**: every API query uses `DBI::sqlInterpolate()`.
-- **Strict validation**: seasons, team IDs, rounds, limits, stats, and player search terms are validated before querying.
-- **Result caps**: every list endpoint enforces hard maximum limits.
-- **Security headers**: the API sets `X-Frame-Options`, `X-Content-Type-Options`, HSTS, a strict referrer policy, and a restrictive permissions policy.
-- **CORS allow-list**: only the origins you explicitly configure are granted cross-origin access.
-- **Rate limiting**: a simple request-per-minute guard is enabled by default.
-- **Secrets hygiene**: `.env` files and SQLite files are ignored by Git, and the Azure deployment stores database passwords in Key Vault.
+- **Prepared SQL**: every endpoint queries through parameterized SQL.
+- **Strict validation**: seasons, limits, player IDs, team IDs, stats, and query text are validated before use.
+- **Result caps**: list endpoints enforce hard maximum limits.
+- **Explicit CORS allow-list**: only configured origins can call the API cross-origin.
+- **Security headers**: HSTS, frame busting, content-type hardening, referrer policy, and permissions policy are all set in the API.
+- **Rate limiting**: the API applies a simple request-per-minute guard.
+- **Secrets in Key Vault**: Azure deployment keeps DB credentials out of repo files.
+- **Structured request telemetry**: the API logs request path, status, latency, and slow/failing requests without dumping raw database errors into normal logs.
 
-## Deployment target configured in this repo
+## Azure deployment (primary path)
 
-This repository is now set up for the hobby-friendly deployment target you chose:
-
-- **Cloudflare Pages Free** for the static frontend
-- **Render Starter ($7/mo)** for the R Plumber API
-- **SQLite baked into the Render image at deploy time**
-
-That keeps the recurring cost to the Render Starter service only. The trade-off is that the database is rebuilt whenever Render performs a fresh deploy, so the simplest refresh workflow is to redeploy the service when you want newer stats.
-
-### Cloudflare Pages setup
-
-1. Create a new Pages project from this repository.
-2. Use:
-   - **Framework preset:** None
-   - **Build command:** leave blank
-   - **Build output directory:** `.`
-3. Deploy the repository root as-is.
-
-Cloudflare Pages will automatically apply the root `_headers` file, which adds the frontend security headers and locks browser API calls to `https://netballstats-api.onrender.com`.
-
-### Azure Static Web Apps GitHub deployment
-
-This repository now includes `.github/workflows/deploy-azure-static-web-app.yml`, which deploys the built `dist/` output on every push to `main`.
-
-To use it with the live site at `https://ashy-hill-04f165c00.1.azurestaticapps.net/`, add the deployment token from Azure Static Web Apps as the repository secret:
-
-```text
-AZURE_STATIC_WEB_APPS_API_TOKEN
-```
-
-The workflow builds the site with `npm run build` and uploads `dist/` directly to Azure Static Web Apps.
-
-### Render setup
-
-This repository includes:
-
-- `Dockerfile` to install R, the required packages, and `superNetballR`
-- `render.yaml` to provision a **Starter** web service called **`netballstats-api`**
-- a Docker build step that runs `Rscript scripts/build_database.R` so the SQLite database is created during deployment
-
-To deploy:
-
-1. In Render, create a Blueprint or new web service from this repository.
-2. Use the included `render.yaml`.
-3. Set **`NETBALL_STATS_ALLOWED_ORIGINS`** to your actual frontend origins, for example:
-
-```text
-https://your-project.pages.dev,https://netballstats.pages.dev
-```
-
-Because the frontend config defaults to `https://netballstats-api.onrender.com`, the simplest path is to keep the Render service name as `netballstats-api`.
-
-### Refreshing the hobby deployment
-
-The hobby setup avoids a separate managed database or persistent disk. That keeps the cost low, but it means database updates are tied to deploys.
-
-To refresh the data:
-
-- trigger a manual Render redeploy, or
-- push a small commit to this repository to trigger a new build
-
-Each new Render deploy rebuilds `storage/netball_stats.sqlite` inside the image using the latest Champion Data responses available to `superNetballR`.
-
-## Hosting suggestions
-
-For this repository as currently written, **Cloudflare Pages Free + Render Starter** is the simplest low-maintenance hobby option.
-
-If you later want faster refreshes, persistent state across deploys, or a safer long-term datastore, the next upgrade would be:
-
-- keep **Cloudflare Pages** for the frontend
-- keep **Render** for the API
-- move the database to either a Render persistent disk or a managed Postgres service
-
-## Operational suggestions
-
-- Run the database refresh on a schedule instead of refreshing during user requests.
-- Use a read-only database user for the API and a separate write-capable user for ingestion jobs.
-- Put the API behind HTTPS only and terminate TLS at your hosting platform.
-- Log validation failures and high-rate clients.
-- Revisit `config/competitions.csv` at the start of each season because Champion Data competition IDs change year to year.
-- Consider moving to PostgreSQL once you want multi-process writes, richer indexing, or safer remote hosting.
-
-## Azure deployment
-
-This repository now includes an Azure deployment path using:
+This repository is prepared for:
 
 - **Azure Static Web Apps Standard** for the frontend
 - **Azure Container Apps** for the R Plumber API
-- **Azure Database for PostgreSQL Flexible Server** for managed data storage
-- **Azure Key Vault** for database passwords
-- **Azure Container Registry** for the API image
-- **Log Analytics** for Container Apps logs
+- **Azure Database for PostgreSQL Flexible Server** for the application database
+- **Azure Container Apps Jobs** for scheduled database refreshes
+- **Azure Key Vault** for secret storage
+- **Azure Container Registry** for API image builds
+- **Log Analytics** for Container Apps logs and request telemetry
 
-### Azure files added
+### Azure files in this repo
 
 - `azure.yaml`: Azure Developer CLI project definition
-- `infra/main.bicep`: subscription-scope entry point that creates the resource group
-- `infra/modules/app-stack.bicep`: resource-group deployment for the app stack
-- `infra/main.parameters.json`: environment-variable-driven defaults for `azd`
-- `Dockerfile.azure`: API container image for Azure Container Apps
-- `staticwebapp.config.json`: Azure Static Web Apps headers and API route configuration
-- `scripts/build_static.mjs` + `package.json`: static asset build output for Azure Static Web Apps
+- `infra/main.bicep`: subscription-scope entry point
+- `infra/modules/app-stack.bicep`: resource-group stack
+- `infra/main.parameters.json`: env-driven defaults for `azd`
+- `Dockerfile.azure`: API image build for Azure Container Apps
+- `staticwebapp.config.json`: Static Web Apps routing + headers
+- `.github/workflows/deploy-azure-static-web-app.yml`: static frontend deployment workflow
 
-The Azure template keeps most resources in `AZURE_LOCATION` (for example `australiaeast`) but deploys **Static Web Apps** separately in a supported region. By default that is `eastasia`, because Azure Static Web Apps is not available in every region.
-
-### Provision with azd
-
-Set the required Azure Developer CLI environment values first:
+### Required azd environment values
 
 ```sh
 cd /Users/craig/Git/netballstats
@@ -236,26 +168,50 @@ azd env set NETBALL_STATS_POSTGRES_ADMIN_PASSWORD '<strong-admin-password>'
 azd env set NETBALL_STATS_POSTGRES_API_PASSWORD '<strong-readonly-password>'
 ```
 
-If you plan to use a custom frontend hostname, set it too:
+If you use a custom frontend hostname, add it too:
 
 ```sh
 azd env set NETBALL_STATS_CUSTOM_FRONTEND_HOSTNAME https://stats.example.com
 ```
 
-Then validate and deploy:
+### Optional staged private PostgreSQL networking
+
+The Bicep now includes an **opt-in** private-networking path for PostgreSQL and the Container Apps environment. It is intentionally disabled by default so current public deployments do not attempt a destructive in-place migration.
+
+Enable it only when you are ready for a staged infrastructure cutover:
 
 ```sh
+azd env set NETBALL_STATS_PRIVATE_POSTGRES_NETWORKING_MODE enabled
+```
+
+Optional CIDR / DNS overrides:
+
+```sh
+azd env set NETBALL_STATS_VNET_ADDRESS_PREFIX 10.30.0.0/16
+azd env set NETBALL_STATS_CONTAINERAPPS_INFRA_SUBNET_PREFIX 10.30.0.0/21
+azd env set NETBALL_STATS_POSTGRES_DELEGATED_SUBNET_PREFIX 10.30.8.0/28
+azd env set NETBALL_STATS_POSTGRES_PRIVATE_DNS_ZONE_NAME netballstats.private.postgres.database.azure.com
+```
+
+Important notes:
+
+- enabling private networking may require Azure to recreate the Container Apps environment
+- treat it as a planned migration, not a casual toggle on a live environment
+- when private networking is enabled, the broad `0.0.0.0` PostgreSQL firewall rule is skipped automatically
+
+### Provision and deploy
+
+```sh
+cd /Users/craig/Git/netballstats
 azd provision --preview
 azd up
 ```
 
-If you are deploying from an Apple Silicon Mac, keep `azure.yaml` configured with `platform: linux/amd64` for the `api` service. Azure Container Apps remote builds only support that platform today.
+If you are deploying from Apple Silicon, keep `azure.yaml` configured with `platform: linux/amd64` for the API service.
 
-`azd deploy` also expects the Container Registry login server under `AZURE_CONTAINER_REGISTRY_ENDPOINT`. The template now outputs that name during provisioning, and `azure.yaml` uses it explicitly for the API image push target.
+### Seed or refresh PostgreSQL
 
-### Seed PostgreSQL after provision
-
-`azd up` provisions the infrastructure and deploys the frontend/API, but the database still needs to be populated from Champion Data. Run the ingestion script from a trusted machine or CI runner with network access:
+`azd up` provisions infrastructure and deploys the API/frontend, but the database still needs a build from Champion Data. From a trusted machine or CI runner:
 
 ```sh
 NETBALL_STATS_DB_BACKEND=postgres \
@@ -270,14 +226,51 @@ NETBALL_STATS_API_DB_PASSWORD='<readonly password>' \
 Rscript scripts/build_database.R
 ```
 
-That build step loads the application tables into PostgreSQL and grants `SELECT` permissions to the read-only API user that the Azure Container App uses at runtime.
+The deployed stack also provisions two scheduled Container Apps jobs:
 
-When the build script targets PostgreSQL, it now disables PostgreSQL statement timeouts by default for that ingestion session so bulk `COPY` operations can complete. The API still keeps its short readiness/query timeout settings through the Container App environment.
+- Saturday at **21:00 AEST**
+- Sunday at **18:00 AEST**
+
+Those jobs rebuild the database in Azure using the deployed API image.
+
+### Validate the deployed API
+
+After deployment, run the regression checks against the public API:
+
+```sh
+NETBALL_STATS_API_BASE_URL=https://<api-fqdn> Rscript scripts/test_api_regression.R
+```
 
 ### Azure deployment notes
 
-- The generated Bicep uses a **user-assigned managed identity** for the Container App.
-- The managed identity receives **AcrPull** on the Azure Container Registry and **Key Vault Secrets User** on the Key Vault.
-- The Static Web App is configured on the **Standard** plan so it can link `/api/*` to the Container App backend.
-- `assets/config.js` now defaults to `/api` for non-local, non-Cloudflare hosts, which matches the Azure linked-backend pattern.
-- Azure Container Apps probes now use `/live` for process liveness and `/ready` for PostgreSQL readiness, while `/health` remains the richer operator-facing status endpoint.
+- The API uses a **user-assigned managed identity** for ACR pulls and Key Vault secret reads.
+- Container Apps probes use `/live` for liveness and `/ready` for DB readiness.
+- The API emits structured request-complete / request-slow / request-failed log lines with endpoint latency.
+- Docker builds now restore R packages from `renv.lock`, so local, CI, and Azure builds all use the same dependency set.
+
+## Frontend build
+
+Build the static site with:
+
+```sh
+npm run build
+```
+
+That writes the deployable frontend into `dist/`.
+
+## Legacy alternative: Cloudflare Pages + Render
+
+The repo still contains `render.yaml` and the generic `Dockerfile` for a lower-cost hobby path. That route is now considered a legacy alternative rather than the default operating model.
+
+If you use it:
+
+- prefer PostgreSQL rather than baking SQLite into the image
+- keep the API read-only and refresh data from an offline/scheduled job
+- run `Rscript scripts/test_api_regression.R --base-url=<render-api-url>` after each deploy
+
+## Operational suggestions
+
+- Revisit `config/competitions.csv` at the start of each season because Champion Data competition IDs change year to year.
+- Keep the API and refresh jobs on separate credentials: read-only for the API, write-capable for ingestion.
+- Use the request telemetry logs to identify true hot endpoints before introducing caching or Redis.
+- Treat private-networking enablement as a migration project with a maintenance window.

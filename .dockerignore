@@ -8,4 +8,5 @@ node_modules
 *.sqlite-journal
 *.sqlite-shm
 *.sqlite-wal
-
+renv/library
+renv/staging

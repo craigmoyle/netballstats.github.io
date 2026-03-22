@@ -20,6 +20,7 @@ const {
   renderSeasonColumnChart
 } = window.NetballCharts;
 const {
+  cycleStatusBanner = () => {},
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
 
@@ -40,6 +41,16 @@ const state = {
     "player-leaders": "table"
   }
 };
+
+const ARCHIVE_LOADING_MESSAGES = [
+  "Pulling match sheets from the archive…",
+  "Balancing team and player leaders…",
+  "Lining up season tables and charts…"
+];
+const ARCHIVE_STARTUP_MESSAGES = [
+  "Waking the stats service…",
+  "Waiting for the archive to come online…"
+];
 
 const elements = {
   statusBanner: document.getElementById("status-banner"),
@@ -86,11 +97,19 @@ function isLocalApiConfigured() {
   }
 }
 
-function showStatus(message, tone = "neutral") {
-  elements.statusBanner.textContent = message;
-  elements.statusBanner.dataset.tone = tone;
-  elements.statusBanner.role = tone === "error" ? "alert" : "status";
-  elements.statusBanner.hidden = !message;
+function showStatus(message, tone = "neutral", options = {}) {
+  if (!message) {
+    window.NetballStatsUI?.showStatusBanner?.(elements.statusBanner, "");
+    return;
+  }
+  window.NetballStatsUI?.showStatusBanner?.(elements.statusBanner, message, tone, options);
+}
+
+function showLoadingStatus(messages, kicker) {
+  cycleStatusBanner(elements.statusBanner, messages, {
+    tone: "loading",
+    kicker
+  });
 }
 
 function buildUrl(path, params = {}) {
@@ -687,7 +706,7 @@ async function runQueries() {
 
   syncFiltersFromForm();
   renderFilterSummary();
-  showStatus("Loading…");
+  showLoadingStatus(ARCHIVE_LOADING_MESSAGES, "Archive in motion");
   const leaderboardFetchLimit = Math.max(LEADERS_LIMIT, CHART_RANK_LIMIT);
 
   const baseParams = {
@@ -768,13 +787,14 @@ async function runQueries() {
     renderPlayerCharts(playerLeaderRows, playerSeriesPayload.data || []);
     showStatus(
       chartWarnings.length
-        ? "Loaded. Some charts are still catching up."
-        : "",
-      chartWarnings.length ? "neutral" : "success"
+        ? "Archive ready. Some charts are still catching up."
+        : "Archive ready for these filters.",
+      chartWarnings.length ? "neutral" : "success",
+      chartWarnings.length ? { kicker: "Partial chart refresh" } : { kicker: "Archive ready", autoHideMs: 2200 }
     );
   } catch (error) {
     if (seq !== runQuerySeq) return;
-    showStatus(error.message || "Couldn't load stats.", "error");
+    showStatus(error.message || "Couldn't load stats.", "error", { kicker: "Archive interrupted" });
     clearAllTables("Couldn't load stats.");
     clearAllCharts("Couldn't load charts.");
   } finally {
@@ -795,17 +815,17 @@ async function initialise() {
       meta = await fetchJson("/meta");
     } catch (firstError) {
       // Retry once to handle cold-start delays (R/Plumber can take 20-30s to start).
-      showStatus("Starting up, please wait…", "info");
-      await new Promise((resolve) => window.setTimeout(resolve, 5000));
-      meta = await fetchJson("/meta");
-    }
+        showLoadingStatus(ARCHIVE_STARTUP_MESSAGES, "Cold start");
+        await new Promise((resolve) => window.setTimeout(resolve, 5000));
+        meta = await fetchJson("/meta");
+      }
     applyMeta(meta);
     await runQueries();
   } catch (error) {
     const hint = isLocalApiConfigured()
       ? "Run the API before using the site locally."
       : "Stats unavailable. Try again shortly.";
-    showStatus(hint, "error");
+    showStatus(hint, "error", { kicker: "Archive unavailable" });
     clearAllTables("Stats unavailable.");
     clearAllCharts("Stats unavailable.");
   }

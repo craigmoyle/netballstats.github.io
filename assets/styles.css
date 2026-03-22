@@ -415,11 +415,53 @@ code {
 }
 
 .status-banner {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
   margin-bottom: 1rem;
   padding: 0.95rem 1rem;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.status-banner::before {
+  content: attr(data-kicker);
+  display: block;
+  margin-bottom: 0.2rem;
+  color: var(--accent-cool);
+  font-family: var(--display-font);
+  font-size: var(--type-xs);
+  letter-spacing: 0.1em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.status-banner:not([data-kicker])::before {
+  display: none;
+}
+
+.status-banner::after {
+  content: "";
+  position: absolute;
+  inset: auto auto 0 0;
+  width: 100%;
+  height: 2px;
+  opacity: 0;
+  background: linear-gradient(90deg, rgba(121, 216, 208, 0), rgba(121, 216, 208, 0.7), rgba(240, 198, 126, 0.4), rgba(121, 216, 208, 0));
+  pointer-events: none;
+}
+
+.status-banner[data-tone="loading"] {
+  border-color: color-mix(in srgb, var(--accent-cool) 38%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-cool) 8%, transparent), transparent),
+    color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.status-banner[data-tone="loading"]::after {
+  opacity: 1;
+  animation: status-banner-scan 1.6s linear infinite;
 }
 
 .status-banner[data-tone="error"] {
@@ -430,6 +472,15 @@ code {
 .status-banner[data-tone="success"] {
   border-color: rgba(165, 239, 193, 0.55);
   color: var(--success);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--success) 8%, transparent), transparent),
+    color-mix(in srgb, var(--text) 4%, transparent);
+  animation: status-banner-arrive 0.48s ease-out;
+}
+
+.status-banner[data-tone="success"]::after {
+  opacity: 0.85;
+  background: linear-gradient(90deg, rgba(165, 239, 193, 0), rgba(165, 239, 193, 0.82), rgba(240, 198, 126, 0.36), rgba(165, 239, 193, 0));
 }
 
 .filters {
@@ -588,6 +639,12 @@ button:hover {
 button:hover {
   filter: brightness(1.03);
   box-shadow: 0 18px 24px rgba(0, 0, 0, 0.22);
+}
+
+.button:active,
+button:active {
+  transform: translateY(1px) scale(0.99);
+  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.16);
 }
 
 .button:disabled,
@@ -1116,6 +1173,15 @@ tr[data-rank="3"] td:first-child {
   background: color-mix(in srgb, var(--text) 4%, transparent);
   color: var(--muted);
   font-size: 0.9rem;
+  transition: transform 0.18s ease-out, border-color 0.18s ease-out, background 0.18s ease-out, color 0.18s ease-out;
+}
+
+.directory-card:hover .tag,
+.directory-card:focus-visible .tag {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 24%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--text);
 }
 
 .compare-builder {
@@ -1338,11 +1404,28 @@ caption.table-caption {
 }
 
 .empty-state {
+  position: relative;
   padding: 1.25rem;
   border-radius: var(--radius-sm);
   border: 1px dashed color-mix(in srgb, var(--text) 16%, transparent);
   color: var(--muted);
   background: color-mix(in srgb, var(--text) 2%, transparent);
+}
+
+.empty-state::before {
+  content: attr(data-kicker);
+  display: block;
+  margin-bottom: 0.45rem;
+  color: var(--accent-cool);
+  font-family: var(--display-font);
+  font-size: var(--type-xs);
+  letter-spacing: 0.11em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.empty-state:not([data-kicker])::before {
+  display: none;
 }
 
 .query-page .hero-panel {
@@ -1499,6 +1582,10 @@ caption.table-caption {
   color: var(--text);
 }
 
+.example-chip:active {
+  transform: translateY(1px);
+}
+
 .query-results-grid {
   display: grid;
   gap: 1.35rem;
@@ -1624,6 +1711,26 @@ caption.table-caption {
   transform: translateY(0);
 }
 
+@keyframes status-banner-scan {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes status-banner-arrive {
+  0% {
+    transform: translateY(6px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 /* No-JS fallback: reveal immediately when scripting is unavailable */
 @media (scripting: none) {
   .reveal {
@@ -1644,9 +1751,12 @@ caption.table-caption {
   .season-choice span,
   .button,
   button,
-  .example-chip {
+  .example-chip,
+  .tag,
+  .status-banner {
     transition: none !important;
     transform: none !important;
+    animation: none !important;
   }
   tbody tr {
     transition: none;

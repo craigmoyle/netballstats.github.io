@@ -90,6 +90,26 @@ param apiMaxReplicas int = 2
 @description('Optional additional frontend hostname to permit through CORS.')
 param customFrontendHostname string = ''
 
+@description('Optional mode for staged private PostgreSQL networking. Set to enabled to provision a VNet-integrated Container Apps environment and private PostgreSQL network.')
+@allowed([
+  ''
+  'disabled'
+  'enabled'
+])
+param privatePostgresNetworkingMode string = 'disabled'
+
+@description('Optional override for the VNet CIDR used when private PostgreSQL networking is enabled.')
+param virtualNetworkAddressPrefix string = ''
+
+@description('Optional override for the Container Apps infrastructure subnet CIDR used when private PostgreSQL networking is enabled.')
+param containerAppsInfrastructureSubnetPrefix string = ''
+
+@description('Optional override for the delegated PostgreSQL subnet CIDR used when private PostgreSQL networking is enabled.')
+param postgresDelegatedSubnetPrefix string = ''
+
+@description('Optional override for the private DNS zone used when private PostgreSQL networking is enabled.')
+param postgresPrivateDnsZoneName string = ''
+
 var resourceGroupTags = union(tags, {
   'azd-env-name': environmentName
 })
@@ -125,6 +145,11 @@ module appStack './modules/app-stack.bicep' = {
     apiMinReplicas: apiMinReplicas
     apiMaxReplicas: apiMaxReplicas
     customFrontendHostname: customFrontendHostname
+    privatePostgresNetworkingMode: privatePostgresNetworkingMode
+    virtualNetworkAddressPrefix: virtualNetworkAddressPrefix
+    containerAppsInfrastructureSubnetPrefix: containerAppsInfrastructureSubnetPrefix
+    postgresDelegatedSubnetPrefix: postgresDelegatedSubnetPrefix
+    postgresPrivateDnsZoneName: postgresPrivateDnsZoneName
   }
 }
 

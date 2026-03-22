@@ -1,6 +1,13 @@
 const config = window.NETBALL_STATS_CONFIG || {};
 const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30000;
+const {
+  cycleStatusBanner = () => {}
+} = window.NetballStatsUI || {};
+const DIRECTORY_LOADING_MESSAGES = [
+  "Opening the player ledger…",
+  "Indexing career pages across the archive…"
+];
 
 const fmtInt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 
@@ -55,11 +62,19 @@ async function fetchJson(path, params = {}) {
   }
 }
 
-function showStatus(message, tone = "neutral") {
-  elements.directoryStatus.textContent = message;
-  elements.directoryStatus.dataset.tone = tone;
-  elements.directoryStatus.role = tone === "error" ? "alert" : "status";
-  elements.directoryStatus.hidden = !message;
+function showStatus(message, tone = "neutral", options = {}) {
+  if (!message) {
+    window.NetballStatsUI?.showStatusBanner?.(elements.directoryStatus, "");
+    return;
+  }
+  window.NetballStatsUI?.showStatusBanner?.(elements.directoryStatus, message, tone, options);
+}
+
+function showLoadingStatus(messages, kicker) {
+  cycleStatusBanner(elements.directoryStatus, messages, {
+    tone: "loading",
+    kicker
+  });
 }
 
 function formatNumber(value) {
@@ -100,7 +115,8 @@ function renderPlayers(players) {
   if (!filteredPlayers.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.textContent = "No players matched that search.";
+    empty.dataset.kicker = "Search the archive";
+    empty.textContent = "No players matched that search. Try a shorter surname or a different spelling.";
     elements.directoryGrid.replaceChildren(empty);
     return;
   }
@@ -157,7 +173,7 @@ function renderPlayers(players) {
 }
 
 async function initialise() {
-  showStatus("Loading player directory…");
+  showLoadingStatus(DIRECTORY_LOADING_MESSAGES, "Directory in motion");
 
   try {
     const payload = await fetchJson("/players");
@@ -165,11 +181,11 @@ async function initialise() {
     elements.directoryTotal.textContent = formatNumber(state.players.length);
     elements.directorySummary.textContent = "Career pages are live for every player currently in the database.";
     renderPlayers(state.players);
-    showStatus("Player directory loaded.", "success");
+    showStatus("Player directory ready.", "success", { kicker: "Profiles indexed", autoHideMs: 2200 });
   } catch (error) {
-    showStatus(error.message || "Unable to load the player directory.", "error");
+    showStatus(error.message || "Unable to load the player directory.", "error", { kicker: "Directory unavailable" });
     elements.directoryResultsMeta.textContent = "Player directory unavailable.";
-    elements.directoryGrid.innerHTML = '<div class="empty-state">The player directory is temporarily unavailable.</div>';
+    elements.directoryGrid.innerHTML = '<div class="empty-state" data-kicker="Archive note">The player directory is taking a breather. Try again shortly.</div>';
   }
 }
 

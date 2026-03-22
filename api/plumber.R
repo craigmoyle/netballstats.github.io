@@ -81,6 +81,10 @@ request_telemetry_enabled <- function() {
   identical(tolower(Sys.getenv("NETBALL_STATS_REQUEST_TELEMETRY", "true")), "true")
 }
 
+request_slow_threshold_ms <- function() {
+  parse_positive_env_int("NETBALL_STATS_REQUEST_SLOW_MS", 1500L)
+}
+
 request_path_for_logs <- function(req) {
   raw_path <- req$PATH_INFO %||% req$REQUEST_URI %||% "/"
   sub("\\?.*$", "", raw_path)
@@ -96,6 +100,32 @@ response_status_code <- function(res, default = 200L) {
     return(default)
   }
   status
+}
+
+request_log_level <- function(status, duration_ms) {
+  if (!is.na(status) && status >= 500L) {
+    return("ERROR")
+  }
+  if (!is.na(status) && status >= 400L) {
+    return("WARN")
+  }
+  if (!is.na(duration_ms) && duration_ms >= request_slow_threshold_ms()) {
+    return("WARN")
+  }
+  "INFO"
+}
+
+request_log_event <- function(status, duration_ms) {
+  if (!is.na(status) && status >= 500L) {
+    return("request_failed")
+  }
+  if (!is.na(status) && status >= 400L) {
+    return("request_rejected")
+  }
+  if (!is.na(duration_ms) && duration_ms >= request_slow_threshold_ms()) {
+    return("request_slow")
+  }
+  "request_complete"
 }
 
 #* @apiTitle Netball Stats API
@@ -160,12 +190,13 @@ function(req, res) {
   )
 
   duration_ms <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")) * 1000)
+  status <- response_status_code(res)
   api_log(
-    "INFO",
-    "request_complete",
+    request_log_level(status, duration_ms),
+    request_log_event(status, duration_ms),
     method = req$REQUEST_METHOD %||% "GET",
     path = path,
-    status = response_status_code(res),
+    status = status,
     duration_ms = duration_ms
   )
 
@@ -180,7 +211,8 @@ function(req, res) {
 database_health_check <- function(include_metadata = FALSE) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
-    return(list(ok = FALSE, error = conditionMessage(conn)))
+    api_log("ERROR", "db_health_connection_failed", error_class = class(conn)[[1]] %||% "unknown")
+    return(list(ok = FALSE, error = "The statistics database is currently unavailable."))
   }
   on.exit(DBI::dbDisconnect(conn), add = TRUE)
 
@@ -189,7 +221,8 @@ database_health_check <- function(include_metadata = FALSE) {
     error = function(error) error
   )
   if (inherits(query_check, "error")) {
-    return(list(ok = FALSE, error = conditionMessage(query_check)))
+    api_log("ERROR", "db_health_query_failed", error_class = class(query_check)[[1]] %||% "unknown")
+    return(list(ok = FALSE, error = "The statistics database is currently unavailable."))
   }
 
   if (!include_metadata) {
@@ -197,6 +230,7 @@ database_health_check <- function(include_metadata = FALSE) {
   }
 
   if (!DBI::dbExistsTable(conn, "metadata")) {
+    api_log("WARN", "db_metadata_missing")
     return(list(
       ok = FALSE,
       error = "Database metadata table not found. Seed the database first."
@@ -211,7 +245,8 @@ database_health_check <- function(include_metadata = FALSE) {
     error = function(error) error
   )
   if (inherits(metadata, "error")) {
-    return(list(ok = FALSE, error = conditionMessage(metadata)))
+    api_log("ERROR", "db_health_metadata_failed", error_class = class(metadata)[[1]] %||% "unknown")
+    return(list(ok = FALSE, error = "The statistics database is currently unavailable."))
   }
 
   list(ok = TRUE, metadata = metadata)

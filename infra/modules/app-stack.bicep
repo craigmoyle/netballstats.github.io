@@ -77,6 +77,26 @@ param postgresPublicNetworkAccess string = 'Enabled'
 @description('Whether to create the broad Allow Azure services firewall rule for PostgreSQL. Keep this enabled until the API and DB refresh jobs use private networking or another explicit allow-list.')
 param allowAzureServicesPostgresFirewallRule bool = true
 
+@description('Optional mode for staged private PostgreSQL networking. Set to enabled to provision a VNet-integrated Container Apps environment and private PostgreSQL network.')
+@allowed([
+  ''
+  'disabled'
+  'enabled'
+])
+param privatePostgresNetworkingMode string = 'disabled'
+
+@description('Optional override for the VNet CIDR used when private PostgreSQL networking is enabled.')
+param virtualNetworkAddressPrefix string = ''
+
+@description('Optional override for the Container Apps infrastructure subnet CIDR used when private PostgreSQL networking is enabled.')
+param containerAppsInfrastructureSubnetPrefix string = ''
+
+@description('Optional override for the delegated PostgreSQL subnet CIDR used when private PostgreSQL networking is enabled.')
+param postgresDelegatedSubnetPrefix string = ''
+
+@description('Optional override for the private DNS zone used when private PostgreSQL networking is enabled.')
+param postgresPrivateDnsZoneName string = ''
+
 @description('CPU allocation for the API container app.')
 param apiCpu int = 1
 
@@ -101,6 +121,14 @@ var resourceToken = toLower(take(uniqueString(subscription().id, resourceGroup()
 var normalizedPrefix = toLower(replace(namePrefix, '-', ''))
 var containerRegistryName = take('${normalizedPrefix}${resourceToken}acr', 50)
 var postgresServerName = take('${normalizedPrefix}-${resourceToken}-pg', 63)
+var enablePrivatePostgresNetworking = toLower(privatePostgresNetworkingMode) == 'enabled'
+var defaultVirtualNetworkAddressPrefix = '10.30.0.0/16'
+var defaultContainerAppsInfrastructureSubnetPrefix = '10.30.0.0/21'
+var defaultPostgresDelegatedSubnetPrefix = '10.30.8.0/28'
+var effectiveVirtualNetworkAddressPrefix = empty(virtualNetworkAddressPrefix) ? defaultVirtualNetworkAddressPrefix : virtualNetworkAddressPrefix
+var effectiveContainerAppsInfrastructureSubnetPrefix = empty(containerAppsInfrastructureSubnetPrefix) ? defaultContainerAppsInfrastructureSubnetPrefix : containerAppsInfrastructureSubnetPrefix
+var effectivePostgresDelegatedSubnetPrefix = empty(postgresDelegatedSubnetPrefix) ? defaultPostgresDelegatedSubnetPrefix : postgresDelegatedSubnetPrefix
+var effectivePostgresPrivateDnsZoneName = empty(postgresPrivateDnsZoneName) ? '${normalizedPrefix}-${resourceToken}.postgres.database.azure.com' : postgresPrivateDnsZoneName
 var staticWebAppName = take('${namePrefix}-web-${resourceToken}', 40)
 var containerEnvironmentName = take('${namePrefix}-aca-env-${resourceToken}', 32)
 var containerAppName = take('${namePrefix}-api-${resourceToken}', 32)
@@ -109,6 +137,10 @@ var dbRefreshJobSunName = take('${namePrefix}-db-sun-${resourceToken}', 32)
 var keyVaultName = take('${normalizedPrefix}-${resourceToken}-kv', 24)
 var workspaceName = take('${namePrefix}-logs-${resourceToken}', 63)
 var userAssignedIdentityName = take('${namePrefix}-api-mi-${resourceToken}', 64)
+var virtualNetworkName = take('${namePrefix}-vnet-${resourceToken}', 64)
+var containerAppsInfrastructureSubnetName = 'aca-infrastructure'
+var postgresDelegatedSubnetName = 'postgres-flex'
+var postgresPrivateDnsZoneLinkName = take('${namePrefix}-postgres-dns-${resourceToken}', 80)
 var allowAllAzureIpsRuleName = 'allow-azure-services'
 var staticWebAppHostName = 'https://${staticWebApp.properties.defaultHostname}'
 var allowedCorsOrigins = empty(customFrontendHostname)
@@ -208,6 +240,75 @@ resource keyVaultSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@
   }
 }
 
+resource privateNetwork 'Microsoft.Network/virtualNetworks@2024-07-01' = if (enablePrivatePostgresNetworking) {
+  name: virtualNetworkName
+  location: location
+  tags: tags
+  properties: {
+    addressSpace: {
+      addressPrefixes: [
+        effectiveVirtualNetworkAddressPrefix
+      ]
+    }
+  }
+}
+
+resource containerAppsInfrastructureSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-07-01' = if (enablePrivatePostgresNetworking) {
+  parent: privateNetwork
+  name: containerAppsInfrastructureSubnetName
+  properties: {
+    addressPrefix: effectiveContainerAppsInfrastructureSubnetPrefix
+    delegations: [
+      {
+        name: 'container-apps'
+        properties: {
+          serviceName: 'Microsoft.App/environments'
+        }
+      }
+    ]
+  }
+}
+
+resource postgresDelegatedSubnet 'Microsoft.Network/virtualNetworks/subnets@2024-07-01' = if (enablePrivatePostgresNetworking) {
+  parent: privateNetwork
+  name: postgresDelegatedSubnetName
+  properties: {
+    addressPrefix: effectivePostgresDelegatedSubnetPrefix
+    delegations: [
+      {
+        name: 'postgres-flex'
+        properties: {
+          serviceName: 'Microsoft.DBforPostgreSQL/flexibleServers'
+        }
+      }
+    ]
+    serviceEndpoints: [
+      {
+        service: 'Microsoft.Storage'
+      }
+    ]
+  }
+}
+
+resource postgresPrivateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = if (enablePrivatePostgresNetworking) {
+  name: effectivePostgresPrivateDnsZoneName
+  location: 'global'
+  tags: tags
+}
+
+resource postgresPrivateDnsZoneLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = if (enablePrivatePostgresNetworking) {
+  parent: postgresPrivateDnsZone
+  name: postgresPrivateDnsZoneLinkName
+  location: 'global'
+  tags: tags
+  properties: {
+    registrationEnabled: false
+    virtualNetwork: {
+      id: privateNetwork.id
+    }
+  }
+}
+
 resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' = {
   name: postgresServerName
   location: location
@@ -231,15 +332,23 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' =
     highAvailability: {
       mode: 'Disabled'
     }
-    network: {
-      publicNetworkAccess: postgresPublicNetworkAccess
-    }
+    network: enablePrivatePostgresNetworking
+      ? {
+          delegatedSubnetResourceId: postgresDelegatedSubnet.id
+          privateDnsZoneArmResourceId: postgresPrivateDnsZone.id
+        }
+      : {
+          publicNetworkAccess: postgresPublicNetworkAccess
+        }
     storage: {
       autoGrow: 'Enabled'
       storageSizeGB: postgresStorageSizeGb
     }
     version: postgresVersion
   }
+  dependsOn: [
+    postgresPrivateDnsZoneLink
+  ]
 }
 
 resource postgresDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2025-08-01' = {
@@ -251,7 +360,7 @@ resource postgresDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2
   }
 }
 
-resource postgresFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2025-08-01' = if (allowAzureServicesPostgresFirewallRule) {
+resource postgresFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2025-08-01' = if (!enablePrivatePostgresNetworking && allowAzureServicesPostgresFirewallRule) {
   parent: postgresServer
   name: allowAllAzureIpsRuleName
   properties: {
@@ -260,19 +369,32 @@ resource postgresFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewal
   }
 }
 
+var containerEnvironmentProperties = union({
+  appLogsConfiguration: {
+    destination: 'log-analytics'
+    logAnalyticsConfiguration: {
+      customerId: logAnalyticsWorkspace.properties.customerId
+      sharedKey: logAnalyticsWorkspace.listKeys().primarySharedKey
+    }
+  }
+}, enablePrivatePostgresNetworking ? {
+  vnetConfiguration: {
+    infrastructureSubnetId: containerAppsInfrastructureSubnet.id
+    internal: false
+  }
+  workloadProfiles: [
+    {
+      name: 'Consumption'
+      workloadProfileType: 'Consumption'
+    }
+  ]
+} : {})
+
 resource containerEnvironment 'Microsoft.App/managedEnvironments@2025-07-01' = {
   name: containerEnvironmentName
   location: location
   tags: tags
-  properties: {
-    appLogsConfiguration: {
-      destination: 'log-analytics'
-      logAnalyticsConfiguration: {
-        customerId: logAnalyticsWorkspace.properties.customerId
-        sharedKey: logAnalyticsWorkspace.listKeys().primarySharedKey
-      }
-    }
-  }
+  properties: containerEnvironmentProperties
 }
 
 resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {

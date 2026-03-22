@@ -23,6 +23,87 @@
     return `${text || ""}`.replace(/\s+/g, " ").trim();
   }
 
+  const statusState = new WeakMap();
+
+  function clearStatusTimers(element) {
+    const activeState = statusState.get(element);
+    if (!activeState) {
+      return;
+    }
+    if (activeState.intervalId) {
+      window.clearInterval(activeState.intervalId);
+    }
+    if (activeState.timeoutId) {
+      window.clearTimeout(activeState.timeoutId);
+    }
+    statusState.delete(element);
+  }
+
+  function renderStatusBanner(element, message, tone = "neutral", options = {}) {
+    if (!element) {
+      return;
+    }
+    element.textContent = message || "";
+    if (message) {
+      element.dataset.tone = tone;
+      if (options.kicker) {
+        element.dataset.kicker = options.kicker;
+      } else {
+        element.removeAttribute("data-kicker");
+      }
+      element.role = tone === "error" ? "alert" : "status";
+      element.hidden = false;
+    } else {
+      element.hidden = true;
+      element.removeAttribute("data-kicker");
+      element.removeAttribute("data-tone");
+    }
+  }
+
+  function showStatusBanner(element, message, tone = "neutral", options = {}) {
+    clearStatusTimers(element);
+    renderStatusBanner(element, message, tone, options);
+
+    if (!element || !message || !options.autoHideMs) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      renderStatusBanner(element, "");
+      clearStatusTimers(element);
+    }, options.autoHideMs);
+
+    statusState.set(element, { timeoutId });
+  }
+
+  function cycleStatusBanner(element, messages, options = {}) {
+    if (!element) {
+      return;
+    }
+
+    const sequence = (messages || []).map((message) => `${message || ""}`.trim()).filter(Boolean);
+    if (!sequence.length) {
+      showStatusBanner(element, options.fallbackMessage || "", options.tone || "neutral", options);
+      return;
+    }
+
+    clearStatusTimers(element);
+
+    let index = 0;
+    renderStatusBanner(element, sequence[index], options.tone || "loading", options);
+
+    if (sequence.length === 1) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      index = (index + 1) % sequence.length;
+      renderStatusBanner(element, sequence[index], options.tone || "loading", options);
+    }, options.intervalMs || 1800);
+
+    statusState.set(element, { intervalId });
+  }
+
   function syncResponsiveTable(table) {
     if (!table) {
       return;
@@ -78,6 +159,9 @@
     {},
     window.NetballStatsUI || {},
     {
+      clearStatusTimers,
+      cycleStatusBanner,
+      showStatusBanner,
       syncResponsiveTable
     }
   );

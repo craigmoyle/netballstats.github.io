@@ -3,8 +3,14 @@ const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30000;
 const SUPER_SHOT_START_SEASON = 2020;
 const {
+  cycleStatusBanner = () => {},
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
+const PLAYER_LOADING_MESSAGES = [
+  "Pulling the player record…",
+  "Balancing career totals and season splits…",
+  "Laying out the stat ledger…"
+];
 const PLAYER_STAT_DEFINITIONS = [
   ["netPoints", "NetPoints"],
   ["intercepts", "Intercepts"],
@@ -94,11 +100,19 @@ async function fetchJson(path, params = {}) {
   }
 }
 
-function showStatus(message, tone = "neutral") {
-  elements.playerStatus.textContent = message;
-  elements.playerStatus.dataset.tone = tone;
-  elements.playerStatus.role = tone === "error" ? "alert" : "status";
-  elements.playerStatus.hidden = !message;
+function showStatus(message, tone = "neutral", options = {}) {
+  if (!message) {
+    window.NetballStatsUI?.showStatusBanner?.(elements.playerStatus, "");
+    return;
+  }
+  window.NetballStatsUI?.showStatusBanner?.(elements.playerStatus, message, tone, options);
+}
+
+function showLoadingStatus(messages, kicker) {
+  cycleStatusBanner(elements.playerStatus, messages, {
+    tone: "loading",
+    kicker
+  });
 }
 
 function formatNumber(value) {
@@ -351,14 +365,14 @@ async function initialise() {
     return;
   }
 
-  showStatus("Loading player profile…");
+  showLoadingStatus(PLAYER_LOADING_MESSAGES, "Player ledger");
 
   try {
     const profile = await fetchJson("/player-profile", { player_id: playerId });
     renderProfile(profile);
-    showStatus("Player profile loaded.", "success");
+    showStatus("Player profile ready.", "success", { kicker: "Career snapshot ready", autoHideMs: 2200 });
   } catch (error) {
-    showStatus(error.message || "Unable to load the player profile.", "error");
+    showStatus(error.message || "Unable to load the player profile.", "error", { kicker: "Profile unavailable" });
   }
 }
 

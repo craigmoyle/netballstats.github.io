@@ -19,6 +19,21 @@
     },
     "customFrontendHostname": {
       "value": "${NETBALL_STATS_CUSTOM_FRONTEND_HOSTNAME}"
+    },
+    "privatePostgresNetworkingMode": {
+      "value": "${NETBALL_STATS_PRIVATE_POSTGRES_NETWORKING_MODE}"
+    },
+    "virtualNetworkAddressPrefix": {
+      "value": "${NETBALL_STATS_VNET_ADDRESS_PREFIX}"
+    },
+    "containerAppsInfrastructureSubnetPrefix": {
+      "value": "${NETBALL_STATS_CONTAINERAPPS_INFRA_SUBNET_PREFIX}"
+    },
+    "postgresDelegatedSubnetPrefix": {
+      "value": "${NETBALL_STATS_POSTGRES_DELEGATED_SUBNET_PREFIX}"
+    },
+    "postgresPrivateDnsZoneName": {
+      "value": "${NETBALL_STATS_POSTGRES_PRIVATE_DNS_ZONE_NAME}"
     }
   }
 }

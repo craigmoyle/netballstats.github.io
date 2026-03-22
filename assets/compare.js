@@ -25,8 +25,18 @@ const {
   renderTrendChart
 } = window.NetballCharts;
 const {
+  cycleStatusBanner = () => {},
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
+const COMPARE_LOADING_MESSAGES = [
+  "Pulling the selected seasons…",
+  "Stacking each record side by side…",
+  "Drawing the comparison line…"
+];
+const COMPARE_META_LOADING_MESSAGES = [
+  "Loading comparison options…",
+  "Fetching teams, players, and seasons…"
+];
 
 const state = {
   meta: null,
@@ -116,11 +126,19 @@ async function fetchJson(path, params = {}) {
   }
 }
 
-function showStatus(message, tone = "neutral") {
-  elements.statusBanner.textContent = message;
-  elements.statusBanner.dataset.tone = tone;
-  elements.statusBanner.role = tone === "error" ? "alert" : "status";
-  elements.statusBanner.hidden = !message;
+function showStatus(message, tone = "neutral", options = {}) {
+  if (!message) {
+    window.NetballStatsUI?.showStatusBanner?.(elements.statusBanner, "");
+    return;
+  }
+  window.NetballStatsUI?.showStatusBanner?.(elements.statusBanner, message, tone, options);
+}
+
+function showLoadingStatus(messages, kicker) {
+  cycleStatusBanner(elements.statusBanner, messages, {
+    tone: "loading",
+    kicker
+  });
 }
 
 function debounce(fn, delay = 200) {
@@ -893,7 +911,7 @@ async function runComparison() {
     return;
   }
 
-  showStatus("Loading comparison…");
+  showLoadingStatus(COMPARE_LOADING_MESSAGES, "Comparison in motion");
   try {
     let rows;
     if (state.mode === "players") {
@@ -904,7 +922,7 @@ async function runComparison() {
 
     if (!rows.length) {
       clearComparison("No comparison data for these filters.");
-      showStatus("No comparison data for these filters.", "error");
+      showStatus("No comparison data for these filters.", "error", { kicker: "No overlap found" });
       return;
     }
 
@@ -912,10 +930,10 @@ async function runComparison() {
     renderComparisonChart(rows, nextEntities);
     renderComparisonTable(rows, nextEntities);
     renderComparisonSummary(nextEntities, rows);
-    showStatus("");
+    showStatus("Comparison ready.", "success", { kicker: "Head to head ready", autoHideMs: 2200 });
   } catch (error) {
     clearComparison("Couldn't load comparison data.");
-    showStatus(error.message || "Couldn't load comparison data.", "error");
+    showStatus(error.message || "Couldn't load comparison data.", "error", { kicker: "Comparison interrupted" });
   }
 }
 
@@ -1078,6 +1096,7 @@ function initialiseEventListeners() {
 
 async function initialise() {
   clearComparison("Loading comparison options…");
+  showLoadingStatus(COMPARE_META_LOADING_MESSAGES, "Preparing the board");
 
   try {
     const meta = await fetchJson("/meta");
@@ -1089,9 +1108,10 @@ async function initialise() {
       await runComparison();
     } else {
       clearComparison(promptMessage());
+      showStatus("");
     }
   } catch (error) {
-    showStatus(error.message || "Couldn't load comparison options.", "error");
+    showStatus(error.message || "Couldn't load comparison options.", "error", { kicker: "Builder unavailable" });
     clearComparison("Stats unavailable.");
   }
 }
