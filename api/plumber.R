@@ -77,6 +77,27 @@ request_limiter <- local({
   }
 })
 
+request_telemetry_enabled <- function() {
+  identical(tolower(Sys.getenv("NETBALL_STATS_REQUEST_TELEMETRY", "true")), "true")
+}
+
+request_path_for_logs <- function(req) {
+  raw_path <- req$PATH_INFO %||% req$REQUEST_URI %||% "/"
+  sub("\\?.*$", "", raw_path)
+}
+
+request_telemetry_ignored <- function(path) {
+  path %in% c("/live", "/ready", "/health", "/api/live", "/api/ready", "/api/health")
+}
+
+response_status_code <- function(res, default = 200L) {
+  status <- suppressWarnings(as.integer(res$status %||% default))
+  if (is.na(status)) {
+    return(default)
+  }
+  status
+}
+
 #* @apiTitle Netball Stats API
 #* @apiDescription Read-only Super Netball statistics API backed by a PostgreSQL database built with superNetballR.
 
@@ -107,6 +128,48 @@ function(req, res) {
   }
 
   plumber::forward()
+}
+
+#* @filter request_telemetry
+function(req, res) {
+  path <- request_path_for_logs(req)
+  if (
+    !request_telemetry_enabled() ||
+    identical(req$REQUEST_METHOD, "OPTIONS") ||
+    request_telemetry_ignored(path)
+  ) {
+    return(plumber::forward())
+  }
+
+  start_time <- Sys.time()
+  result <- tryCatch(
+    plumber::forward(),
+    error = function(error) {
+      duration_ms <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")) * 1000)
+      api_log(
+        "ERROR",
+        "request_failed",
+        method = req$REQUEST_METHOD %||% "GET",
+        path = path,
+        status = 500L,
+        duration_ms = duration_ms,
+        error_class = class(error)[[1]] %||% "unknown"
+      )
+      stop(error)
+    }
+  )
+
+  duration_ms <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")) * 1000)
+  api_log(
+    "INFO",
+    "request_complete",
+    method = req$REQUEST_METHOD %||% "GET",
+    path = path,
+    status = response_status_code(res),
+    duration_ms = duration_ms
+  )
+
+  result
 }
 
 #* @filter rate_limit

@@ -67,6 +67,16 @@ param postgresSkuTier string = 'Burstable'
 @minValue(32)
 param postgresStorageSizeGb int = 32
 
+@description('Whether PostgreSQL should expose a public endpoint. Keep Enabled until private networking is configured for the API and DB refresh jobs.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param postgresPublicNetworkAccess string = 'Enabled'
+
+@description('Whether to create the broad Allow Azure services firewall rule for PostgreSQL. Keep this enabled until the API and DB refresh jobs use private networking or another explicit allow-list.')
+param allowAzureServicesPostgresFirewallRule bool = true
+
 @description('CPU allocation for the API container app.')
 param apiCpu int = 1
 
@@ -222,7 +232,7 @@ resource postgresServer 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' =
       mode: 'Disabled'
     }
     network: {
-      publicNetworkAccess: 'Enabled'
+      publicNetworkAccess: postgresPublicNetworkAccess
     }
     storage: {
       autoGrow: 'Enabled'
@@ -241,7 +251,7 @@ resource postgresDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2
   }
 }
 
-resource postgresFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2025-08-01' = {
+resource postgresFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2025-08-01' = if (allowAzureServicesPostgresFirewallRule) {
   parent: postgresServer
   name: allowAllAzureIpsRuleName
   properties: {
@@ -375,6 +385,10 @@ resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
             {
               name: 'NETBALL_STATS_DB_STATEMENT_TIMEOUT_MS'
               value: '15000'
+            }
+            {
+              name: 'NETBALL_STATS_REQUEST_TELEMETRY'
+              value: 'true'
             }
           ]
           probes: [
