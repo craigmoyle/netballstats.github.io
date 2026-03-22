@@ -12,15 +12,16 @@
     <script defer src="/assets/config.js"></script>
     <script defer src="/assets/player.js"></script>
   </head>
-  <body>
+  <body class="player-page">
     <a href="#main-content" class="skip-link">Skip to content</a>
 
     <header class="page-shell hero-shell reveal">
       <nav class="page-nav" aria-label="Site navigation">
-        <a class="page-nav__link" href="/">Back to explorer</a>
-        <a class="page-nav__link page-nav__link--accent" href="/players/">All players</a>
+        <a class="page-nav__link" href="/">Explore archive</a>
+        <a class="page-nav__link page-nav__link--accent" href="/players/">Player profiles</a>
+        <a class="page-nav__link" href="/query/">Ask the stats</a>
         <a class="page-nav__link" href="/compare/">Compare</a>
-        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light theme">☀</button>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light theme">Light</button>
       </nav>
 
       <section class="hero-panel player-hero">
@@ -79,7 +80,7 @@
           <h2>Career totals</h2>
         </div>
         <div class="table-wrapper table-wrapper--spotlight">
-          <table aria-describedby="career-stats-caption">
+          <table class="stack-table" aria-describedby="career-stats-caption">
             <caption id="career-stats-caption" class="table-caption">Totals and per-game averages for the curated player stat set.</caption>
             <thead>
               <tr>

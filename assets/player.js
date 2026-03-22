@@ -2,6 +2,9 @@ const config = window.NETBALL_STATS_CONFIG || {};
 const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30000;
 const SUPER_SHOT_START_SEASON = 2020;
+const {
+  syncResponsiveTable = () => {}
+} = window.NetballStatsUI || {};
 const PLAYER_STAT_DEFINITIONS = [
   ["netPoints", "NetPoints"],
   ["intercepts", "Intercepts"],
@@ -230,6 +233,7 @@ function renderCareerStats(careerStats) {
     cell.textContent = "No career stats were available for this player.";
     row.appendChild(cell);
     elements.careerStatsBody.appendChild(row);
+    syncResponsiveTable(elements.careerStatsBody.closest("table"));
     return;
   }
 
@@ -243,6 +247,7 @@ function renderCareerStats(careerStats) {
     );
     elements.careerStatsBody.appendChild(row);
   });
+  syncResponsiveTable(elements.careerStatsBody.closest("table"));
 }
 
 function renderSeasonTable(profile) {

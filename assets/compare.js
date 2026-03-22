@@ -24,6 +24,9 @@ const {
   formatNumber,
   renderTrendChart
 } = window.NetballCharts;
+const {
+  syncResponsiveTable = () => {}
+} = window.NetballStatsUI || {};
 
 const state = {
   meta: null,
@@ -222,6 +225,7 @@ function renderEmptyTable(message) {
   cell.textContent = message;
   row.appendChild(cell);
   elements.compareTableBody.appendChild(row);
+  syncResponsiveTable(elements.compareTableBody.closest("table"));
 }
 
 function clearComparison(message) {
@@ -871,6 +875,7 @@ function renderComparisonTable(rows, entities) {
     footRow.appendChild(cell);
   });
   elements.compareTableFoot.appendChild(footRow);
+  syncResponsiveTable(elements.compareTableBody.closest("table"));
 }
 
 function renderComparisonSummary(entities, rows) {

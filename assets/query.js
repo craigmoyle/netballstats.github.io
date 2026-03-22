@@ -1,6 +1,9 @@
 const config = window.NETBALL_STATS_CONFIG || {};
 const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = 30000;
+const {
+  syncResponsiveTable = () => {}
+} = window.NetballStatsUI || {};
 const QUERY_STATUS_LABELS = {
   count: "Count",
   highest: "Highest",
@@ -30,7 +33,9 @@ const elements = {
 };
 
 
-elements.apiBase.textContent = API_BASE_URL;
+if (elements.apiBase) {
+  elements.apiBase.textContent = API_BASE_URL;
+}
 
 function buildUrl(path, params = {}) {
   const url = new URL(`${API_BASE_URL}${path}`, window.location.href);
@@ -119,6 +124,7 @@ function clearTable(message) {
   cell.textContent = message;
   row.appendChild(cell);
   elements.queryRowsBody.appendChild(row);
+  syncResponsiveTable(elements.queryRowsBody.closest("table"));
 }
 
 function createInterpretationCard(label, value) {
@@ -235,6 +241,7 @@ function renderRows(rows) {
     fragment.appendChild(row);
   });
   elements.queryRowsBody.replaceChildren(fragment);
+  syncResponsiveTable(elements.queryRowsBody.closest("table"));
 }
 
 function renderUnsupported(result) {

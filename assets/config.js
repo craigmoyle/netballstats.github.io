@@ -19,18 +19,66 @@
     window.NETBALL_STATS_CONFIG || {}
   );
 
-  // Reveal animations: use IntersectionObserver so content is visible
-  // immediately — not gated on API calls completing.
-  var revealObserver = new IntersectionObserver(function (entries) {
-    entries.forEach(function (entry) {
-      if (entry.isIntersecting) {
-        entry.target.classList.add("is-visible");
-        revealObserver.unobserve(entry.target);
-      }
-    });
-  }, { threshold: 0.04, rootMargin: "0px 0px 80px 0px" });
+  function cleanLabel(text) {
+    return `${text || ""}`.replace(/\s+/g, " ").trim();
+  }
 
-  document.querySelectorAll(".reveal").forEach(function (el) {
-    revealObserver.observe(el);
+  function syncResponsiveTable(table) {
+    if (!table) {
+      return;
+    }
+
+    const labels = Array.from(table.querySelectorAll("thead tr:first-child > th, thead tr:first-child > td"))
+      .map((cell) => cleanLabel(cell.textContent));
+
+    ["tbody", "tfoot"].forEach((section) => {
+      table.querySelectorAll(`${section} tr`).forEach((row) => {
+        const cells = Array.from(row.children).filter((cell) => cell.matches("th, td"));
+        const hasManualPrimary = cells.some((cell) => cell.dataset.stackPrimary === "true");
+
+        cells.forEach((cell, index) => {
+          const colSpan = Number(cell.getAttribute("colspan") || 1);
+          if (colSpan > 1) {
+            cell.removeAttribute("data-label");
+            cell.removeAttribute("data-stack-primary");
+            return;
+          }
+
+          const label = labels[index];
+          if (label) {
+            cell.dataset.label = label;
+          } else {
+            cell.removeAttribute("data-label");
+          }
+
+          if (hasManualPrimary) {
+            if (cell.dataset.stackPrimary !== "true") {
+              cell.removeAttribute("data-stack-primary");
+            }
+            return;
+          }
+
+          if (index === 0) {
+            cell.dataset.stackPrimary = "true";
+          } else {
+            cell.removeAttribute("data-stack-primary");
+          }
+        });
+      });
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll(".stack-table").forEach((table) => {
+      syncResponsiveTable(table);
+    });
   });
+
+  window.NetballStatsUI = Object.assign(
+    {},
+    window.NetballStatsUI || {},
+    {
+      syncResponsiveTable
+    }
+  );
 })();

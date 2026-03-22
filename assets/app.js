@@ -19,6 +19,9 @@ const {
   renderTrendChart,
   renderSeasonColumnChart
 } = window.NetballCharts;
+const {
+  syncResponsiveTable = () => {}
+} = window.NetballStatsUI || {};
 
 const state = {
   meta: null,
@@ -176,6 +179,7 @@ function clearTable(tableBody, message) {
   cell.textContent = message;
   row.appendChild(cell);
   tableBody.appendChild(row);
+  syncResponsiveTable(tableBody.closest("table"));
 }
 
 function createCell(text, className) {
@@ -356,6 +360,11 @@ function updateValueHeadings() {
   elements.competitionValueHeading.textContent = label;
   elements.teamValueHeading.textContent = label;
   elements.playerValueHeading.textContent = label;
+  [
+    elements.competitionSeasonBody,
+    elements.teamLeadersBody,
+    elements.playerLeadersBody
+  ].forEach((tableBody) => syncResponsiveTable(tableBody.closest("table")));
 }
 
 function syncFiltersFromForm() {
@@ -452,6 +461,7 @@ function renderMatches(matches) {
     fragment.appendChild(row);
   });
   elements.matchesTableBody.replaceChildren(fragment);
+  syncResponsiveTable(elements.matchesTableBody.closest("table"));
 }
 
 function renderTeamLeaders(rows) {
@@ -473,9 +483,11 @@ function renderTeamLeaders(rows) {
       createCell(formatNumber(statValue(rowData))),
       createCell(formatNumber(rowData.matches_played))
     );
+    row.children[1].dataset.stackPrimary = "true";
     fragment.appendChild(row);
   });
   elements.teamLeadersBody.replaceChildren(fragment);
+  syncResponsiveTable(elements.teamLeadersBody.closest("table"));
 }
 
 function renderPlayerLeaders(rows) {
@@ -498,9 +510,11 @@ function renderPlayerLeaders(rows) {
       createCell(formatNumber(statValue(rowData))),
       createCell(formatNumber(rowData.matches_played))
     );
+    row.children[1].dataset.stackPrimary = "true";
     fragment.appendChild(row);
   });
   elements.playerLeadersBody.replaceChildren(fragment);
+  syncResponsiveTable(elements.playerLeadersBody.closest("table"));
 }
 
 function renderCompetitionSeasonTable(rows, errorMessage) {
@@ -526,6 +540,7 @@ function renderCompetitionSeasonTable(rows, errorMessage) {
     fragment.appendChild(row);
   });
   elements.competitionSeasonBody.replaceChildren(fragment);
+  syncResponsiveTable(elements.competitionSeasonBody.closest("table"));
 }
 
 function clearAllTables(message) {
