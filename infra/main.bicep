@@ -158,6 +158,7 @@ output staticWebAppUrl string = appStack.outputs.staticWebAppUrl
 output apiContainerAppFqdn string = appStack.outputs.apiContainerAppFqdn
 output AZURE_CONTAINER_REGISTRY_ENDPOINT string = appStack.outputs.containerRegistryLoginServer
 output containerRegistryLoginServer string = appStack.outputs.containerRegistryLoginServer
+output browserTelemetryInsightsName string = appStack.outputs.browserTelemetryInsightsName
 output postgresServerFqdn string = appStack.outputs.postgresServerFqdn
 output postgresDatabase string = appStack.outputs.postgresDatabase
 output postgresAdminSecretUri string = appStack.outputs.postgresAdminSecretUri

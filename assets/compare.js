@@ -28,6 +28,11 @@ const {
   cycleStatusBanner = () => {},
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
+const {
+  applyMetaConfig = () => {},
+  bucketCount = () => "unknown",
+  trackEvent = () => {}
+} = window.NetballStatsTelemetry || {};
 const COMPARE_LOADING_MESSAGES = [
   "Pulling the selected seasons…",
   "Stacking each record side by side…",
@@ -341,6 +346,16 @@ function selectedTeams() {
 
 function selectedEntities() {
   return state.mode === "players" ? state.selectedPlayers : selectedTeams();
+}
+
+function comparisonTelemetryProperties(entityCount = selectedEntities().length) {
+  return {
+    mode: state.mode,
+    metric: state.metric,
+    stat: currentStatKey() || "unknown",
+    entity_count_bucket: bucketCount(entityCount, [0, 1, 2, 3, 4, 6, 8]),
+    season_count_bucket: bucketCount(getSelectedSeasons().length, [0, 1, 2, 3, 5, 8])
+  };
 }
 
 function updateSelectionMeta() {
@@ -911,6 +926,7 @@ async function runComparison() {
     return;
   }
 
+  trackEvent("compare_submitted", comparisonTelemetryProperties(entities.length));
   showLoadingStatus(COMPARE_LOADING_MESSAGES, "Comparison in motion");
   try {
     let rows;
@@ -922,6 +938,10 @@ async function runComparison() {
 
     if (!rows.length) {
       clearComparison("No comparison data for these filters.");
+      trackEvent("compare_completed", {
+        ...comparisonTelemetryProperties(entities.length),
+        outcome: "no_data"
+      });
       showStatus("No comparison data for these filters.", "error", { kicker: "No overlap found" });
       return;
     }
@@ -930,9 +950,17 @@ async function runComparison() {
     renderComparisonChart(rows, nextEntities);
     renderComparisonTable(rows, nextEntities);
     renderComparisonSummary(nextEntities, rows);
+    trackEvent("compare_completed", {
+      ...comparisonTelemetryProperties(nextEntities.length),
+      outcome: "success"
+    });
     showStatus("Comparison ready.", "success", { kicker: "Head to head ready", autoHideMs: 2200 });
   } catch (error) {
     clearComparison("Couldn't load comparison data.");
+    trackEvent("compare_completed", {
+      ...comparisonTelemetryProperties(entities.length),
+      outcome: "error"
+    });
     showStatus(error.message || "Couldn't load comparison data.", "error", { kicker: "Comparison interrupted" });
   }
 }
@@ -1082,6 +1110,7 @@ function initialiseEventListeners() {
   });
 
   elements.resetCompare.addEventListener("click", () => {
+    trackEvent("compare_reset", comparisonTelemetryProperties(selectedEntities().length));
     resetState();
     clearComparison(promptMessage());
     showStatus("");
@@ -1100,6 +1129,7 @@ async function initialise() {
 
   try {
     const meta = await fetchJson("/meta");
+    applyMetaConfig(meta);
     applyMeta(meta);
     await applyUrlState();
     initialiseEventListeners();

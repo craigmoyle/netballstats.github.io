@@ -8,6 +8,10 @@ const DIRECTORY_LOADING_MESSAGES = [
   "Opening the player ledger…",
   "Indexing career pages across the archive…"
 ];
+const {
+  bucketCount = () => "unknown",
+  trackEvent = () => {}
+} = window.NetballStatsTelemetry || {};
 
 const fmtInt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 
@@ -181,6 +185,9 @@ async function initialise() {
     elements.directoryTotal.textContent = formatNumber(state.players.length);
     elements.directorySummary.textContent = "Career pages are live for every player currently in the database.";
     renderPlayers(state.players);
+    trackEvent("player_directory_loaded", {
+      player_count_bucket: bucketCount(state.players.length, [0, 10, 25, 50, 100, 250, 500])
+    });
     showStatus("Player directory ready.", "success", { kicker: "Profiles indexed", autoHideMs: 2200 });
   } catch (error) {
     showStatus(error.message || "Unable to load the player directory.", "error", { kicker: "Directory unavailable" });

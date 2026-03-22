@@ -5,6 +5,11 @@ const {
   cycleStatusBanner = () => {},
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
+const {
+  applyMetaConfig = () => {},
+  bucketCount = () => "unknown",
+  trackEvent = () => {}
+} = window.NetballStatsTelemetry || {};
 const QUERY_LOADING_MESSAGES = [
   "Parsing the question…",
   "Checking the supporting match totals…",
@@ -387,7 +392,7 @@ function updateUrl(question) {
 
 let questionRunning = false;
 
-async function runQuestion(question) {
+async function runQuestion(question, source = "manual") {
   if (questionRunning) return;
 
   const trimmed = question.trim();
@@ -407,11 +412,27 @@ async function runQuestion(question) {
 
   showLoadingStatus(QUERY_LOADING_MESSAGES, "Reading the archive");
   setSummaryCards("…", "…", "…", "Running");
+  trackEvent("ask_stats_submitted", {
+    source,
+    question_length_bucket: bucketCount(trimmed.length, [0, 20, 40, 80, 120, 180])
+  });
 
   try {
     const result = await fetchJson("/query", { question: trimmed, limit: 12 });
     renderResult(result);
     updateUrl(trimmed);
+    trackEvent("ask_stats_completed", {
+      source,
+      outcome: result.status === "supported" ? "supported" : (result.status || "unsupported"),
+      question_type: result.summary?.question_type || result.parsed?.intent_type || "unknown",
+      stat: result.parsed?.stat || result.summary?.stat_label || "unknown",
+      subject_type: result.parsed?.subject_type || "unknown",
+      has_opponent_filter: Boolean(result.parsed?.opponent_name),
+      season_count_bucket: Array.isArray(result.parsed?.seasons)
+        ? bucketCount(result.parsed.seasons.length, [0, 1, 2, 3, 5])
+        : "all_or_unspecified",
+      match_count_bucket: bucketCount(result.summary?.match_count, [0, 1, 2, 5, 10, 25, 50, 100])
+    });
     showStatus(
       result.status === "supported"
         ? "Answer ready. Supporting rows are listed below."
@@ -431,6 +452,10 @@ async function runQuestion(question) {
         "Which players scored 40+ goals in 2025?"
       ]
     });
+    trackEvent("ask_stats_completed", {
+      source,
+      outcome: "error"
+    });
     showStatus(error.message || "Something went wrong. Try again.", "error", { kicker: "Question interrupted" });
   } finally {
     questionRunning = false;
@@ -447,6 +472,7 @@ async function init() {
 
   try {
     const meta = await fetchJson("/meta");
+    applyMetaConfig(meta);
     renderMeta(meta);
   } catch (error) {
     elements.querySeasonSummary.textContent = "Stats metadata unavailable. The parser may still work.";
@@ -457,7 +483,7 @@ async function init() {
   if (initialQuestion) {
     elements.questionInput.value = initialQuestion;
     updateQuestionComposerState(initialQuestion);
-    await runQuestion(initialQuestion);
+    await runQuestion(initialQuestion, "url");
     return;
   }
 
@@ -466,7 +492,7 @@ async function init() {
 
 elements.queryForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  await runQuestion(elements.questionInput.value);
+  await runQuestion(elements.questionInput.value, "manual");
 });
 
 elements.questionInput.addEventListener("input", () => {
@@ -474,10 +500,14 @@ elements.questionInput.addEventListener("input", () => {
 });
 
 elements.clearQuestion.addEventListener("click", () => {
+  const previousQuestion = elements.questionInput.value || "";
   elements.questionInput.value = "";
   showStatus("");
   updateUrl("");
   setIdleState();
+  trackEvent("ask_stats_cleared", {
+    previous_question_length_bucket: bucketCount(previousQuestion.length, [0, 20, 40, 80, 120, 180])
+  });
 });
 
 elements.exampleStrip.addEventListener("click", async (event) => {
@@ -489,7 +519,7 @@ elements.exampleStrip.addEventListener("click", async (event) => {
   const example = button.getAttribute("data-example") || "";
   elements.questionInput.value = example;
   updateQuestionComposerState(example);
-  await runQuestion(example);
+  await runQuestion(example, "example");
 });
 
 void init();

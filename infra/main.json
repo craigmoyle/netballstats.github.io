@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.41.2.15936",
-      "templateHash": "1388656968824065978"
+      "templateHash": "3833466686648841417"
     }
   },
   "parameters": {
@@ -332,7 +332,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.41.2.15936",
-              "templateHash": "9212907256996406920"
+              "templateHash": "3311266662939117299"
             }
           },
           "parameters": {
@@ -579,6 +579,7 @@
             "dbRefreshJobSunName": "[take(format('{0}-db-sun-{1}', parameters('namePrefix'), variables('resourceToken')), 32)]",
             "keyVaultName": "[take(format('{0}-{1}-kv', variables('normalizedPrefix'), variables('resourceToken')), 24)]",
             "workspaceName": "[take(format('{0}-logs-{1}', parameters('namePrefix'), variables('resourceToken')), 63)]",
+            "browserTelemetryInsightsName": "[take(format('{0}-browser-ai-{1}', parameters('namePrefix'), variables('resourceToken')), 64)]",
             "userAssignedIdentityName": "[take(format('{0}-api-mi-{1}', parameters('namePrefix'), variables('resourceToken')), 64)]",
             "virtualNetworkName": "[take(format('{0}-vnet-{1}', parameters('namePrefix'), variables('resourceToken')), 64)]",
             "containerAppsInfrastructureSubnetName": "aca-infrastructure",
@@ -601,6 +602,22 @@
                   "name": "PerGB2018"
                 }
               }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[variables('browserTelemetryInsightsName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "DisableLocalAuth": false,
+                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', variables('workspaceName'))]"
+              ]
             },
             {
               "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
@@ -969,6 +986,10 @@
                         {
                           "name": "NETBALL_STATS_REQUEST_TELEMETRY",
                           "value": "true"
+                        },
+                        {
+                          "name": "NETBALL_STATS_BROWSER_APPINSIGHTS_CONNECTION_STRING",
+                          "value": "[reference(resourceId('Microsoft.Insights/components', variables('browserTelemetryInsightsName')), '2020-02-02').ConnectionString]"
                         }
                       ],
                       "probes": [
@@ -1021,6 +1042,7 @@
               },
               "dependsOn": [
                 "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName')), 'AcrPull'))]",
+                "[resourceId('Microsoft.Insights/components', variables('browserTelemetryInsightsName'))]",
                 "[resourceId('Microsoft.App/managedEnvironments', variables('containerEnvironmentName'))]",
                 "[resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName'))]",
                 "[extensionResourceId(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('userAssignedIdentityName')), 'KeyVaultSecretsUser'))]",
@@ -1290,6 +1312,10 @@
               "type": "string",
               "value": "[reference(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), '2025-04-01').loginServer]"
             },
+            "browserTelemetryInsightsName": {
+              "type": "string",
+              "value": "[variables('browserTelemetryInsightsName')]"
+            },
             "postgresServerFqdn": {
               "type": "string",
               "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', variables('postgresServerName')), '2025-08-01').fullyQualifiedDomainName]"
@@ -1342,6 +1368,10 @@
     "containerRegistryLoginServer": {
       "type": "string",
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('app-stack-{0}', parameters('environmentName'))), '2025-04-01').outputs.containerRegistryLoginServer.value]"
+    },
+    "browserTelemetryInsightsName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', format('app-stack-{0}', parameters('environmentName'))), '2025-04-01').outputs.browserTelemetryInsightsName.value]"
     },
     "postgresServerFqdn": {
       "type": "string",

@@ -23,6 +23,11 @@ const {
   cycleStatusBanner = () => {},
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
+const {
+  applyMetaConfig = () => {},
+  bucketCount = () => "unknown",
+  trackEvent = () => {}
+} = window.NetballStatsTelemetry || {};
 
 const state = {
   meta: null,
@@ -395,6 +400,19 @@ function syncFiltersFromForm() {
     playerStat: elements.playerStat.value,
     statMode: elements.statMode.value,
     playerSearch: elements.playerSearch.value.trim()
+  };
+}
+
+function archiveTelemetryProperties() {
+  syncFiltersFromForm();
+  return {
+    season_count_bucket: bucketCount(state.filters.seasons.length, [0, 1, 2, 3, 5, 8]),
+    has_team_filter: Boolean(state.filters.teamId),
+    has_round_filter: Boolean(state.filters.round),
+    has_player_search: Boolean(state.filters.playerSearch),
+    stat_mode: state.filters.statMode || "unknown",
+    team_stat: state.filters.teamStat || "unknown",
+    player_stat: state.filters.playerStat || "unknown"
   };
 }
 
@@ -820,6 +838,7 @@ async function initialise() {
         meta = await fetchJson("/meta");
       }
     applyMeta(meta);
+    applyMetaConfig(meta);
     await runQueries();
   } catch (error) {
     const hint = isLocalApiConfigured()
@@ -833,6 +852,7 @@ async function initialise() {
 
 elements.filtersForm.addEventListener("submit", (event) => {
   event.preventDefault();
+  trackEvent("archive_filters_applied", archiveTelemetryProperties());
   runQueries();
 });
 
@@ -868,6 +888,7 @@ elements.resetFilters.addEventListener("click", () => {
     return;
   }
 
+  trackEvent("archive_filters_reset", archiveTelemetryProperties());
   applyMeta(state.meta);
   runQueries();
 });

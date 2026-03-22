@@ -1,0 +1,76 @@
+// Query 1: Page views by page type
+let PageViewEvents = union isfuzzy=true
+(
+  AppPageViews
+  | project TimeGenerated, PageName = Name, PageUri = Url, Properties = todynamic(Properties), ItemCount
+),
+(
+  pageViews
+  | project TimeGenerated = timestamp, PageName = name, PageUri = url, Properties = todynamic(customDimensions), ItemCount = itemCount
+);
+PageViewEvents
+| extend PageType = tostring(coalesce(Properties.page_type, PageName))
+| summarize Views = sum(toint(coalesce(ItemCount, 1))) by PageType
+| order by Views desc
+
+// Query 2: Feature usage by custom event
+let UsageEvents = union isfuzzy=true
+(
+  AppEvents
+  | project TimeGenerated, EventName = Name, Properties = todynamic(Properties), ItemCount
+),
+(
+  customEvents
+  | project TimeGenerated = timestamp, EventName = name, Properties = todynamic(customDimensions), ItemCount = itemCount
+);
+UsageEvents
+| summarize Events = sum(toint(coalesce(ItemCount, 1))) by EventName
+| order by Events desc
+
+// Query 3: Ask the Stats outcomes
+let UsageEvents = union isfuzzy=true
+(
+  AppEvents
+  | project TimeGenerated, EventName = Name, Properties = todynamic(Properties), ItemCount
+),
+(
+  customEvents
+  | project TimeGenerated = timestamp, EventName = name, Properties = todynamic(customDimensions), ItemCount = itemCount
+);
+UsageEvents
+| where EventName == "ask_stats_completed"
+| extend Outcome = tostring(Properties.outcome), QuestionType = tostring(Properties.question_type)
+| summarize Events = sum(toint(coalesce(ItemCount, 1))) by Outcome, QuestionType
+| order by Events desc
+
+// Query 4: Homepage filter usage
+let UsageEvents = union isfuzzy=true
+(
+  AppEvents
+  | project TimeGenerated, EventName = Name, Properties = todynamic(Properties), ItemCount
+),
+(
+  customEvents
+  | project TimeGenerated = timestamp, EventName = name, Properties = todynamic(customDimensions), ItemCount = itemCount
+);
+UsageEvents
+| where EventName == "archive_filters_applied"
+| extend TeamStat = tostring(Properties.team_stat), PlayerStat = tostring(Properties.player_stat), StatMode = tostring(Properties.stat_mode), SeasonBucket = tostring(Properties.season_count_bucket)
+| summarize Runs = sum(toint(coalesce(ItemCount, 1))) by TeamStat, PlayerStat, StatMode, SeasonBucket
+| order by Runs desc
+
+// Query 5: Compare usage
+let UsageEvents = union isfuzzy=true
+(
+  AppEvents
+  | project TimeGenerated, EventName = Name, Properties = todynamic(Properties), ItemCount
+),
+(
+  customEvents
+  | project TimeGenerated = timestamp, EventName = name, Properties = todynamic(customDimensions), ItemCount = itemCount
+);
+UsageEvents
+| where EventName == "compare_completed"
+| extend Outcome = tostring(Properties.outcome), Mode = tostring(Properties.mode), Metric = tostring(Properties.metric), Stat = tostring(Properties.stat), EntityBucket = tostring(Properties.entity_count_bucket)
+| summarize Runs = sum(toint(coalesce(ItemCount, 1))) by Outcome, Mode, Metric, Stat, EntityBucket
+| order by Runs desc

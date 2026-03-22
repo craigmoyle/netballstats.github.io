@@ -6,6 +6,10 @@ const {
   cycleStatusBanner = () => {},
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
+const {
+  bucketCount = () => "unknown",
+  trackEvent = () => {}
+} = window.NetballStatsTelemetry || {};
 const PLAYER_LOADING_MESSAGES = [
   "Pulling the player record…",
   "Balancing career totals and season splits…",
@@ -370,6 +374,12 @@ async function initialise() {
   try {
     const profile = await fetchJson("/player-profile", { player_id: playerId });
     renderProfile(profile);
+    trackEvent("player_profile_loaded", {
+      metric: state.metric,
+      season_count_bucket: bucketCount(profile.overview?.seasons_played, [0, 1, 2, 3, 5, 8, 12]),
+      team_count_bucket: bucketCount(profile.overview?.teams_played, [0, 1, 2, 3, 5]),
+      stat_count_bucket: bucketCount((profile.available_stats || []).length, [0, 1, 3, 5, 10, 15, 20])
+    });
     showStatus("Player profile ready.", "success", { kicker: "Career snapshot ready", autoHideMs: 2200 });
   } catch (error) {
     showStatus(error.message || "Unable to load the player profile.", "error", { kicker: "Profile unavailable" });

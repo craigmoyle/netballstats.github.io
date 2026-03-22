@@ -136,6 +136,7 @@ The application is intentionally conservative:
 - **Rate limiting**: the API applies a simple request-per-minute guard.
 - **Secrets in Key Vault**: Azure deployment keeps DB credentials out of repo files.
 - **Structured request telemetry**: the API logs request path, status, latency, and slow/failing requests without dumping raw database errors into normal logs.
+- **Privacy-safe usage telemetry**: browser page views and curated feature events flow to Azure Application Insights without logging raw Ask the Stats question text or auto-capturing fetch/XHR URLs.
 
 ## Azure deployment (primary path)
 
@@ -148,6 +149,7 @@ This repository is prepared for:
 - **Azure Key Vault** for secret storage
 - **Azure Container Registry** for API image builds
 - **Log Analytics** for Container Apps logs and request telemetry
+- **Application Insights (workspace-based)** for browser usage telemetry
 
 ### Azure files in this repo
 
@@ -157,6 +159,7 @@ This repository is prepared for:
 - `infra/main.parameters.json`: env-driven defaults for `azd`
 - `Dockerfile.azure`: API image build for Azure Container Apps
 - `staticwebapp.config.json`: Static Web Apps routing + headers
+- `scripts/usage-telemetry.kql`: ready-to-pin KQL queries for usage reporting
 - `.github/workflows/deploy-azure-static-web-app.yml`: static frontend deployment workflow
 
 ### Required azd environment values
@@ -247,6 +250,13 @@ NETBALL_STATS_API_BASE_URL=https://<api-fqdn> Rscript scripts/test_api_regressio
 - Container Apps probes use `/live` for liveness and `/ready` for DB readiness.
 - The API emits structured request-complete / request-slow / request-failed log lines with endpoint latency.
 - Docker builds now restore R packages from `renv.lock`, so local, CI, and Azure builds all use the same dependency set.
+
+### Usage telemetry reporting
+
+- Browser usage telemetry is intentionally limited to curated page views and feature events.
+- The frontend does **not** auto-track fetch/XHR calls, which keeps raw Ask the Stats question URLs out of browser telemetry.
+- Starter reporting queries live in `scripts/usage-telemetry.kql`.
+- Paste those queries into either the Application Insights Logs blade or the linked Log Analytics workspace, then pin the ones you care about to an Azure Dashboard or Workbook.
 
 ## Frontend build
 

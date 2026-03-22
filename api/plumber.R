@@ -90,6 +90,14 @@ request_path_for_logs <- function(req) {
   sub("\\?.*$", "", raw_path)
 }
 
+browser_telemetry_connection_string <- function() {
+  trimws(Sys.getenv("NETBALL_STATS_BROWSER_APPINSIGHTS_CONNECTION_STRING", ""))
+}
+
+browser_telemetry_enabled <- function() {
+  nzchar(browser_telemetry_connection_string())
+}
+
 request_telemetry_ignored <- function(path) {
   path %in% c("/live", "/ready", "/health", "/api/live", "/api/ready", "/api/health")
 }
@@ -454,7 +462,12 @@ function(res) {
     team_stats = metadata_stat_catalog(metadata_map, "team_stats_json", DEFAULT_TEAM_STATS),
     player_stats = metadata_stat_catalog(metadata_map, "player_stats_json", DEFAULT_PLAYER_STATS),
     build_mode = metadata_map[["build_mode"]] %||% "production",
-    refreshed_at = metadata_map[["refreshed_at"]] %||% NA_character_
+    refreshed_at = metadata_map[["refreshed_at"]] %||% NA_character_,
+    telemetry = list(
+      provider = if (browser_telemetry_enabled()) "appinsights" else "none",
+      browser_enabled = browser_telemetry_enabled(),
+      connection_string = if (browser_telemetry_enabled()) browser_telemetry_connection_string() else NULL
+    )
   )
 }
 

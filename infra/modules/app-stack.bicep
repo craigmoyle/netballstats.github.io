@@ -136,6 +136,7 @@ var dbRefreshJobSatName = take('${namePrefix}-db-sat-${resourceToken}', 32)
 var dbRefreshJobSunName = take('${namePrefix}-db-sun-${resourceToken}', 32)
 var keyVaultName = take('${normalizedPrefix}-${resourceToken}-kv', 24)
 var workspaceName = take('${namePrefix}-logs-${resourceToken}', 63)
+var browserTelemetryInsightsName = take('${namePrefix}-browser-ai-${resourceToken}', 64)
 var userAssignedIdentityName = take('${namePrefix}-api-mi-${resourceToken}', 64)
 var virtualNetworkName = take('${namePrefix}-vnet-${resourceToken}', 64)
 var containerAppsInfrastructureSubnetName = 'aca-infrastructure'
@@ -164,6 +165,18 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-07
     sku: {
       name: 'PerGB2018'
     }
+  }
+}
+
+resource browserTelemetryInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: browserTelemetryInsightsName
+  location: location
+  tags: tags
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    DisableLocalAuth: false
+    WorkspaceResourceId: logAnalyticsWorkspace.id
   }
 }
 
@@ -512,6 +525,10 @@ resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
               name: 'NETBALL_STATS_REQUEST_TELEMETRY'
               value: 'true'
             }
+            {
+              name: 'NETBALL_STATS_BROWSER_APPINSIGHTS_CONNECTION_STRING'
+              value: browserTelemetryInsights.properties.ConnectionString
+            }
           ]
           probes: [
             {
@@ -767,6 +784,7 @@ output staticWebAppHostname string = staticWebApp.properties.defaultHostname
 output staticWebAppUrl string = 'https://${staticWebApp.properties.defaultHostname}'
 output apiContainerAppFqdn string = apiContainerApp.properties.configuration.ingress.fqdn
 output containerRegistryLoginServer string = containerRegistry.properties.loginServer
+output browserTelemetryInsightsName string = browserTelemetryInsights.name
 output postgresServerFqdn string = postgresServer.properties.fullyQualifiedDomainName
 output postgresDatabase string = postgresDatabaseName
 output postgresAdminSecretUri string = postgresAdminPasswordSecret.properties.secretUriWithVersion
