@@ -98,6 +98,19 @@ browser_telemetry_enabled <- function() {
   nzchar(browser_telemetry_connection_string())
 }
 
+json_scalar <- function(value, default = NULL) {
+  if (is.null(value) || length(value) == 0L) {
+    return(if (is.null(default)) NULL else jsonlite::unbox(default))
+  }
+
+  scalar <- value[[1]]
+  if (is.null(scalar) || length(scalar) == 0L || (length(scalar) == 1L && is.na(scalar))) {
+    return(if (is.null(default)) NULL else jsonlite::unbox(default))
+  }
+
+  jsonlite::unbox(unname(scalar))
+}
+
 request_telemetry_ignored <- function(path) {
   path %in% c("/live", "/ready", "/health", "/api/live", "/api/ready", "/api/health")
 }
@@ -433,8 +446,8 @@ function(res) {
   list(
     status = "ok",
     database = "ok",
-    refreshed_at = metadata$value[metadata$key == "refreshed_at"] %||% NA_character_,
-    build_mode = metadata$value[metadata$key == "build_mode"] %||% NA_character_
+    refreshed_at = json_scalar(metadata$value[metadata$key == "refreshed_at"]),
+    build_mode = json_scalar(metadata$value[metadata$key == "build_mode"])
   )
 }
 
@@ -461,12 +474,12 @@ function(res) {
     teams = teams,
     team_stats = metadata_stat_catalog(metadata_map, "team_stats_json", DEFAULT_TEAM_STATS),
     player_stats = metadata_stat_catalog(metadata_map, "player_stats_json", DEFAULT_PLAYER_STATS),
-    build_mode = metadata_map[["build_mode"]] %||% "production",
-    refreshed_at = metadata_map[["refreshed_at"]] %||% NA_character_,
+    build_mode = json_scalar(metadata_map[["build_mode"]], default = "production"),
+    refreshed_at = json_scalar(metadata_map[["refreshed_at"]]),
     telemetry = list(
-      provider = if (browser_telemetry_enabled()) "appinsights" else "none",
-      browser_enabled = browser_telemetry_enabled(),
-      connection_string = if (browser_telemetry_enabled()) browser_telemetry_connection_string() else NULL
+      provider = json_scalar(if (browser_telemetry_enabled()) "appinsights" else "none"),
+      browser_enabled = json_scalar(browser_telemetry_enabled()),
+      connection_string = if (browser_telemetry_enabled()) json_scalar(browser_telemetry_connection_string()) else NULL
     )
   )
 }
