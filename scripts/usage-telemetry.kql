@@ -13,6 +13,21 @@ PageViewEvents
 | summarize Views = sum(toint(coalesce(ItemCount, 1))) by PageType
 | order by Views desc
 
+// Query 1b: Recent page views with richer proxy-era detail
+PageViewEvents
+| extend PageType = tostring(coalesce(Properties.page_type, PageName))
+| project
+    TimeGenerated,
+    PageType,
+    PageName,
+    PageUri,
+    ClientBrowser = column_ifexists("ClientBrowser", ""),
+    ClientOS = column_ifexists("ClientOS", ""),
+    SessionId = column_ifexists("SessionId", ""),
+    UserId = column_ifexists("UserId", ""),
+    Properties
+| order by TimeGenerated desc
+
 // Query 2: Feature usage by custom event
 let UsageEvents = union isfuzzy=true
 (
@@ -26,6 +41,18 @@ let UsageEvents = union isfuzzy=true
 UsageEvents
 | summarize Events = sum(toint(coalesce(ItemCount, 1))) by EventName
 | order by Events desc
+
+// Query 2b: Recent custom events with richer proxy-era detail
+UsageEvents
+| project
+    TimeGenerated,
+    EventName,
+    SessionId = column_ifexists("SessionId", ""),
+    UserId = column_ifexists("UserId", ""),
+    ClientBrowser = column_ifexists("ClientBrowser", ""),
+    ClientOS = column_ifexists("ClientOS", ""),
+    Properties
+| order by TimeGenerated desc
 
 // Query 3: Ask the Stats outcomes
 let UsageEvents = union isfuzzy=true
