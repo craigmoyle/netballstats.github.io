@@ -136,6 +136,27 @@
     });
   }
 
+  function sendTelemetry(kind, payload) {
+    const body = JSON.stringify({ kind, payload });
+    const endpoint = buildApiUrl("/telemetry").toString();
+
+    if (navigator.sendBeacon) {
+      const beacon = new Blob([body], { type: "application/json" });
+      if (navigator.sendBeacon(endpoint, beacon)) {
+        return;
+      }
+    }
+
+    void fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body,
+      keepalive: true
+    }).catch(() => {});
+  }
+
   function enqueue(kind, payload) {
     state.queue.push({ kind, payload });
     void ensureClient();
@@ -522,12 +543,12 @@
 
   function applyMetaConfig(meta) {
     const telemetry = meta?.telemetry;
-    if (!telemetry || telemetry.browser_enabled !== true || !telemetry.connection_string) {
+    if (!telemetry || telemetry.browser_enabled !== true) {
       return;
     }
 
     state.browserConfig = {
-      connectionString: telemetry.connection_string
+      enabled: true
     };
     state.metaPromise = Promise.resolve(state.browserConfig);
     if (!state.appInsights) {
@@ -566,16 +587,23 @@
     if (!state.initPromise) {
       state.initPromise = (async () => {
         const browserConfig = state.browserConfig || await fetchMetaConfig();
-        if (!browserConfig?.connectionString) {
+        if (!browserConfig?.enabled) {
           return null;
         }
 
-        const appInsights = await bootAppInsights(browserConfig.connectionString);
-        if (!appInsights) {
-          return null;
-        }
-
-        state.appInsights = appInsights;
+        state.appInsights = {
+          trackPageView(payload) {
+            sendTelemetry("pageView", payload);
+          },
+          trackEvent(eventDescriptor, properties) {
+            sendTelemetry("event", {
+              name: eventDescriptor?.name || "",
+              properties: properties || {}
+            });
+          },
+          flush() {}
+        };
+        window.appInsights = state.appInsights;
         flushQueue();
         return state.appInsights;
       })().catch(() => {

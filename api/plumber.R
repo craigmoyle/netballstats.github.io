@@ -111,8 +111,218 @@ meta_json_scalar <- function(value, default = NULL) {
   jsonlite::unbox(unname(scalar))
 }
 
+allowed_browser_page_types <- c(
+  "archive-home",
+  "ask-stats",
+  "compare",
+  "player-directory",
+  "player-profile"
+)
+
+allowed_browser_event_names <- c(
+  "archive_filters_applied",
+  "archive_filters_reset",
+  "ask_stats_submitted",
+  "ask_stats_completed",
+  "ask_stats_cleared",
+  "compare_submitted",
+  "compare_completed",
+  "compare_reset",
+  "player_profile_loaded",
+  "player_directory_loaded"
+)
+
+parse_connection_string_fields <- function(connection_string) {
+  fields <- list()
+  parts <- strsplit(connection_string %||% "", ";", fixed = TRUE)[[1]]
+  for (part in parts) {
+    entry <- strsplit(part, "=", fixed = TRUE)[[1]]
+    if (length(entry) != 2L) {
+      next
+    }
+    fields[[tolower(trimws(entry[[1]]))]] <- trimws(entry[[2]])
+  }
+  fields
+}
+
+browser_telemetry_ingestion_url <- function() {
+  fields <- parse_connection_string_fields(browser_telemetry_connection_string())
+  instrumentation_key <- fields[["instrumentationkey"]] %||% ""
+  if (!nzchar(instrumentation_key)) {
+    return(NULL)
+  }
+
+  endpoint <- fields[["ingestionendpoint"]] %||% ""
+  if (!nzchar(endpoint)) {
+    endpoint_suffix <- fields[["endpointsuffix"]] %||% "services.visualstudio.com"
+    location <- fields[["location"]] %||% ""
+    endpoint <- sprintf(
+      "https://%sdc.%s",
+      if (nzchar(location)) paste0(location, ".") else "",
+      endpoint_suffix
+    )
+  }
+
+  sprintf("%s/v2/track", sub("/+$", "", endpoint))
+}
+
+browser_telemetry_instrumentation_key <- function() {
+  fields <- parse_connection_string_fields(browser_telemetry_connection_string())
+  fields[["instrumentationkey"]] %||% ""
+}
+
+telemetry_iso_time <- function(time = Sys.time()) {
+  format(as.POSIXct(time, tz = "UTC"), "%Y-%m-%dT%H:%M:%OS3Z", tz = "UTC")
+}
+
+telemetry_trim_string <- function(value, max_length = 120L) {
+  trimmed <- gsub("\\s+", " ", trimws(as.character(value %||% "")))
+  substr(trimmed, 1L, max_length)
+}
+
+telemetry_sanitise_properties <- function(properties) {
+  if (is.null(properties) || !is.list(properties)) {
+    return(list())
+  }
+
+  output <- list()
+  property_names <- names(properties) %||% character()
+  if (!length(property_names)) {
+    return(output)
+  }
+
+  for (property_name in property_names) {
+    if (!grepl("^[a-z0-9_]+$", property_name)) {
+      next
+    }
+
+    value <- properties[[property_name]]
+    if (is.null(value) || length(value) == 0L) {
+      next
+    }
+
+    scalar <- value[[1]]
+    if (is.na(scalar)) {
+      next
+    }
+
+    output[[property_name]] <- telemetry_trim_string(scalar)
+  }
+
+  output
+}
+
+build_telemetry_envelope <- function(kind, payload, req) {
+  instrumentation_key <- browser_telemetry_instrumentation_key()
+  if (!nzchar(instrumentation_key)) {
+    stop("Browser telemetry instrumentation key is unavailable.", call. = FALSE)
+  }
+
+  telemetry_name <- telemetry_trim_string(payload$name, 80L)
+  telemetry_uri <- telemetry_trim_string(payload$uri, 200L)
+  telemetry_properties <- telemetry_sanitise_properties(payload$properties)
+  operation_name <- if (nzchar(telemetry_uri)) telemetry_uri else telemetry_name
+  client_ip <- telemetry_trim_string(req$HTTP_X_FORWARDED_FOR %||% req$REMOTE_ADDR %||% "unknown", 80L)
+
+  list(
+    time = telemetry_iso_time(),
+    iKey = instrumentation_key,
+    name = sprintf(
+      "Microsoft.ApplicationInsights.%s.%s",
+      gsub("-", "", instrumentation_key, fixed = TRUE),
+      if (identical(kind, "pageView")) "Pageview" else "Event"
+    ),
+    tags = list(
+      "ai.operation.name" = operation_name,
+      "ai.cloud.role" = "netballstats-browser",
+      "ai.location.ip" = client_ip,
+      "ai.internal.sdkVersion" = "netballstats-browser-proxy:1.0.0"
+    ),
+    data = list(
+      baseType = if (identical(kind, "pageView")) "PageviewData" else "EventData",
+      baseData = if (identical(kind, "pageView")) {
+        list(
+          ver = 2,
+          name = telemetry_name,
+          url = telemetry_uri,
+          properties = telemetry_properties
+        )
+      } else {
+        list(
+          ver = 2,
+          name = telemetry_name,
+          properties = telemetry_properties
+        )
+      }
+    )
+  )
+}
+
+forward_browser_telemetry <- function(kind, payload, req) {
+  ingestion_url <- browser_telemetry_ingestion_url()
+  if (!nzchar(ingestion_url %||% "")) {
+    stop("Browser telemetry ingestion endpoint is unavailable.", call. = FALSE)
+  }
+
+  envelope <- build_telemetry_envelope(kind, payload, req)
+  response <- httr::POST(
+    url = ingestion_url,
+    body = jsonlite::toJSON(list(envelope), auto_unbox = TRUE, null = "null"),
+    encode = "raw",
+    httr::add_headers("Content-Type" = "application/json"),
+    httr::timeout(5)
+  )
+
+  status <- httr::status_code(response)
+  if (status < 200L || status >= 300L) {
+    stop(sprintf("Telemetry ingestion failed with status %s.", status), call. = FALSE)
+  }
+
+  invisible(TRUE)
+}
+
+parse_browser_telemetry_request <- function(req) {
+  raw_body <- req$postBody %||% ""
+  if (!nzchar(raw_body)) {
+    stop("Telemetry body is required.", call. = FALSE)
+  }
+
+  parsed <- jsonlite::fromJSON(raw_body, simplifyVector = FALSE)
+  if (!is.list(parsed)) {
+    stop("Telemetry body must be a JSON object.", call. = FALSE)
+  }
+
+  kind <- parsed$kind %||% ""
+  if (!kind %in% c("pageView", "event")) {
+    stop("Telemetry kind must be pageView or event.", call. = FALSE)
+  }
+
+  payload <- parsed$payload
+  if (!is.list(payload)) {
+    stop("Telemetry payload is required.", call. = FALSE)
+  }
+
+  payload$name <- telemetry_trim_string(payload$name, 80L)
+  if (!nzchar(payload$name)) {
+    stop("Telemetry name is required.", call. = FALSE)
+  }
+
+  if (identical(kind, "pageView") && !payload$name %in% allowed_browser_page_types) {
+    stop("Telemetry page type is not allowed.", call. = FALSE)
+  }
+
+  if (identical(kind, "event") && !payload$name %in% allowed_browser_event_names) {
+    stop("Telemetry event name is not allowed.", call. = FALSE)
+  }
+
+  payload$uri <- telemetry_trim_string(payload$uri, 200L)
+  payload$properties <- telemetry_sanitise_properties(payload$properties)
+
+  list(kind = kind, payload = payload)
+}
+
 request_telemetry_ignored <- function(path) {
-  path %in% c("/live", "/ready", "/health", "/api/live", "/api/ready", "/api/health")
+  path %in% c("/live", "/ready", "/health", "/api/live", "/api/ready", "/api/health", "/telemetry", "/api/telemetry")
 }
 
 response_status_code <- function(res, default = 200L) {
@@ -162,7 +372,7 @@ function(req, res) {
     res$setHeader("Vary", "Origin")
   }
 
-  res$setHeader("Access-Control-Allow-Methods", "GET, OPTIONS")
+  res$setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
   res$setHeader("Access-Control-Allow-Headers", "Content-Type")
   res$setHeader("Cache-Control", "no-store")
   res$setHeader("X-Content-Type-Options", "nosniff")
@@ -482,6 +692,37 @@ function(res) {
       connection_string = if (browser_telemetry_enabled()) meta_json_scalar(browser_telemetry_connection_string()) else NULL
     )
   )
+}
+
+#* @post /telemetry
+#* @post /api/telemetry
+function(req, res) {
+  if (!browser_telemetry_enabled()) {
+    res$status <- 204
+    return(list())
+  }
+
+  result <- tryCatch({
+    telemetry_request <- parse_browser_telemetry_request(req)
+    forward_browser_telemetry(telemetry_request$kind, telemetry_request$payload, req)
+    api_log(
+      "INFO",
+      "browser_telemetry_forwarded",
+      kind = telemetry_request$kind,
+      name = telemetry_request$payload$name
+    )
+    res$status <- 202
+    list(ok = jsonlite::unbox(TRUE))
+  }, error = function(error) {
+    api_log(
+      "WARN",
+      "browser_telemetry_rejected",
+      error_class = class(error)[[1]] %||% "unknown"
+    )
+    json_error(res, 400, conditionMessage(error))
+  })
+
+  result
 }
 
 #* @get /players
