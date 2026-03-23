@@ -10,7 +10,7 @@ name: Clean up container registry
 #   AZURE_SUBSCRIPTION_ID  — Azure subscription ID
 #
 # Required GitHub Actions secrets (Settings → Secrets → Actions):
-#   AZURE_CLIENT_ID        — App registration / managed-identity client ID
+#   AZURE_CLIENT_ID        — Federated app registration client ID
 #   AZURE_TENANT_ID        — Microsoft Entra tenant ID
 #
 # The service-principal needs the built-in AcrDelete role on the registry.
@@ -27,14 +27,6 @@ name: Clean up container registry
 #     "name": "ghactions-cleanup",
 #     "issuer": "https://token.actions.githubusercontent.com",
 #     "subject": "repo:craigmoyle/netballstats:ref:refs/heads/main",
-#     "audiences": ["api://AzureADTokenExchange"]
-#   }'
-#
-#   # Also allow the workflow_dispatch subject (scheduled runs use main):
-#   az ad app federated-credential create --id $APP_ID --parameters '{
-#     "name": "ghactions-cleanup-dispatch",
-#     "issuer": "https://token.actions.githubusercontent.com",
-#     "subject": "repo:craigmoyle/netballstats:environment:production",
 #     "audiences": ["api://AzureADTokenExchange"]
 #   }'
 #
