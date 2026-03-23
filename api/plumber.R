@@ -98,7 +98,7 @@ browser_telemetry_enabled <- function() {
   nzchar(browser_telemetry_connection_string())
 }
 
-json_scalar <- function(value, default = NULL) {
+meta_json_scalar <- function(value, default = NULL) {
   if (is.null(value) || length(value) == 0L) {
     return(if (is.null(default)) NULL else jsonlite::unbox(default))
   }
@@ -446,8 +446,8 @@ function(res) {
   list(
     status = "ok",
     database = "ok",
-    refreshed_at = json_scalar(metadata$value[metadata$key == "refreshed_at"]),
-    build_mode = json_scalar(metadata$value[metadata$key == "build_mode"])
+    refreshed_at = meta_json_scalar(metadata$value[metadata$key == "refreshed_at"]),
+    build_mode = meta_json_scalar(metadata$value[metadata$key == "build_mode"])
   )
 }
 
@@ -474,12 +474,12 @@ function(res) {
     teams = teams,
     team_stats = metadata_stat_catalog(metadata_map, "team_stats_json", DEFAULT_TEAM_STATS),
     player_stats = metadata_stat_catalog(metadata_map, "player_stats_json", DEFAULT_PLAYER_STATS),
-    build_mode = json_scalar(metadata_map[["build_mode"]], default = "production"),
-    refreshed_at = json_scalar(metadata_map[["refreshed_at"]]),
+    build_mode = meta_json_scalar(metadata_map[["build_mode"]], default = "production"),
+    refreshed_at = meta_json_scalar(metadata_map[["refreshed_at"]]),
     telemetry = list(
-      provider = json_scalar(if (browser_telemetry_enabled()) "appinsights" else "none"),
-      browser_enabled = json_scalar(browser_telemetry_enabled()),
-      connection_string = if (browser_telemetry_enabled()) json_scalar(browser_telemetry_connection_string()) else NULL
+      provider = meta_json_scalar(if (browser_telemetry_enabled()) "appinsights" else "none"),
+      browser_enabled = meta_json_scalar(browser_telemetry_enabled()),
+      connection_string = if (browser_telemetry_enabled()) meta_json_scalar(browser_telemetry_connection_string()) else NULL
     )
   )
 }
