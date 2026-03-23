@@ -13,7 +13,7 @@ name: Clean up container registry
 #   AZURE_CLIENT_ID        — Federated app registration client ID
 #   AZURE_TENANT_ID        — Microsoft Entra tenant ID
 #
-# The service-principal needs the built-in AcrDelete role on the registry.
+# The service-principal needs the built-in AcrPull and AcrDelete roles on the registry.
 #
 # One-time setup (replace <owner>/<repo> and the IDs below):
 #
