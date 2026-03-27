@@ -989,7 +989,7 @@ function(season = "", seasons = "", team_id = "", round = "", limit = "12", res)
 
 #* @get /team-leaders
 #* @get /api/team-leaders
-function(season = "", seasons = "", team_id = "", round = "", stat = "points", metric = "total", limit = "8", res) {
+function(season = "", seasons = "", team_id = "", round = "", stat = "points", metric = "total", ranking = "highest", limit = "8", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
     return(database_unavailable(res, conn))
@@ -1003,7 +1003,9 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", m
     limit <- parse_limit(limit, default = 8L, maximum = 25L)
     stat <- validate_stat(conn, "team_period_stats", stat, default_stat = "points")
     metric <- parse_metric(metric)
+    ranking <- parse_ranking_mode(ranking)
     order_column <- if (identical(metric, "average")) "average_value" else "total_value"
+    order_direction <- ranking_order_sql(ranking)
 
     query <- paste(
       "SELECT squad_id, squad_name, ?stat AS stat, ROUND(CAST(SUM(value_number) AS numeric), 2) AS total_value,",
@@ -1014,7 +1016,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", m
     filters <- apply_stat_filters(query, list(stat = stat), seasons, team_id, round)
     filters$query <- paste0(
       filters$query,
-      " GROUP BY squad_id, squad_name ORDER BY ", order_column, " DESC, squad_name ASC LIMIT ?limit"
+      " GROUP BY squad_id, squad_name ORDER BY ", order_column, " ", order_direction, ", squad_name ASC LIMIT ?limit"
     )
     filters$params$limit <- limit
 
@@ -1027,7 +1029,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", m
 
 #* @get /player-leaders
 #* @get /api/player-leaders
-function(season = "", seasons = "", team_id = "", round = "", stat = "points", search = "", metric = "total", limit = "12", res) {
+function(season = "", seasons = "", team_id = "", round = "", stat = "points", search = "", metric = "total", ranking = "highest", limit = "12", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
     return(database_unavailable(res, conn))
@@ -1041,6 +1043,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", s
     limit <- parse_limit(limit, default = 12L, maximum = 50L)
     stat <- validate_stat(conn, "player_period_stats", stat, default_stat = "points")
     metric <- parse_metric(metric)
+    ranking <- parse_ranking_mode(ranking)
     rows <- fetch_player_leader_rows(
       conn,
       seasons = seasons,
@@ -1049,6 +1052,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", s
       stat = stat,
       search = search,
       metric = metric,
+      ranking = ranking,
       limit = limit
     )
 
@@ -1094,7 +1098,7 @@ function(season = "", seasons = "", round = "", stat = "points", metric = "total
 
 #* @get /team-season-series
 #* @get /api/team-season-series
-function(season = "", seasons = "", team_id = "", round = "", stat = "points", metric = "total", limit = "10", res) {
+function(season = "", seasons = "", team_id = "", round = "", stat = "points", metric = "total", ranking = "highest", limit = "10", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
     return(database_unavailable(res, conn))
@@ -1108,8 +1112,11 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", m
     limit <- parse_limit(limit, default = 10L, maximum = 10L)
     stat <- validate_stat(conn, "team_period_stats", stat, default_stat = "points")
     metric <- parse_metric(metric)
+    ranking <- parse_ranking_mode(ranking)
     ranked_order_column <- if (identical(metric, "average")) "average_value" else "grand_total"
     series_order_column <- if (identical(metric, "average")) "average_value" else "total_value"
+    ranked_order_direction <- ranking_order_sql(ranking)
+    series_order_direction <- ranking_order_sql(ranking)
 
     ranked_query <- paste(
       "SELECT squad_id, ROUND(CAST(SUM(value_number) AS numeric), 2) AS grand_total,",
@@ -1120,7 +1127,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", m
     ranked_filters <- apply_stat_filters(ranked_query, list(stat = stat), seasons, team_id, round)
     ranked_filters$query <- paste0(
       ranked_filters$query,
-      " GROUP BY squad_id ORDER BY ", ranked_order_column, " DESC, squad_id ASC"
+      " GROUP BY squad_id ORDER BY ", ranked_order_column, " ", ranked_order_direction, ", squad_id ASC"
     )
     if (is.null(team_id)) {
       ranked_filters$query <- paste0(ranked_filters$query, " LIMIT ?limit")
@@ -1152,7 +1159,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", m
     filters$query <- paste0(
       filters$query,
       " GROUP BY stats.squad_id, stats.squad_name, teams.squad_colour, stats.season",
-      " ORDER BY stats.season ASC, ", series_order_column, " DESC, stats.squad_name ASC"
+      " ORDER BY stats.season ASC, ", series_order_column, " ", series_order_direction, ", stats.squad_name ASC"
     )
 
     rows <- query_rows(conn, filters$query, filters$params)
@@ -1164,7 +1171,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", m
 
 #* @get /player-season-series
 #* @get /api/player-season-series
-function(season = "", seasons = "", team_id = "", round = "", stat = "points", search = "", metric = "total", limit = "10", res) {
+function(season = "", seasons = "", team_id = "", round = "", stat = "points", search = "", metric = "total", ranking = "highest", limit = "10", res) {
   conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
     return(database_unavailable(res, conn))
@@ -1178,6 +1185,7 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", s
     limit <- parse_limit(limit, default = 10L, maximum = 10L)
     stat <- validate_stat(conn, "player_period_stats", stat, default_stat = "points")
     metric <- parse_metric(metric)
+    ranking <- parse_ranking_mode(ranking)
     rows <- fetch_player_season_metric_rows(
       conn,
       seasons = seasons,
@@ -1186,13 +1194,13 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", s
       stat = stat,
       search = search
     )
-    ranked_ids <- top_player_ids_from_series_rows(rows, metric, limit)
+    ranked_ids <- top_player_ids_from_series_rows(rows, metric, ranking = ranking, limit = limit)
     if (length(ranked_ids)) {
       rows <- rows[rows$player_id %in% ranked_ids, , drop = FALSE]
     } else {
       rows <- rows[0, , drop = FALSE]
     }
-    rows <- sort_player_series_rows(rows, metric)
+    rows <- sort_player_series_rows(rows, metric, ranking = ranking)
 
     list(data = apply_metric_value(rows, metric))
   }, error = function(error) {

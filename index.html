@@ -115,6 +115,17 @@
               <option value="average">Average per game</option>
             </select>
           </div>
+          <div class="field field--secondary field--compact">
+            <span class="field-label">Leaderboard order</span>
+            <input id="ranking-mode" name="ranking-mode" type="hidden" value="highest">
+            <div class="view-toggle compare-mode-toggle" role="group" aria-label="Leaderboard order">
+              <button type="button" class="button button--small is-active" data-ranking-mode="highest" aria-pressed="true">Highest</button>
+              <button type="button" class="button button--small button--ghost" data-ranking-mode="lowest" aria-pressed="false">Lowest</button>
+            </div>
+            <div class="field-hint-wrap">
+              <small class="field-hint">Applies to the player and team leaderboards below.</small>
+            </div>
+          </div>
           <div class="filter-actions filter-actions--primary field--wide">
             <p class="filter-actions__hint">Apply these filters to refresh the match log, leaderboards, and charts below.</p>
             <div class="filter-actions__buttons">
@@ -185,7 +196,7 @@
             <div class="chart-stack">
               <article class="chart-card">
                 <div class="chart-card__header">
-                  <h3 class="chart-card__title">Top players by the selected stat</h3>
+                  <h3 id="player-leaders-chart-title" class="chart-card__title">Highest players by the selected stat</h3>
                 </div>
                 <div id="player-leaders-chart" class="chart-shell" role="img" aria-label="Player leaderboard chart"></div>
               </article>
@@ -272,7 +283,7 @@
             <div class="chart-stack">
               <article class="chart-card">
                 <div class="chart-card__header">
-                  <h3 class="chart-card__title">Top clubs by the selected stat</h3>
+                  <h3 id="team-leaders-chart-title" class="chart-card__title">Highest clubs by the selected stat</h3>
                 </div>
                 <div id="team-leaders-chart" class="chart-shell" role="img" aria-label="Team leaderboard chart"></div>
               </article>

@@ -38,6 +38,7 @@ const state = {
     teamStat: "points",
     playerStat: "points",
     statMode: "total",
+    rankingMode: "highest",
     playerSearch: ""
   },
   views: {
@@ -67,6 +68,8 @@ const elements = {
   teamStat: document.getElementById("team-stat"),
   playerStat: document.getElementById("player-stat"),
   statMode: document.getElementById("stat-mode"),
+  rankingMode: document.getElementById("ranking-mode"),
+  rankingButtons: document.querySelectorAll("[data-ranking-mode]"),
   playerSearch: document.getElementById("player-search"),
   resetFilters: document.getElementById("reset-filters"),
   heroTotalGoals: document.getElementById("hero-total-goals"),
@@ -85,6 +88,8 @@ const elements = {
   teamTrendChart: document.getElementById("team-trend-chart"),
   playerLeadersChart: document.getElementById("player-leaders-chart"),
   playerTrendChart: document.getElementById("player-trend-chart"),
+  teamLeadersChartTitle: document.getElementById("team-leaders-chart-title"),
+  playerLeadersChartTitle: document.getElementById("player-leaders-chart-title"),
   competitionValueHeading: document.getElementById("competition-value-heading"),
   teamValueHeading: document.getElementById("team-value-heading"),
   playerValueHeading: document.getElementById("player-value-heading"),
@@ -372,6 +377,28 @@ function statModeDescriptor() {
   return isAverageMetric() ? "average per game" : "total";
 }
 
+function rankingModeLabel() {
+  return state.filters.rankingMode === "lowest" ? "Lowest" : "Highest";
+}
+
+function rankingModeDescriptor() {
+  return state.filters.rankingMode === "lowest" ? "Lowest first" : "Highest first";
+}
+
+function setRankingMode(nextMode = "highest") {
+  const normalized = nextMode === "lowest" ? "lowest" : "highest";
+  if (elements.rankingMode) {
+    elements.rankingMode.value = normalized;
+  }
+
+  elements.rankingButtons.forEach((button) => {
+    const active = button.dataset.rankingMode === normalized;
+    button.classList.toggle("is-active", active);
+    button.classList.toggle("button--ghost", !active);
+    button.setAttribute("aria-pressed", `${active}`);
+  });
+}
+
 function statValue(row) {
   if (row && row.value !== undefined && row.value !== null && row.value !== "") {
     return row.value;
@@ -399,6 +426,7 @@ function syncFiltersFromForm() {
     teamStat: elements.teamStat.value,
     playerStat: elements.playerStat.value,
     statMode: elements.statMode.value,
+    rankingMode: elements.rankingMode.value || "highest",
     playerSearch: elements.playerSearch.value.trim()
   };
 }
@@ -411,6 +439,7 @@ function archiveTelemetryProperties() {
     has_round_filter: Boolean(state.filters.round),
     has_player_search: Boolean(state.filters.playerSearch),
     stat_mode: state.filters.statMode || "unknown",
+    ranking_mode: state.filters.rankingMode || "unknown",
     team_stat: state.filters.teamStat || "unknown",
     player_stat: state.filters.playerStat || "unknown"
   };
@@ -423,6 +452,7 @@ function renderFilterSummary() {
     teamLabel(state.filters.teamId),
     state.filters.round ? `Round ${state.filters.round}` : "All rounds",
     statModeDescriptor(),
+    rankingModeDescriptor(),
     `Team ${state.filters.teamStat || "-"}`,
     `Player ${state.filters.playerStat || "-"}`
   ];
@@ -432,6 +462,12 @@ function renderFilterSummary() {
   }
 
   elements.activeFilterSummary.textContent = segments.join(" • ");
+  if (elements.teamLeadersChartTitle) {
+    elements.teamLeadersChartTitle.textContent = `${rankingModeLabel()} clubs by the selected stat`;
+  }
+  if (elements.playerLeadersChartTitle) {
+    elements.playerLeadersChartTitle.textContent = `${rankingModeLabel()} players by the selected stat`;
+  }
   updateValueHeadings();
 }
 
@@ -461,6 +497,7 @@ function applyMeta(meta) {
   elements.round.value = "";
   elements.playerSearch.value = "";
   elements.statMode.value = "total";
+  setRankingMode("highest");
   elements.teamStat.value = meta.team_stats.includes("points") ? "points" : meta.team_stats[0] || "";
   elements.playerStat.value = meta.player_stats.includes("points") ? "points" : meta.player_stats[0] || "";
   renderFilterSummary();
@@ -672,7 +709,7 @@ function renderTeamCharts(leaderRows, trendRows) {
   const chartLeaderRows = leaderRows.slice(0, CHART_RANK_LIMIT);
 
   renderHorizontalBarChart(elements.teamLeadersChart, chartLeaderRows, {
-    ariaLabel: `Team leaderboard ${statModeDescriptor()} chart for ${state.filters.teamStat}`,
+    ariaLabel: `${rankingModeLabel()} team leaderboard ${statModeDescriptor()} chart for ${state.filters.teamStat}`,
     emptyMessage: "No results for these filters.",
     labelAccessor: (row) => row.squad_name,
     valueAccessor: (row) => statValue(row),
@@ -694,7 +731,7 @@ function renderPlayerCharts(leaderRows, trendRows) {
   const chartLeaderRows = leaderRows.slice(0, CHART_RANK_LIMIT);
 
   renderHorizontalBarChart(elements.playerLeadersChart, chartLeaderRows, {
-    ariaLabel: `Player leaderboard ${statModeDescriptor()} chart for ${state.filters.playerStat}`,
+    ariaLabel: `${rankingModeLabel()} player leaderboard ${statModeDescriptor()} chart for ${state.filters.playerStat}`,
     emptyMessage: "No results for these filters.",
     labelAccessor: (row) => row.player_name,
     valueAccessor: (row) => statValue(row),
@@ -749,6 +786,7 @@ async function runQueries() {
         ...baseParams,
         stat: state.filters.teamStat,
         metric: state.filters.statMode,
+        ranking: state.filters.rankingMode,
         limit: leaderboardFetchLimit
       }),
       fetchJson("/player-leaders", {
@@ -756,6 +794,7 @@ async function runQueries() {
         stat: state.filters.playerStat,
         search: state.filters.playerSearch,
         metric: state.filters.statMode,
+        ranking: state.filters.rankingMode,
         limit: leaderboardFetchLimit
       }),
       fetchOptionalJson("/competition-season-series", {
@@ -768,6 +807,7 @@ async function runQueries() {
         ...baseParams,
         stat: state.filters.teamStat,
         metric: state.filters.statMode,
+        ranking: state.filters.rankingMode,
         limit: CHART_RANK_LIMIT
       }),
       fetchOptionalJson("/player-season-series", {
@@ -775,6 +815,7 @@ async function runQueries() {
         stat: state.filters.playerStat,
         search: state.filters.playerSearch,
         metric: state.filters.statMode,
+        ranking: state.filters.rankingMode,
         limit: CHART_RANK_LIMIT
       })
     ]);
@@ -891,6 +932,13 @@ elements.resetFilters.addEventListener("click", () => {
   trackEvent("archive_filters_reset", archiveTelemetryProperties());
   applyMeta(state.meta);
   runQueries();
+});
+
+elements.rankingButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    setRankingMode(button.dataset.rankingMode);
+    renderFilterSummary();
+  });
 });
 
 elements.panelViewButtons.forEach((button) => {

@@ -129,6 +129,16 @@ team_leaders_payload <- request_json(base_url, '/team-leaders', query = list(sea
 assert_true(is.list(team_leaders_payload$data) && length(team_leaders_payload$data) >= 1, 'Expected /team-leaders to return rows.')
 check_step('team leaders endpoint returns ranked team rows')
 
+team_leaders_highest_payload <- request_json(base_url, '/team-leaders', query = list(season = default_season, stat = 'goals', ranking = 'highest', limit = 3))
+team_leaders_lowest_payload <- request_json(base_url, '/team-leaders', query = list(season = default_season, stat = 'goals', ranking = 'lowest', limit = 3))
+assert_true(is.list(team_leaders_highest_payload$data) && length(team_leaders_highest_payload$data) >= 1, 'Expected /team-leaders highest mode to return rows.')
+assert_true(is.list(team_leaders_lowest_payload$data) && length(team_leaders_lowest_payload$data) >= 1, 'Expected /team-leaders lowest mode to return rows.')
+highest_value <- as.numeric(scalar_value(team_leaders_highest_payload$data[[1]]$total_value %||% NA_real_))
+lowest_value <- as.numeric(scalar_value(team_leaders_lowest_payload$data[[1]]$total_value %||% NA_real_))
+assert_true(!is.na(highest_value) && !is.na(lowest_value), 'Expected ranked team rows to expose numeric totals.')
+assert_true(highest_value >= lowest_value, 'Expected highest-mode team leaders to rank at least as high as lowest-mode leaders.')
+check_step('team leaders endpoint supports highest and lowest ranking modes')
+
 query_payload <- request_json(
   base_url,
   '/query',
@@ -146,6 +156,15 @@ team_query_payload <- request_json(
 assert_true(identical(as.character(scalar_value(team_query_payload$status)), 'supported'), 'Expected /query to support a representative team natural-language question.')
 assert_true(identical(as.character(scalar_value(team_query_payload$parsed$subject_type %||% '')), 'teams'), 'Expected team query parsing to report teams subject_type.')
 check_step('natural-language query endpoint supports representative team queries')
+
+helpers_env <- new.env(parent = globalenv())
+sys.source('api/R/helpers.R', envir = helpers_env)
+possessive_subject <- helpers_env$extract_query_subject_phrase(
+  "What is the Swifts' highest goals total against the Vixens?",
+  'highest'
+)
+assert_true(identical(possessive_subject, 'the Swifts'), 'Expected possessive team phrasing to normalize to the team subject.')
+check_step('parser normalizes possessive team phrasing')
 
 invalid_summary <- request_json(base_url, '/summary', query = list(season = 1900), expected_status = 400L)
 assert_true(nzchar(as.character(invalid_summary$error %||% '')), 'Expected invalid requests to return an error payload.')

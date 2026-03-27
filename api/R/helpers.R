@@ -217,6 +217,26 @@ parse_metric <- function(value = "", name = "metric") {
   parsed
 }
 
+parse_ranking_mode <- function(value = "", name = "ranking") {
+  if (is.null(value) || !nzchar(trimws(value))) {
+    return("highest")
+  }
+
+  parsed <- tolower(trimws(value))
+  if (parsed %in% c("highest", "desc", "descending", "top")) {
+    return("highest")
+  }
+  if (parsed %in% c("lowest", "asc", "ascending", "bottom")) {
+    return("lowest")
+  }
+
+  stop(name, " must be either highest or lowest.", call. = FALSE)
+}
+
+ranking_order_sql <- function(ranking_mode = "highest") {
+  if (identical(ranking_mode, "lowest")) "ASC" else "DESC"
+}
+
 parse_search <- function(value, name = "search", max_length = 80L) {
   if (is.null(value) || !nzchar(trimws(value))) {
     return(NULL)
@@ -789,10 +809,10 @@ extract_query_player_phrase <- function(question, intent_type) {
       "(?i)^how many (?:times|matches) did\\s+(.+?)\\s+(?:score|record|make|have|post|notch|register)\\b"
     ),
     highest = c(
-      "(?i)^what is\\s+(.+?)(?:'s|’s)\\s+highest\\b"
+      "(?i)^what is\\s+(.+?)\\s+highest\\b"
     ),
     lowest = c(
-      "(?i)^what is\\s+(.+?)(?:'s|’s)\\s+lowest\\b"
+      "(?i)^what is\\s+(.+?)\\s+lowest\\b"
     ),
     character()
   )
@@ -800,7 +820,12 @@ extract_query_player_phrase <- function(question, intent_type) {
   for (pattern in patterns) {
     captured <- extract_first_capture(question, pattern)
     if (!is.null(captured)) {
-      return(captured)
+      normalized <- trimws(captured)
+      normalized <- sub("(?:'s|’s)$", "", normalized, perl = TRUE)
+      normalized <- sub("([sS])['’]$", "\\1", normalized, perl = TRUE)
+      if (nzchar(normalized)) {
+        return(normalized)
+      }
     }
   }
 
@@ -1347,11 +1372,12 @@ sort_query_result_rows <- function(rows, intent_type = "list") {
 # Fetches player leaderboard rows aggregated across all requested seasons in SQL.
 # Returns one row per player with cross-season totals. ORDER BY and LIMIT are
 # pushed to the database so only the top-N rows are transferred.
-fetch_player_leader_rows <- function(conn, seasons = NULL, team_id = NULL, round = NULL, stat = "points", search = "", metric = "total", limit = 12L) {
+fetch_player_leader_rows <- function(conn, seasons = NULL, team_id = NULL, round = NULL, stat = "points", search = "", metric = "total", ranking = "highest", limit = 12L) {
   seasons_filter <- if (!is.null(seasons) && length(seasons)) as.integer(seasons) else NULL
   stats_table <- if (has_player_match_stats(conn)) "player_match_stats" else "player_period_stats"
   value_col   <- if (identical(stats_table, "player_match_stats")) "match_value" else "value_number"
   order_column <- if (identical(metric, "average")) "average_value" else "total_value"
+  order_direction <- ranking_order_sql(ranking)
 
   query <- paste(
     "SELECT stats.player_id, players.canonical_name AS player_name, MAX(stats.squad_name) AS squad_name,",
@@ -1374,7 +1400,7 @@ fetch_player_leader_rows <- function(conn, seasons = NULL, team_id = NULL, round
   filters$query <- paste0(
     search_filters$query,
     " GROUP BY stats.player_id, players.canonical_name",
-    " ORDER BY ", order_column, " DESC, players.canonical_name ASC",
+    " ORDER BY ", order_column, " ", order_direction, ", players.canonical_name ASC",
     " LIMIT ?limit"
   )
   filters$params <- search_filters$params
@@ -1464,7 +1490,7 @@ summarize_player_metric_rows <- function(rows) {
   combined
 }
 
-sort_player_leader_rows <- function(rows, metric = "total") {
+sort_player_leader_rows <- function(rows, metric = "total", ranking = "highest") {
   if (!nrow(rows)) {
     return(rows)
   }
@@ -1474,20 +1500,24 @@ sort_player_leader_rows <- function(rows, metric = "total") {
   rows$average_value <- suppressWarnings(as.numeric(rows$average_value))
   rows$player_name <- as.character(rows$player_name)
 
+  if (identical(ranking, "lowest")) {
+    return(rows[order(rows[[order_column]], rows$player_name, na.last = TRUE), , drop = FALSE])
+  }
+
   rows[order(-rows[[order_column]], rows$player_name, na.last = TRUE), , drop = FALSE]
 }
 
-top_player_ids_from_series_rows <- function(rows, metric = "total", limit = 10L) {
+top_player_ids_from_series_rows <- function(rows, metric = "total", ranking = "highest", limit = 10L) {
   if (!nrow(rows)) {
     return(integer())
   }
 
   summarized <- summarize_player_metric_rows(rows)
-  ranked <- sort_player_leader_rows(summarized, metric)
+  ranked <- sort_player_leader_rows(summarized, metric, ranking = ranking)
   head(as.integer(ranked$player_id), limit)
 }
 
-sort_player_series_rows <- function(rows, metric = "total") {
+sort_player_series_rows <- function(rows, metric = "total", ranking = "highest") {
   if (!nrow(rows)) {
     return(rows)
   }
@@ -1497,6 +1527,10 @@ sort_player_series_rows <- function(rows, metric = "total") {
   rows$total_value <- suppressWarnings(as.numeric(rows$total_value))
   rows$average_value <- suppressWarnings(as.numeric(rows$average_value))
   rows$player_name <- as.character(rows$player_name)
+
+  if (identical(ranking, "lowest")) {
+    return(rows[order(rows$season, rows[[order_column]], rows$player_name, na.last = TRUE), , drop = FALSE])
+  }
 
   rows[order(rows$season, -rows[[order_column]], rows$player_name, na.last = TRUE), , drop = FALSE]
 }
