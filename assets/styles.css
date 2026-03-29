@@ -2014,8 +2014,24 @@ caption.table-caption {
 }
 
 .round-standout-table {
-  min-width: 560px;
+  table-layout: fixed;
+  width: 100%;
 }
+
+/* Player spotlight columns: Spotlight | Player | Team | Opponent | Value | Note */
+#round-player-table th:nth-child(1) { width: 7.5rem; }
+#round-player-table th:nth-child(2) { width: 6.5rem; }
+#round-player-table th:nth-child(3) { width: 7rem; }
+#round-player-table th:nth-child(4) { width: 7rem; }
+#round-player-table th:nth-child(5) { width: 5.5rem; }
+/* Note (col 6) takes remaining width */
+
+/* Team spotlight columns: Spotlight | Team | Opponent | Value | Note */
+#round-team-table th:nth-child(1) { width: 7.5rem; }
+#round-team-table th:nth-child(2) { width: 8rem; }
+#round-team-table th:nth-child(3) { width: 8rem; }
+#round-team-table th:nth-child(4) { width: 5.5rem; }
+/* Note (col 5) takes remaining width */
 
 .round-standout-value {
   white-space: nowrap;
@@ -2024,6 +2040,7 @@ caption.table-caption {
 
 .standout-note {
   color: var(--muted);
+  font-size: var(--type-xs);
 }
 
 .query-board {

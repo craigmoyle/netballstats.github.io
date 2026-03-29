@@ -359,15 +359,7 @@
       notes.push(entry.badges.join(" · "));
     }
 
-    if (unwrapValue(entry?.season) && unwrapValue(entry?.round_number)) {
-      notes.push(`Season ${formatNumber(entry.season)} · Round ${formatNumber(entry.round_number)}`);
-    }
-
-    if (unwrapValue(entry?.local_start_time)) {
-      notes.push(formatDate(entry.local_start_time));
-    }
-
-    return notes.filter(Boolean).join(" · ") || "Round spotlight";
+    return notes.filter(Boolean).join(" · ") || "—";
   }
 
   function renderStandoutTable(tableBody, rows, type) {
