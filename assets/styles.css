@@ -220,7 +220,9 @@ code {
 }
 
 .hero-copy--home {
+  flex: 1 1 auto;
   max-width: min(48rem, 100%);
+  min-width: 0;
   gap: 0.75rem;
 }
 
@@ -277,6 +279,17 @@ code {
   color: color-mix(in srgb, var(--text) 72%, transparent);
   letter-spacing: 0.02em;
   line-height: 1.55;
+}
+
+@media (min-width: 900px) {
+  .hero-copy--home h1,
+  .hero-copy--home .hero-tagline {
+    white-space: nowrap;
+  }
+
+  .hero-copy--home .hero-tagline {
+    max-width: none;
+  }
 }
 
 .intro-copy {
