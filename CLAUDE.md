@@ -23,3 +23,9 @@ Domain cues can borrow from Champion Data and the official Super Netball ecosyst
 3. **Dense without confusion.** Complex data is welcome, but it must be progressively disclosed and easy to scan on both desktop and mobile.
 4. **Accessibility is part of the aesthetic.** Maintain WCAG AA contrast, strong keyboard support, and respectful reduced-motion behaviour as non-negotiable design qualities.
 5. **Distinctive consistency.** Reuse the shared visual system, but give major pages their own emphasis and hierarchy so the site feels cohesive without becoming templated.
+
+### Stat and copy conventions
+- Stat labels come from `STAT_LABEL_OVERRIDES` in `assets/config.js` via `formatStatLabel()`. Never hardcode display strings for stat names in page scripts.
+- Use "Points" not "Goals" when referring to match scoring — team/player points are computed from goal1 + 2×goal2 (super shots are worth 2).
+- Use netball terminology throughout. "First centre pass" not "tip-off". "Quarter" is correct. "Rebound" is a valid Champion Data stat.
+- Keep copy tight. Avoid explanatory drag — the archive data should speak for itself.

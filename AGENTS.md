@@ -47,12 +47,51 @@ This file captures the repo-specific context, decisions, and operating guidance 
 - `theme.js` owns the reveal-animation observer logic. Do not reintroduce a second `IntersectionObserver` setup elsewhere.
 - Keep major pages visually distinct, but within the same editorial system. The product should feel cohesive without every page feeling templated.
 
+### Stat labels
+- Use `window.NetballStatsUI.formatStatLabel(key)` everywhere a stat key needs a human-readable label. Do not hardcode display strings for stat names.
+- `STAT_LABEL_OVERRIDES` in `assets/config.js` is the canonical map of camelCase stat key → label (e.g. `goalAssists` → "Goal Assists", `feeds` → "Feeds into Circle", `points` → "Points"). Add new overrides there, not in page scripts.
+- Use `window.NetballStatsUI.statPrefersLowerValue(key)` to determine whether a stat should highlight the *lowest* value as best (turnovers, penalties, etc.).
+- `LOW_IS_BETTER_STATS` in `assets/config.js` is the canonical set of stat keys that prefer lower values.
+
+### Table wrapping on desktop
+- Leader tables (`#player-leaders-table`, `#team-leaders-table`) use `white-space: nowrap` scoped to `@media (min-width: 681px)`. The `.table-wrapper` already provides `overflow-x: auto`, so the table scrolls horizontally rather than wrapping cells. Do not remove the `nowrap` rule.
+
+### Round recap frontend
+- `ordinalSuffix(n)` in `assets/round.js` handles 1st/2nd/3rd/11th–13th edge cases correctly.
+- `standoutNote()` prepends `historical_rank` context ("34th highest all-time") before badges and date info when the entry carries a rank value.
+- The rank direction ("highest" vs "lowest") is read from `entry.ranking`.
+
+### Copy and language conventions
+- Use netball terminology, not basketball terms. "First centre pass" not "tip-off". "Quarter" is correct for netball; "rebound" appears in Champion Data stats and is valid.
+- Keep UI copy tight. Avoid explanatory drag — the data should speak for itself.
+
 ## Backend and data conventions
 
 - `api/R/helpers.R` contains much of the validation, query-building, and transformation logic; prefer extending existing helpers over duplicating logic.
 - The natural-language query flow now supports a parsed `seasons` array for multi-season filters. Preserve that shape when extending query parsing.
 - The API should continue logging structured request and error telemetry without dumping raw internal database errors into normal logs.
 - Keep the API conservative about privacy and high-cardinality fields.
+
+### Points vs goals
+- The database has no `points` stat in `player_match_stats`. `goal1` = 1-point shots made; `goal2` = super shots (worth 2 points each).
+- Player points per game = `goal1 + 2 × goal2` — computed via a self-join on `player_match_stats`.
+- Team points per game come from `matches.home_score` / `matches.away_score` (the true match scores), not from player stats.
+- Use "points" (not "goals") when referring to match scoring in UI copy and round summaries.
+- `fetch_player_points_high()` and `fetch_team_points_high()` are dedicated helpers for this; do not try to use the generic `fetch_player_game_high_rows()` with `stat = 'points'` — "points" is a synthetic stat and that fetcher expects a real `player_match_stats` stat key.
+
+### Historical ranking
+- `compute_archive_rank()` computes all-time `COUNT(*) + 1` ranking (standard competition ranking) across all seasons.
+- Four cases: player points (goal1+2×goal2 subquery), team points (matches UNION ALL), player regular stats (index scan on `idx_pms_stat_value`), team regular stats (aggregation subquery on `team_period_stats`).
+- Always wrap `compute_archive_rank()` calls in `tryCatch` — a failed rank query must not crash the enclosing endpoint.
+- `points_record_badges()` is separate from `game_record_badges()` for the same reason: `game_record_badges()` calls the generic fetchers internally, which cannot handle the synthetic "points" stat.
+
+### SQLite compatibility
+- Use `append_integer_in_filter()` for `IN (?, ?, ...)` clauses — not `ANY(ARRAY[...])`. The API must work with both PostgreSQL and SQLite (used in local dev and tests).
+
+### Round recap
+- `build_round_summary_payload()` generates 12 spotlights: 6 player stats (points, goalAssists, feeds, gain, deflections, intercepts) and 6 team stats (points, gain, deflections, intercepts, penalties, generalPlayTurnovers). The last two team stats rank lowest-is-best.
+- Each spotlight entry carries `historical_rank` (integer or NULL). The frontend renders this as e.g. "34th highest all-time" or "2nd lowest all-time".
+- Each round-summary call now executes ~50 DB queries. Acceptable for Azure PostgreSQL but worth monitoring if latency becomes an issue.
 
 ## Azure and deployment notes
 
@@ -108,3 +147,7 @@ This file captures the repo-specific context, decisions, and operating guidance 
 - `azure.yaml` postdeploy keeps the database refresh jobs aligned with the API image. Frontend-only GitHub Actions deploys do not update those jobs.
 - If the API image/runtime changes, keep the `renv` cache outside `/root` or the non-root Container App user will hit broken library symlinks at runtime.
 - The registry cleanup workflow can authenticate successfully and still fail functionally if the service principal lacks `AcrPull`; it needs both `AcrPull` and `AcrDelete`.
+- Do not use `fetch_player_game_high_rows()` or `fetch_team_game_high_rows()` with `stat = 'points'`. "Points" is synthetic (goal1 + 2×goal2 / match scores); use `fetch_player_points_high()` and `fetch_team_points_high()` instead.
+- Do not use `ANY(ARRAY[...])` syntax for IN clauses. Use `append_integer_in_filter()` to stay SQLite-compatible.
+- The homepage hero `h1` uses a home-specific font-size override (`.hero-copy--home h1`) with a tighter `clamp()` than the global heading scale. Do not remove it — the global scale is too large for the 1240px shell at mid-range viewport widths.
+- Archive filter toggles use `field--toggle` class (not `compare-mode-toggle`) to avoid inheriting pill-button wrapping from the compare page styles.
