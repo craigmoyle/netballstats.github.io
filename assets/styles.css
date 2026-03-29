@@ -2019,18 +2019,18 @@ caption.table-caption {
 }
 
 /* Player spotlight columns: Spotlight | Player | Team | Opponent | Value | Note */
-#round-player-table th:nth-child(1) { width: 7.5rem; }
-#round-player-table th:nth-child(2) { width: 6.5rem; }
-#round-player-table th:nth-child(3) { width: 7rem; }
-#round-player-table th:nth-child(4) { width: 7rem; }
-#round-player-table th:nth-child(5) { width: 5.5rem; }
+#round-player-table th:nth-child(1) { width: 9rem; }
+#round-player-table th:nth-child(2) { width: 8rem; }
+#round-player-table th:nth-child(3) { width: 9rem; }
+#round-player-table th:nth-child(4) { width: 9rem; }
+#round-player-table th:nth-child(5) { width: 6rem; }
 /* Note (col 6) takes remaining width */
 
 /* Team spotlight columns: Spotlight | Team | Opponent | Value | Note */
-#round-team-table th:nth-child(1) { width: 7.5rem; }
-#round-team-table th:nth-child(2) { width: 8rem; }
-#round-team-table th:nth-child(3) { width: 8rem; }
-#round-team-table th:nth-child(4) { width: 5.5rem; }
+#round-team-table th:nth-child(1) { width: 9rem; }
+#round-team-table th:nth-child(2) { width: 10rem; }
+#round-team-table th:nth-child(3) { width: 10rem; }
+#round-team-table th:nth-child(4) { width: 6rem; }
 /* Note (col 5) takes remaining width */
 
 .round-standout-value {
