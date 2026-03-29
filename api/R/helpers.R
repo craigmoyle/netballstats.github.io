@@ -313,6 +313,41 @@ query_rows <- function(conn, query, params = list()) {
   DBI::dbGetQuery(conn, sql_interpolate_safe(conn, query, params))
 }
 
+normalize_record_value <- function(value) {
+  if (is.null(value) || length(value) == 0L || (length(value) == 1L && is.na(value))) {
+    return(NULL)
+  }
+
+  if (inherits(value, "POSIXt")) {
+    return(format(value, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"))
+  }
+
+  if (inherits(value, "Date")) {
+    return(format(value, "%Y-%m-%d"))
+  }
+
+  if (is.factor(value)) {
+    return(as.character(value))
+  }
+
+  unname(value)
+}
+
+row_to_record <- function(rows, index) {
+  setNames(
+    lapply(rows, function(column) normalize_record_value(column[[index]])),
+    names(rows)
+  )
+}
+
+rows_to_records <- function(rows) {
+  if (!nrow(rows)) {
+    return(list())
+  }
+
+  lapply(seq_len(nrow(rows)), function(index) row_to_record(rows, index))
+}
+
 append_integer_in_filter <- function(query, params, column_name, values, prefix) {
   if (is.null(values) || !length(values)) {
     return(list(query = query, params = params))
@@ -1535,7 +1570,7 @@ sort_player_series_rows <- function(rows, metric = "total", ranking = "highest")
   rows[order(rows$season, -rows[[order_column]], rows$player_name, na.last = TRUE), , drop = FALSE]
 }
 
-fetch_player_game_high_rows <- function(conn, seasons = NULL, team_id = NULL, round = NULL, stat = "points", search = "", ranking = "highest", limit = 10L) {
+fetch_player_game_high_rows <- function(conn, seasons = NULL, team_id = NULL, round = NULL, competition_phase = NULL, stat = "points", search = "", ranking = "highest", limit = 10L) {
   # Single query over all requested seasons; avoids one round-trip per season.
   # When seasons is NULL (no filter), omit the IN clause so the planner can do
   # a straight index scan on stat without a large IN list covering every season.
@@ -1559,6 +1594,10 @@ fetch_player_game_high_rows <- function(conn, seasons = NULL, team_id = NULL, ro
       query, list(stat = stat), seasons = seasons_filter, team_id = team_id,
       round_number = round, table_alias = "pms"
     )
+    if (!is.null(competition_phase)) {
+      filters$query <- paste0(filters$query, " AND COALESCE(matches.competition_phase, '') = ?competition_phase")
+      filters$params$competition_phase <- as.character(competition_phase)
+    }
     search_filters <- apply_player_search_filter(filters$query, filters$params, search, "pms.player_id")
     filters$query  <- paste0(
       search_filters$query,
@@ -1588,6 +1627,10 @@ fetch_player_game_high_rows <- function(conn, seasons = NULL, team_id = NULL, ro
     round_number = round,
     table_alias = "stats"
   )
+  if (!is.null(competition_phase)) {
+    filters$query <- paste0(filters$query, " AND COALESCE(matches.competition_phase, '') = ?competition_phase")
+    filters$params$competition_phase <- as.character(competition_phase)
+  }
   search_filters <- apply_player_search_filter(filters$query, filters$params, search, "stats.player_id")
   filters$query <- paste0(
     search_filters$query,
@@ -1600,6 +1643,541 @@ fetch_player_game_high_rows <- function(conn, seasons = NULL, team_id = NULL, ro
   sort_query_result_rows(
     query_rows(conn, filters$query, filters$params),
     if (identical(ranking, "lowest")) "lowest" else "highest"
+  )
+}
+
+fetch_team_game_high_rows <- function(conn, seasons = NULL, team_id = NULL, round = NULL, competition_phase = NULL, stat = "points", ranking = "highest", limit = 10L) {
+  order_direction <- ranking_order_sql(ranking)
+
+  query <- paste(
+    "SELECT stats.squad_id, stats.squad_name,",
+    "MAX(CASE WHEN matches.home_squad_id = stats.squad_id THEN matches.away_squad_name ELSE matches.home_squad_name END) AS opponent,",
+    "stats.season, stats.round_number, stats.match_id, matches.local_start_time,",
+    "?stat AS stat, ROUND(CAST(SUM(stats.value_number) AS numeric), 2) AS total_value",
+    "FROM team_period_stats AS stats",
+    "INNER JOIN matches ON matches.match_id = stats.match_id",
+    "WHERE stats.stat = ?stat"
+  )
+
+  filters <- apply_stat_filters(
+    query,
+    list(stat = stat),
+    seasons = seasons,
+    team_id = team_id,
+    round_number = round,
+    table_alias = "stats"
+  )
+  if (!is.null(competition_phase)) {
+    filters$query <- paste0(filters$query, " AND COALESCE(matches.competition_phase, '') = ?competition_phase")
+    filters$params$competition_phase <- as.character(competition_phase)
+  }
+  filters$query <- paste0(
+    filters$query,
+    " GROUP BY stats.squad_id, stats.squad_name, stats.season, stats.round_number, stats.match_id, matches.local_start_time",
+    " ORDER BY total_value ", order_direction, ", stats.season DESC, stats.round_number DESC, stats.squad_name ASC LIMIT ?limit"
+  )
+  filters$params$limit <- limit
+
+  query_rows(conn, filters$query, filters$params)
+}
+
+numeric_equal <- function(left, right, tolerance = 1e-9) {
+  if (is.null(left) || is.null(right) || any(is.na(c(left, right)))) {
+    return(FALSE)
+  }
+
+  abs(as.numeric(left) - as.numeric(right)) <= tolerance
+}
+
+record_badge_label <- function(scope = c("season", "archive"), ranking = "highest") {
+  scope <- match.arg(scope)
+  prefix <- if (identical(scope, "season")) "Season" else "Archive"
+  suffix <- if (identical(ranking, "lowest")) "low" else "high"
+  paste(prefix, suffix)
+}
+
+extract_first_numeric <- function(rows, column = "total_value") {
+  if (!nrow(rows) || !(column %in% names(rows))) {
+    return(NA_real_)
+  }
+
+  suppressWarnings(as.numeric(rows[[column]][[1]]))
+}
+
+game_record_badges <- function(conn, subject_type = c("team", "player"), stat, ranking = "highest", total_value, season) {
+  subject_type <- match.arg(subject_type)
+
+  if (is.null(total_value) || is.na(total_value) || is.null(season) || is.na(season)) {
+    return(character())
+  }
+
+  fetcher <- if (identical(subject_type, "team")) fetch_team_game_high_rows else fetch_player_game_high_rows
+  season_best <- fetcher(
+    conn,
+    seasons = as.integer(season),
+    stat = stat,
+    ranking = ranking,
+    limit = 1L
+  )
+  archive_best <- fetcher(
+    conn,
+    seasons = NULL,
+    stat = stat,
+    ranking = ranking,
+    limit = 1L
+  )
+
+  badges <- character()
+  if (numeric_equal(total_value, extract_first_numeric(season_best))) {
+    badges <- c(badges, record_badge_label("season", ranking))
+  }
+  if (numeric_equal(total_value, extract_first_numeric(archive_best))) {
+    badges <- c(badges, record_badge_label("archive", ranking))
+  }
+
+  unique(badges)
+}
+
+margin_record_badges <- function(conn, margin_value, season) {
+  if (is.null(margin_value) || is.na(margin_value) || is.null(season) || is.na(season)) {
+    return(character())
+  }
+
+  season_row <- query_rows(
+    conn,
+    paste(
+      "SELECT MAX(ABS(home_score - away_score)) AS margin_value",
+      "FROM matches",
+      "WHERE home_score IS NOT NULL AND away_score IS NOT NULL AND season = ?season"
+    ),
+    list(season = as.integer(season))
+  )
+  archive_row <- query_rows(
+    conn,
+    paste(
+      "SELECT MAX(ABS(home_score - away_score)) AS margin_value",
+      "FROM matches",
+      "WHERE home_score IS NOT NULL AND away_score IS NOT NULL"
+    )
+  )
+
+  badges <- character()
+  if (numeric_equal(margin_value, extract_first_numeric(season_row, "margin_value"))) {
+    badges <- c(badges, record_badge_label("season", "highest"))
+  }
+  if (numeric_equal(margin_value, extract_first_numeric(archive_row, "margin_value"))) {
+    badges <- c(badges, record_badge_label("archive", "highest"))
+  }
+
+  unique(badges)
+}
+
+format_round_label <- function(competition_phase, round_number) {
+  phase <- trimws(as.character(competition_phase %||% ""))
+
+  if (!nzchar(phase) || grepl("^regular", phase, ignore.case = TRUE)) {
+    return(sprintf("Round %s", round_number))
+  }
+
+  sprintf("%s Round %s", phase, round_number)
+}
+
+fetch_latest_completed_round <- function(conn, season = NULL, round = NULL) {
+  query <- paste(
+    "SELECT season, COALESCE(competition_phase, '') AS competition_phase, round_number,",
+    "COUNT(*) AS total_matches, MAX(local_start_time) AS round_end_time",
+    "FROM matches",
+    "WHERE home_score IS NOT NULL AND away_score IS NOT NULL"
+  )
+  params <- list()
+
+  if (!is.null(season)) {
+    query <- paste0(query, " AND season = ?season")
+    params$season <- as.integer(season)
+  }
+
+  if (!is.null(round)) {
+    query <- paste0(query, " AND round_number = ?round_number")
+    params$round_number <- as.integer(round)
+  }
+
+  query <- paste0(
+    query,
+    " GROUP BY season, COALESCE(competition_phase, ''), round_number",
+    " ORDER BY season DESC, round_end_time DESC, round_number DESC LIMIT 1"
+  )
+
+  query_rows(conn, query, params)
+}
+
+fetch_round_matches <- function(conn, season, competition_phase = "", round_number) {
+  query_rows(
+    conn,
+    paste(
+      "SELECT match_id, season, COALESCE(competition_phase, '') AS competition_phase, round_number, game_number, local_start_time, venue_name,",
+      "home_squad_id, home_squad_name, home_score, away_squad_id, away_squad_name, away_score,",
+      "ABS(home_score - away_score) AS margin,",
+      "CASE",
+      "WHEN home_score = away_score THEN 'Draw'",
+      "WHEN home_score > away_score THEN home_squad_name",
+      "ELSE away_squad_name",
+      "END AS winner_name",
+      "FROM matches",
+      "WHERE home_score IS NOT NULL AND away_score IS NOT NULL",
+      "AND season = ?season",
+      "AND COALESCE(competition_phase, '') = ?competition_phase",
+      "AND round_number = ?round_number",
+      "ORDER BY local_start_time ASC, game_number ASC, match_id ASC"
+    ),
+    list(
+      season = as.integer(season),
+      competition_phase = as.character(competition_phase %||% ""),
+      round_number = as.integer(round_number)
+    )
+  )
+}
+
+build_round_match_summary <- function(matches) {
+  if (!nrow(matches)) {
+    return(list(
+      total_matches = 0L,
+      total_goals = 0,
+      biggest_margin = NULL,
+      closest_margin = NULL,
+      average_margin = NULL,
+      round_high_team_score = NULL,
+      biggest_margin_match = NULL,
+      closest_match = NULL
+    ))
+  }
+
+  all_scores <- suppressWarnings(as.numeric(c(matches$home_score, matches$away_score)))
+  margins <- suppressWarnings(as.numeric(matches$margin))
+  biggest_index <- which.max(margins)
+  closest_index <- which.min(margins)
+
+  list(
+    total_matches = nrow(matches),
+    total_goals = sum(all_scores, na.rm = TRUE),
+    biggest_margin = suppressWarnings(as.numeric(matches$margin[[biggest_index]])),
+    closest_margin = suppressWarnings(as.numeric(matches$margin[[closest_index]])),
+    average_margin = round(mean(margins, na.rm = TRUE), 1),
+    round_high_team_score = max(all_scores, na.rm = TRUE),
+    biggest_margin_match = row_to_record(matches, biggest_index),
+    closest_match = row_to_record(matches, closest_index)
+  )
+}
+
+performance_entry_from_row <- function(row, title, subject_type = c("player", "team"), ranking = "highest", badges = character()) {
+  subject_type <- match.arg(subject_type)
+
+  if (!nrow(row)) {
+    return(NULL)
+  }
+
+  list(
+    title = title,
+    stat = normalize_record_value(row$stat[[1]]),
+    stat_label = query_stat_label(as.character(row$stat[[1]])),
+    ranking = ranking,
+    value = suppressWarnings(as.numeric(row$total_value[[1]])),
+    subject_name = normalize_record_value(row[[if (identical(subject_type, "player")) "player_name" else "squad_name"]][[1]]),
+    squad_name = normalize_record_value(row$squad_name[[1]] %||% NULL),
+    opponent = normalize_record_value(row$opponent[[1]] %||% NULL),
+    season = suppressWarnings(as.integer(row$season[[1]])),
+    round_number = suppressWarnings(as.integer(row$round_number[[1]])),
+    local_start_time = normalize_record_value(row$local_start_time[[1]] %||% NULL),
+    player_id = if (identical(subject_type, "player") && "player_id" %in% names(row)) suppressWarnings(as.integer(row$player_id[[1]])) else NULL,
+    badges = unique(as.character(badges))
+  )
+}
+
+build_round_fact <- function(title, value, detail, badges = character()) {
+  list(
+    title = title,
+    value = value,
+    detail = detail,
+    badges = unique(as.character(badges))
+  )
+}
+
+build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
+  selected_round <- fetch_latest_completed_round(conn, season = season, round = round)
+  if (!nrow(selected_round)) {
+    return(NULL)
+  }
+
+  season_value <- suppressWarnings(as.integer(selected_round$season[[1]]))
+  round_value <- suppressWarnings(as.integer(selected_round$round_number[[1]]))
+  competition_phase <- as.character(selected_round$competition_phase[[1]] %||% "")
+  matches <- fetch_round_matches(conn, season_value, competition_phase, round_value)
+  if (!nrow(matches)) {
+    return(NULL)
+  }
+
+  round_summary <- build_round_match_summary(matches)
+
+  team_score_row <- fetch_team_game_high_rows(
+    conn,
+    seasons = season_value,
+    round = round_value,
+    competition_phase = competition_phase,
+    stat = "goals",
+    ranking = "highest",
+    limit = 1L
+  )
+  team_turnover_row <- fetch_team_game_high_rows(
+    conn,
+    seasons = season_value,
+    round = round_value,
+    competition_phase = competition_phase,
+    stat = "generalPlayTurnovers",
+    ranking = "lowest",
+    limit = 1L
+  )
+  team_gain_row <- fetch_team_game_high_rows(
+    conn,
+    seasons = season_value,
+    round = round_value,
+    competition_phase = competition_phase,
+    stat = "gain",
+    ranking = "highest",
+    limit = 1L
+  )
+
+  player_goal_row <- fetch_player_game_high_rows(
+    conn,
+    seasons = season_value,
+    round = round_value,
+    competition_phase = competition_phase,
+    stat = "goals",
+    ranking = "highest",
+    limit = 1L
+  )
+  player_assist_row <- fetch_player_game_high_rows(
+    conn,
+    seasons = season_value,
+    round = round_value,
+    competition_phase = competition_phase,
+    stat = "goalAssists",
+    ranking = "highest",
+    limit = 1L
+  )
+  player_intercept_row <- fetch_player_game_high_rows(
+    conn,
+    seasons = season_value,
+    round = round_value,
+    competition_phase = competition_phase,
+    stat = "intercepts",
+    ranking = "highest",
+    limit = 1L
+  )
+
+  standout_players <- Filter(Negate(is.null), list(
+    performance_entry_from_row(
+      player_goal_row,
+      "Top scoring line",
+      subject_type = "player",
+      ranking = "highest",
+      badges = game_record_badges(
+        conn,
+        subject_type = "player",
+        stat = "goals",
+        ranking = "highest",
+        total_value = extract_first_numeric(player_goal_row),
+        season = season_value
+      )
+    ),
+    performance_entry_from_row(
+      player_assist_row,
+      "Most goal assists",
+      subject_type = "player",
+      ranking = "highest",
+      badges = game_record_badges(
+        conn,
+        subject_type = "player",
+        stat = "goalAssists",
+        ranking = "highest",
+        total_value = extract_first_numeric(player_assist_row),
+        season = season_value
+      )
+    ),
+    performance_entry_from_row(
+      player_intercept_row,
+      "Most intercepts",
+      subject_type = "player",
+      ranking = "highest",
+      badges = game_record_badges(
+        conn,
+        subject_type = "player",
+        stat = "intercepts",
+        ranking = "highest",
+        total_value = extract_first_numeric(player_intercept_row),
+        season = season_value
+      )
+    )
+  ))
+
+  standout_teams <- Filter(Negate(is.null), list(
+    performance_entry_from_row(
+      team_score_row,
+      "Round-high team score",
+      subject_type = "team",
+      ranking = "highest",
+      badges = game_record_badges(
+        conn,
+        subject_type = "team",
+        stat = "goals",
+        ranking = "highest",
+        total_value = extract_first_numeric(team_score_row),
+        season = season_value
+      )
+    ),
+    performance_entry_from_row(
+      team_gain_row,
+      "Most gains",
+      subject_type = "team",
+      ranking = "highest",
+      badges = game_record_badges(
+        conn,
+        subject_type = "team",
+        stat = "gain",
+        ranking = "highest",
+        total_value = extract_first_numeric(team_gain_row),
+        season = season_value
+      )
+    ),
+    performance_entry_from_row(
+      team_turnover_row,
+      "Lowest general play turnovers",
+      subject_type = "team",
+      ranking = "lowest",
+      badges = game_record_badges(
+        conn,
+        subject_type = "team",
+        stat = "generalPlayTurnovers",
+        ranking = "lowest",
+        total_value = extract_first_numeric(team_turnover_row),
+        season = season_value
+      )
+    )
+  ))
+
+  biggest_margin_match <- round_summary$biggest_margin_match
+  closest_match <- round_summary$closest_match
+
+  notable_facts <- Filter(Negate(is.null), list(
+    if (nrow(team_score_row)) {
+      build_round_fact(
+        "Round-high team score",
+        format_query_number(extract_first_numeric(team_score_row)),
+        sprintf(
+          "%s scored %s against %s.",
+          team_score_row$squad_name[[1]],
+          format_query_number(extract_first_numeric(team_score_row)),
+          team_score_row$opponent[[1]]
+        ),
+        game_record_badges(
+          conn,
+          subject_type = "team",
+          stat = "goals",
+          ranking = "highest",
+          total_value = extract_first_numeric(team_score_row),
+          season = season_value
+        )
+      )
+    },
+    if (!is.null(biggest_margin_match)) {
+      build_round_fact(
+        "Biggest winning margin",
+        sprintf("%s goals", format_query_number(biggest_margin_match$margin)),
+        sprintf(
+          "%s beat %s %s-%s.",
+          biggest_margin_match$winner_name,
+          if (identical(biggest_margin_match$winner_name, biggest_margin_match$home_squad_name)) biggest_margin_match$away_squad_name else biggest_margin_match$home_squad_name,
+          format_query_number(if (identical(biggest_margin_match$winner_name, biggest_margin_match$home_squad_name)) biggest_margin_match$home_score else biggest_margin_match$away_score),
+          format_query_number(if (identical(biggest_margin_match$winner_name, biggest_margin_match$home_squad_name)) biggest_margin_match$away_score else biggest_margin_match$home_score)
+        ),
+        margin_record_badges(conn, biggest_margin_match$margin, season_value)
+      )
+    },
+    if (nrow(player_goal_row)) {
+      build_round_fact(
+        "Highest individual scoring game",
+        sprintf("%s goals", format_query_number(extract_first_numeric(player_goal_row))),
+        sprintf(
+          "%s scored %s for %s against %s.",
+          player_goal_row$player_name[[1]],
+          format_query_number(extract_first_numeric(player_goal_row)),
+          player_goal_row$squad_name[[1]],
+          player_goal_row$opponent[[1]]
+        ),
+        game_record_badges(
+          conn,
+          subject_type = "player",
+          stat = "goals",
+          ranking = "highest",
+          total_value = extract_first_numeric(player_goal_row),
+          season = season_value
+        )
+      )
+    },
+    if (nrow(team_turnover_row)) {
+      build_round_fact(
+        "Cleanest ball security",
+        sprintf("%s general play turnovers", format_query_number(extract_first_numeric(team_turnover_row))),
+        sprintf(
+          "%s kept it to %s against %s.",
+          team_turnover_row$squad_name[[1]],
+          format_query_number(extract_first_numeric(team_turnover_row)),
+          team_turnover_row$opponent[[1]]
+        ),
+        game_record_badges(
+          conn,
+          subject_type = "team",
+          stat = "generalPlayTurnovers",
+          ranking = "lowest",
+          total_value = extract_first_numeric(team_turnover_row),
+          season = season_value
+        )
+      )
+    },
+    if (!is.null(closest_match)) {
+      build_round_fact(
+        "Closest finish",
+        if (numeric_equal(closest_match$margin, 0)) "Draw" else sprintf("%s-goal margin", format_query_number(closest_match$margin)),
+        if (numeric_equal(closest_match$margin, 0)) {
+          sprintf(
+            "%s and %s finished level at %s-%s.",
+            closest_match$home_squad_name,
+            closest_match$away_squad_name,
+            format_query_number(closest_match$home_score),
+            format_query_number(closest_match$away_score)
+          )
+        } else {
+          sprintf(
+            "%s edged %s %s-%s.",
+            closest_match$winner_name,
+            if (identical(closest_match$winner_name, closest_match$home_squad_name)) closest_match$away_squad_name else closest_match$home_squad_name,
+            format_query_number(if (identical(closest_match$winner_name, closest_match$home_squad_name)) closest_match$home_score else closest_match$away_score),
+            format_query_number(if (identical(closest_match$winner_name, closest_match$home_squad_name)) closest_match$away_score else closest_match$home_score)
+          )
+        }
+      )
+    }
+  ))
+
+  list(
+    season = season_value,
+    competition_phase = competition_phase,
+    round_number = round_value,
+    round_label = format_round_label(competition_phase, round_value),
+    round_end_time = normalize_record_value(selected_round$round_end_time[[1]]),
+    summary = round_summary,
+    matches = rows_to_records(matches),
+    standout_players = standout_players,
+    standout_teams = standout_teams,
+    notable_facts = notable_facts
   )
 }
 

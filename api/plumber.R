@@ -116,7 +116,8 @@ allowed_browser_page_types <- c(
   "ask-stats",
   "compare",
   "player-directory",
-  "player-profile"
+  "player-profile",
+  "round-recap"
 )
 
 allowed_browser_event_names <- c(
@@ -987,6 +988,34 @@ function(season = "", seasons = "", team_id = "", round = "", limit = "12", res)
   })
 }
 
+#* @get /round-summary
+#* @get /api/round-summary
+function(season = "", round = "", res) {
+  conn <- tryCatch(open_db(), error = function(error) error)
+  if (inherits(conn, "error")) {
+    return(database_unavailable(res, conn))
+  }
+  on.exit(DBI::dbDisconnect(conn), add = TRUE)
+
+  tryCatch({
+    season <- parse_optional_int(season, "season", minimum = 2017L, maximum = 2100L)
+    round <- parse_optional_int(round, "round", minimum = 1L, maximum = 30L)
+
+    if (!is.null(round) && is.null(season)) {
+      stop("season is required when round is provided.", call. = FALSE)
+    }
+
+    payload <- build_round_summary_payload(conn, season = season, round = round)
+    if (is.null(payload)) {
+      return(json_error(res, 404, "No completed round is available for that selection."))
+    }
+
+    payload
+  }, error = function(error) {
+    handle_request_error(error, res)
+  })
+}
+
 #* @get /team-leaders
 #* @get /api/team-leaders
 function(season = "", seasons = "", team_id = "", round = "", stat = "points", metric = "total", ranking = "highest", limit = "8", res) {
@@ -1224,26 +1253,15 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", r
     limit <- parse_limit(limit, default = 10L, maximum = 50L)
     stat <- validate_stat(conn, "team_period_stats", stat, default_stat = "points")
     ranking <- parse_ranking_mode(ranking)
-    order_direction <- ranking_order_sql(ranking)
-
-    query <- paste(
-      "SELECT stats.squad_id, stats.squad_name,",
-      "MAX(CASE WHEN matches.home_squad_id = stats.squad_id THEN matches.away_squad_name ELSE matches.home_squad_name END) AS opponent,",
-      "stats.season, stats.round_number, stats.match_id, matches.local_start_time,",
-      "?stat AS stat, ROUND(CAST(SUM(stats.value_number) AS numeric), 2) AS total_value",
-      "FROM team_period_stats AS stats",
-      "INNER JOIN matches ON matches.match_id = stats.match_id",
-      "WHERE stats.stat = ?stat"
-    )
-    filters <- apply_stat_filters(query, list(stat = stat), seasons, team_id, round, table_alias = "stats")
-    filters$query <- paste0(
-      filters$query,
-      " GROUP BY stats.squad_id, stats.squad_name, stats.season, stats.round_number, stats.match_id, matches.local_start_time",
-      " ORDER BY total_value ", order_direction, ", stats.season DESC, stats.round_number DESC, stats.squad_name ASC LIMIT ?limit"
-    )
-    filters$params$limit <- limit
-
-    list(data = query_rows(conn, filters$query, filters$params))
+    list(data = fetch_team_game_high_rows(
+      conn,
+      seasons = seasons,
+      team_id = team_id,
+      round = round,
+      stat = stat,
+      ranking = ranking,
+      limit = limit
+    ))
   }, error = function(error) {
     handle_request_error(error, res)
   })

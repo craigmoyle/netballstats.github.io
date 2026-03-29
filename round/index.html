@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/assets/theme.js"></script>
+    <title>This Round in Super Netball | Netball Stats Database</title>
+    <meta name="description" content="Catch the latest completed Super Netball round with results, standout stat lines, and notable records from across the archive.">
+    <link rel="preload" href="/assets/fonts/fraunces-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/teko-600-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script defer src="/assets/config.js"></script>
+    <script defer src="/assets/telemetry.js"></script>
+    <script defer src="/assets/round.js"></script>
+  </head>
+  <body class="round-page">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+
+    <header class="page-shell hero-shell reveal">
+      <nav class="page-nav" aria-label="Site navigation">
+        <a class="page-nav__link" href="/">Explore archive</a>
+        <a class="page-nav__link page-nav__link--accent" href="/round/">Round recap</a>
+        <a class="page-nav__link" href="/players/">Player profiles</a>
+        <a class="page-nav__link" href="/query/">Ask the stats</a>
+        <a class="page-nav__link" href="/compare/">Compare</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light theme">Light</button>
+      </nav>
+
+      <section class="hero-panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Latest completed round</p>
+          <h1>This round in Super Netball</h1>
+          <p class="intro-copy">A quick editorial rundown of every completed game, the sharpest stat lines, and the marks that moved the archive.</p>
+        </div>
+
+        <aside class="hero-aside" aria-label="Round summary">
+          <div class="hero-aside__card">
+            <span class="hero-aside__label">Round snapshot</span>
+            <strong id="round-hero-label">Loading…</strong>
+            <p id="round-hero-summary">Checking the latest completed fixtures and standout stat lines.</p>
+          </div>
+        </aside>
+      </section>
+    </header>
+
+    <main id="main-content" class="page-shell page-main">
+      <section class="panel reveal">
+        <div id="round-status" class="status-banner" role="status" aria-live="polite" hidden></div>
+        <div class="panel__heading panel__heading--split">
+          <div>
+            <h2 id="round-heading">Latest completed round</h2>
+          </div>
+          <p id="round-meta" class="muted">Loading the most recent completed fixtures…</p>
+        </div>
+        <p id="round-intro" class="muted round-intro">Scorelines, margins, and the stat lines that defined the latest round will appear here.</p>
+      </section>
+
+      <section class="summary-band reveal" aria-label="Round summary cards">
+        <article class="summary-card summary-card--accent">
+          <span class="summary-card__label">Matches</span>
+          <span id="round-summary-matches" class="summary-card__value">--</span>
+        </article>
+        <article class="summary-card">
+          <span class="summary-card__label">Goals in round</span>
+          <span id="round-summary-goals" class="summary-card__value">--</span>
+        </article>
+        <article class="summary-card">
+          <span class="summary-card__label">Biggest margin</span>
+          <span id="round-summary-biggest-margin" class="summary-card__value summary-card__value--small">--</span>
+        </article>
+        <article class="summary-card">
+          <span class="summary-card__label">Closest finish</span>
+          <span id="round-summary-closest-margin" class="summary-card__value summary-card__value--small">--</span>
+        </article>
+      </section>
+
+      <section class="results-grid round-results-grid reveal">
+        <section class="panel results-panel results-panel--wide">
+          <div class="panel__heading panel__heading--split">
+            <div>
+              <h2>Notable facts</h2>
+            </div>
+            <p class="muted">Rule-based fact cards derived from the completed round.</p>
+          </div>
+          <div id="round-fact-grid" class="round-fact-grid" aria-live="polite"></div>
+        </section>
+
+        <section class="panel results-panel results-panel--wide">
+          <div class="panel__heading panel__heading--split">
+            <div>
+              <h2>Match recap</h2>
+            </div>
+            <p class="muted">Every completed result from the round, ordered by tip-off.</p>
+          </div>
+          <div id="round-match-grid" class="round-match-grid" aria-live="polite"></div>
+        </section>
+
+        <section class="panel results-panel">
+          <div class="panel__heading panel__heading--split">
+            <div>
+              <h2>Player spotlights</h2>
+            </div>
+            <p class="muted">The strongest individual stat lines from the round.</p>
+          </div>
+          <div class="table-wrapper table-wrapper--spotlight">
+            <table class="query-table stack-table round-standout-table" id="round-player-table">
+              <caption id="round-player-caption" class="table-caption">Player performances from the latest completed round.</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Spotlight</th>
+                  <th scope="col">Player</th>
+                  <th scope="col">Team</th>
+                  <th scope="col">Opponent</th>
+                  <th scope="col">Value</th>
+                  <th scope="col">Note</th>
+                </tr>
+              </thead>
+              <tbody id="round-player-body">
+                <tr>
+                  <td colspan="6">Loading player spotlights.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel results-panel">
+          <div class="panel__heading panel__heading--split">
+            <div>
+              <h2>Team spotlights</h2>
+            </div>
+            <p class="muted">Round-defining team lines and low-turnover benchmarks.</p>
+          </div>
+          <div class="table-wrapper table-wrapper--spotlight">
+            <table class="query-table stack-table round-standout-table" id="round-team-table">
+              <caption id="round-team-caption" class="table-caption">Team performances from the latest completed round.</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Spotlight</th>
+                  <th scope="col">Team</th>
+                  <th scope="col">Opponent</th>
+                  <th scope="col">Value</th>
+                  <th scope="col">Note</th>
+                </tr>
+              </thead>
+              <tbody id="round-team-body">
+                <tr>
+                  <td colspan="5">Loading team spotlights.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>

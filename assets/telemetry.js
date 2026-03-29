@@ -312,6 +312,9 @@
     if (pathname === "/") {
       return "archive-home";
     }
+    if (pathname === "/round") {
+      return "round-recap";
+    }
     if (pathname === "/query") {
       return "ask-stats";
     }

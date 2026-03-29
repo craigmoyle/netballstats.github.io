@@ -149,6 +149,27 @@ player_game_highs_payload <- request_json(base_url, '/player-game-highs', query 
 assert_true(is.list(player_game_highs_payload$data) && length(player_game_highs_payload$data) >= 1, 'Expected /player-game-highs to return rows.')
 check_step('player game records endpoint returns rows')
 
+round_summary_url <- build_endpoint_url(base_url, '/round-summary')
+round_summary_response <- httr::GET(round_summary_url, httr::timeout(30))
+round_summary_status <- httr::status_code(round_summary_response)
+round_summary_text <- httr::content(round_summary_response, as = 'text', encoding = 'UTF-8')
+round_summary_payload <- if (nzchar(round_summary_text)) {
+  jsonlite::fromJSON(round_summary_text, simplifyVector = FALSE)
+} else {
+  list()
+}
+
+assert_true(round_summary_status %in% c(200L, 404L), sprintf('Expected /round-summary to return 200 or 404, got %s.', round_summary_status))
+if (identical(round_summary_status, 200L)) {
+  assert_true(nzchar(as.character(scalar_value(round_summary_payload$round_label %||% ''))), 'Expected /round-summary to return a round label.')
+  assert_true(is.list(round_summary_payload$matches) && length(round_summary_payload$matches) >= 1, 'Expected /round-summary to return completed matches.')
+  assert_true(is.list(round_summary_payload$notable_facts) && length(round_summary_payload$notable_facts) >= 1, 'Expected /round-summary to return notable facts.')
+  check_step('round summary endpoint returns recap content')
+} else {
+  assert_true(nzchar(as.character(scalar_value(round_summary_payload$error %||% ''))), 'Expected /round-summary 404 responses to include an error payload.')
+  check_step('round summary endpoint returns a clean 404 when no completed round is available')
+}
+
 query_payload <- request_json(
   base_url,
   '/query',
@@ -179,5 +200,9 @@ check_step('parser normalizes possessive team phrasing')
 invalid_summary <- request_json(base_url, '/summary', query = list(season = 1900), expected_status = 400L)
 assert_true(nzchar(as.character(invalid_summary$error %||% '')), 'Expected invalid requests to return an error payload.')
 check_step('validation errors return a 400 response')
+
+invalid_round_summary <- request_json(base_url, '/round-summary', query = list(round = 1), expected_status = 400L)
+assert_true(nzchar(as.character(invalid_round_summary$error %||% '')), 'Expected /round-summary to require a season when round is provided.')
+check_step('round summary validation returns a 400 response')
 
 cat('All API regression checks passed.\n')

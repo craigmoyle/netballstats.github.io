@@ -227,6 +227,8 @@ code {
 
 .query-page .hero-copy .eyebrow,
 .query-page .hero-copy .intro-copy,
+.round-page .hero-copy .eyebrow,
+.round-page .hero-copy .intro-copy,
 .compare-page .hero-copy .eyebrow,
 .compare-page .hero-copy .intro-copy,
 .players-page .hero-copy .eyebrow,
@@ -1630,6 +1632,19 @@ caption.table-caption {
     rgba(9, 17, 23, 0.85);
 }
 
+.round-page .hero-panel {
+  padding: 1.25rem 1.35rem;
+  background:
+    linear-gradient(130deg, rgba(240, 198, 126, 0.12), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgba(121, 216, 208, 0.22), transparent 26%),
+    radial-gradient(circle at 12% 88%, rgba(240, 198, 126, 0.15), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 42%),
+    rgba(9, 17, 23, 0.84);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  box-shadow: var(--shadow);
+  border-radius: var(--radius-card);
+}
+
 .compare-page .hero-panel {
   padding: 1.25rem 1.35rem;
   background:
@@ -1667,6 +1682,7 @@ caption.table-caption {
   font-size: clamp(2.4rem, 5.5vw, 3.8rem);
 }
 
+.round-page .hero-copy h1,
 .compare-page .hero-copy h1,
 .players-page .hero-copy h1,
 .player-page .hero-copy h1 {
@@ -1674,8 +1690,164 @@ caption.table-caption {
   font-size: clamp(2.4rem, 5vw, 4.2rem);
 }
 
+.round-page .hero-aside__card strong,
 .query-page .hero-aside__card strong {
   font-size: 2.35rem;
+}
+
+.round-intro {
+  margin: 0;
+  max-width: 68ch;
+}
+
+.round-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+}
+
+.round-fact-card,
+.round-match-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 1.05rem;
+  border-radius: var(--radius-panel);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--text) 4%, transparent), transparent 42%),
+    rgba(9, 17, 23, 0.36);
+}
+
+.round-fact-card::after,
+.round-match-card::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(240, 198, 126, 0.45), rgba(240, 198, 126, 0));
+  pointer-events: none;
+}
+
+.round-fact-card[data-highlight="archive"] {
+  border-color: color-mix(in srgb, var(--accent-cool) 34%, var(--border));
+}
+
+.round-fact-card__title,
+.round-match-card__kicker,
+.round-match-card__time {
+  margin: 0;
+  font-size: var(--type-xs);
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.round-fact-card__value {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: clamp(1.6rem, 3vw, 2.15rem);
+  line-height: 0.95;
+  letter-spacing: 0.05em;
+}
+
+.round-fact-card__detail {
+  margin: 0;
+  color: var(--muted);
+}
+
+.record-badge-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.record-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+
+.record-badge--archive {
+  border-color: color-mix(in srgb, var(--accent-cool) 34%, var(--border));
+  background: color-mix(in srgb, var(--accent-cool) 14%, transparent);
+}
+
+.round-match-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 0.9rem;
+}
+
+.round-match-card__top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: start;
+}
+
+.round-match-card__title {
+  margin: 0;
+  font-family: var(--display-font);
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  line-height: 0.95;
+  letter-spacing: 0.04em;
+}
+
+.round-match-card__scoreline {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.round-match-card__score-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.9rem;
+  color: var(--muted);
+}
+
+.round-match-card__score-row.is-winner {
+  color: var(--text);
+}
+
+.round-match-card__score {
+  font-family: var(--display-font);
+  font-size: 1.5rem;
+  line-height: 1;
+  letter-spacing: 0.05em;
+}
+
+.round-match-card__meta {
+  margin: 0;
+  padding-left: 1rem;
+  color: var(--muted);
+  display: grid;
+  gap: 0.35rem;
+}
+
+.round-standout-table {
+  min-width: 560px;
+}
+
+.round-standout-value {
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.standout-note {
+  color: var(--muted);
 }
 
 .query-board {
@@ -2468,8 +2640,17 @@ caption.table-caption {
 }
 
 [data-theme="light"] .query-page .hero-panel,
+[data-theme="light"] .round-page .hero-panel,
 [data-theme="light"] .player-hero {
   background: var(--panel-solid);
+}
+
+[data-theme="light"] .round-fact-card,
+[data-theme="light"] .round-match-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.9)),
+    var(--panel-solid);
+  border-color: rgba(130, 90, 30, 0.14);
 }
 
 [data-theme="light"] .query-panel--home,
