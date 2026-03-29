@@ -50,7 +50,24 @@
     "Marking any season or archive highs…"
   ];
 
+  function unwrapValue(value) {
+    if (Array.isArray(value)) {
+      if (!value.length) {
+        return null;
+      }
+      return value.length === 1 ? unwrapValue(value[0]) : value;
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value) && !Object.keys(value).length) {
+      return null;
+    }
+
+    return value;
+  }
+
   function formatNumber(value) {
+    value = unwrapValue(value);
+
     if (value === null || value === undefined || value === "") {
       return "--";
     }
@@ -64,6 +81,8 @@
   }
 
   function formatDate(value, { includeTime = false } = {}) {
+    value = unwrapValue(value);
+
     if (!value) {
       return "--";
     }
@@ -77,6 +96,7 @@
   }
 
   function playerProfileUrl(playerId) {
+    playerId = unwrapValue(playerId);
     return `/player/${encodeURIComponent(playerId)}/`;
   }
 
@@ -151,7 +171,7 @@
     if (primary) {
       cell.dataset.stackPrimary = "true";
     }
-    cell.textContent = content;
+    cell.textContent = unwrapValue(content) ?? "";
     return cell;
   }
 
@@ -167,7 +187,7 @@
     const link = document.createElement("a");
     link.href = href;
     link.className = "table-link";
-    link.textContent = text;
+    link.textContent = unwrapValue(text) ?? "";
     cell.appendChild(link);
     return cell;
   }
@@ -303,7 +323,8 @@
   }
 
   function standoutValueLabel(entry) {
-    const statLabel = entry?.stat_label ? entry.stat_label.toLowerCase() : "value";
+    const statLabelValue = unwrapValue(entry?.stat_label);
+    const statLabel = typeof statLabelValue === "string" ? statLabelValue.toLowerCase() : "value";
     return `${formatNumber(entry?.value)} ${statLabel}`;
   }
 
@@ -314,11 +335,11 @@
       notes.push(entry.badges.join(" · "));
     }
 
-    if (entry?.season && entry?.round_number) {
+    if (unwrapValue(entry?.season) && unwrapValue(entry?.round_number)) {
       notes.push(`Season ${formatNumber(entry.season)} · Round ${formatNumber(entry.round_number)}`);
     }
 
-    if (entry?.local_start_time) {
+    if (unwrapValue(entry?.local_start_time)) {
       notes.push(formatDate(entry.local_start_time));
     }
 
@@ -366,12 +387,12 @@
 
   function renderSummary(payload) {
     const summary = payload.summary || {};
-    const roundLabel = payload.round_label || "Latest completed round";
+    const roundLabel = unwrapValue(payload.round_label) || "Latest completed round";
     const seasonLabel = payload.season ? `${roundLabel}, ${formatNumber(payload.season)}` : roundLabel;
 
     elements.heroLabel.textContent = seasonLabel;
     elements.heading.textContent = seasonLabel;
-    elements.meta.textContent = payload.round_end_time
+    elements.meta.textContent = unwrapValue(payload.round_end_time)
       ? `Completed by ${formatDate(payload.round_end_time, { includeTime: true })}.`
       : "Latest completed fixtures.";
     elements.heroSummary.textContent = `${formatNumber(summary.total_matches)} matches · ${formatNumber(summary.total_goals)} goals · biggest margin ${formatNumber(summary.biggest_margin)}`;
