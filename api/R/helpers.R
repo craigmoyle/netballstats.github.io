@@ -1100,10 +1100,14 @@ build_player_match_query <- function(stat, seasons = NULL, player_id = NULL, opp
 # Returns TRUE when player_match_stats is available in the connected database.
 # The table is created by build_database.R; older DB builds won't have it.
 has_player_match_stats <- function(conn) {
-  isTRUE(tryCatch(
+  cached <- getOption("netballstats.pms_available")
+  if (!is.null(cached)) return(isTRUE(cached))
+  result <- isTRUE(tryCatch(
     DBI::dbExistsTable(conn, "player_match_stats"),
     error = function(e) FALSE
   ))
+  options(netballstats.pms_available = result)
+  result
 }
 
 # Faster alternative to build_player_match_query that reads from the
@@ -1704,6 +1708,250 @@ extract_first_numeric <- function(rows, column = "total_value") {
   suppressWarnings(as.numeric(rows[[column]][[1]]))
 }
 
+# ---------------------------------------------------------------------------
+# Batch spotlight helpers — reduce ~195 queries to ~30 per round-summary call
+# ---------------------------------------------------------------------------
+
+# Validates that stat names are alphanumeric camelCase (internal constants only,
+# never user input) and returns a SQL IN list string.
+safe_stat_in_sql <- function(stats) {
+  valid <- stats[grepl("^[A-Za-z0-9]+$", stats)]
+  if (!length(valid)) return("")
+  paste(sprintf("'%s'", valid), collapse = ", ")
+}
+
+# Batch-fetch the top-1 player row per stat for a given season/round in a single
+# DB round-trip.  Returns a named list keyed by stat name.
+fetch_player_spotlight_rows <- function(conn, seasons, round, competition_phase, stats) {
+  empty <- setNames(lapply(stats, function(s) data.frame()), stats)
+  if (!length(stats)) return(empty)
+  stat_sql <- safe_stat_in_sql(stats)
+  if (!nzchar(stat_sql)) return(empty)
+
+  if (has_player_match_stats(conn)) {
+    query <- paste0(
+      "WITH ranked AS (",
+      " SELECT pms.stat, pms.player_id, players.canonical_name AS player_name, pms.squad_name,",
+      "   CASE WHEN matches.home_squad_id = pms.squad_id",
+      "     THEN matches.away_squad_name ELSE matches.home_squad_name END AS opponent,",
+      "   pms.season, pms.round_number, pms.match_id, matches.local_start_time,",
+      "   pms.match_value AS total_value,",
+      "   ROW_NUMBER() OVER (PARTITION BY pms.stat",
+      "     ORDER BY pms.match_value DESC, pms.season DESC, pms.round_number DESC,",
+      "              players.canonical_name ASC) AS rn",
+      " FROM player_match_stats pms",
+      " INNER JOIN players ON players.player_id = pms.player_id",
+      " INNER JOIN matches ON matches.match_id = pms.match_id",
+      " WHERE pms.stat IN (", stat_sql, ")",
+      "   AND pms.season = ?season",
+      "   AND pms.round_number = ?round_number",
+      "   AND COALESCE(matches.competition_phase, '') = ?competition_phase",
+      ")",
+      " SELECT stat, player_id, player_name, squad_name, opponent,",
+      "   season, round_number, match_id, local_start_time, total_value",
+      " FROM ranked WHERE rn = 1"
+    )
+    rows <- tryCatch(
+      query_rows(conn, query, list(
+        season            = as.integer(seasons[[1]]),
+        round_number      = as.integer(round),
+        competition_phase = as.character(competition_phase %||% "")
+      )),
+      error = function(e) data.frame()
+    )
+    result <- lapply(stats, function(s) {
+      r <- rows[!is.na(rows$stat) & rows$stat == s, , drop = FALSE]
+      if (nrow(r)) r else data.frame()
+    })
+    names(result) <- stats
+    return(result)
+  }
+
+  # Fallback when player_match_stats is unavailable
+  lapply(setNames(stats, stats), function(s) {
+    fetch_player_game_high_rows(
+      conn, seasons = seasons, round = round,
+      competition_phase = competition_phase,
+      stat = s, ranking = "highest", limit = 1L
+    )
+  })
+}
+
+# Batch-fetch the top-1 team row per stat for a given season/round in a single
+# DB round-trip.  Returns a named list keyed by stat name.
+fetch_team_spotlight_rows <- function(conn, seasons, round, competition_phase, stats, ranking = "highest") {
+  empty <- setNames(lapply(stats, function(s) data.frame()), stats)
+  if (!length(stats)) return(empty)
+  stat_sql <- safe_stat_in_sql(stats)
+  if (!nzchar(stat_sql)) return(empty)
+  order_dir <- ranking_order_sql(ranking)
+
+  query <- paste0(
+    "WITH agg AS (",
+    " SELECT stats.stat, stats.squad_id, stats.squad_name,",
+    "   MAX(CASE WHEN matches.home_squad_id = stats.squad_id",
+    "     THEN matches.away_squad_name ELSE matches.home_squad_name END) AS opponent,",
+    "   stats.season, stats.round_number, stats.match_id, matches.local_start_time,",
+    "   ROUND(CAST(SUM(stats.value_number) AS numeric), 2) AS total_value",
+    " FROM team_period_stats stats",
+    " INNER JOIN matches ON matches.match_id = stats.match_id",
+    " WHERE stats.stat IN (", stat_sql, ")",
+    "   AND stats.season = ?season",
+    "   AND stats.round_number = ?round_number",
+    "   AND COALESCE(matches.competition_phase, '') = ?competition_phase",
+    " GROUP BY stats.stat, stats.squad_id, stats.squad_name,",
+    "   stats.season, stats.round_number, stats.match_id, matches.local_start_time",
+    "), ranked AS (",
+    " SELECT *,",
+    "   ROW_NUMBER() OVER (PARTITION BY stat",
+    "     ORDER BY total_value ", order_dir, ", season DESC, round_number DESC, squad_name ASC) AS rn",
+    " FROM agg",
+    ")",
+    " SELECT stat, squad_id, squad_name, opponent,",
+    "   season, round_number, match_id, local_start_time, total_value",
+    " FROM ranked WHERE rn = 1"
+  )
+
+  rows <- tryCatch(
+    query_rows(conn, query, list(
+      season            = as.integer(seasons[[1]]),
+      round_number      = as.integer(round),
+      competition_phase = as.character(competition_phase %||% "")
+    )),
+    error = function(e) data.frame()
+  )
+
+  result <- lapply(stats, function(s) {
+    r <- rows[!is.na(rows$stat) & rows$stat == s, , drop = FALSE]
+    if (nrow(r)) r else data.frame()
+  })
+  names(result) <- stats
+  result
+}
+
+# Batch-fetch the best (MAX or MIN) value per stat for badge computation.
+# season=NULL returns all-time bests; otherwise restricts to that season.
+# Returns a named numeric vector.
+fetch_spotlight_bests <- function(conn, subject_type, stats, season = NULL, ranking = "highest") {
+  result <- setNames(rep(NA_real_, length(stats)), stats)
+  if (!length(stats)) return(result)
+  stat_sql <- safe_stat_in_sql(stats)
+  if (!nzchar(stat_sql)) return(result)
+  agg_fn        <- if (identical(ranking, "highest")) "MAX" else "MIN"
+  season_clause <- if (!is.null(season)) " AND season = ?season" else ""
+  params        <- if (!is.null(season)) list(season = as.integer(season)) else list()
+
+  query <- if (identical(subject_type, "player") && has_player_match_stats(conn)) {
+    paste0(
+      "SELECT stat, ", agg_fn, "(match_value) AS best_value",
+      " FROM player_match_stats WHERE stat IN (", stat_sql, ")", season_clause,
+      " GROUP BY stat"
+    )
+  } else if (identical(subject_type, "player")) {
+    paste0(
+      "SELECT stat, ", agg_fn, "(total_value) AS best_value FROM (",
+      " SELECT stat, player_id, match_id,",
+      "   ROUND(CAST(SUM(value_number) AS numeric), 2) AS total_value",
+      " FROM player_period_stats WHERE stat IN (", stat_sql, ")", season_clause,
+      " GROUP BY stat, player_id, match_id) sub GROUP BY stat"
+    )
+  } else {
+    paste0(
+      "SELECT stat, ", agg_fn, "(total_value) AS best_value FROM (",
+      " SELECT stat, squad_id, match_id,",
+      "   ROUND(CAST(SUM(value_number) AS numeric), 2) AS total_value",
+      " FROM team_period_stats WHERE stat IN (", stat_sql, ")", season_clause,
+      " GROUP BY stat, squad_id, match_id) sub GROUP BY stat"
+    )
+  }
+
+  rows <- tryCatch(query_rows(conn, query, params), error = function(e) data.frame())
+  if (nrow(rows) && all(c("stat", "best_value") %in% names(rows))) {
+    for (i in seq_len(nrow(rows))) {
+      s <- as.character(rows$stat[[i]])
+      if (s %in% names(result)) {
+        result[[s]] <- suppressWarnings(as.numeric(rows$best_value[[i]]))
+      }
+    }
+  }
+  result
+}
+
+# Batch-compute the historical rank for multiple (stat, value) pairs in one
+# DB round-trip using a CASE WHEN counting pattern.
+# stat_values: named list of stat -> numeric value (NA values pre-filtered).
+# Returns a named integer vector.
+batch_compute_archive_ranks <- function(conn, subject_type, stat_values, ranking = "highest") {
+  if (!length(stat_values)) return(setNames(integer(0), character(0)))
+  stats      <- names(stat_values)
+  stat_sql   <- safe_stat_in_sql(stats)
+  compare_op <- if (identical(ranking, "highest")) ">" else "<"
+  result     <- setNames(rep(NA_integer_, length(stats)), stats)
+
+  make_case <- function(value_col) {
+    parts <- vapply(stats, function(s) {
+      v <- as.numeric(stat_values[[s]])
+      sprintf("WHEN stat = '%s' AND %s %s %.15g THEN 1", s, value_col, compare_op, v)
+    }, character(1))
+    paste0("CASE ", paste(parts, collapse = " "), " END")
+  }
+
+  query <- tryCatch({
+    if (identical(subject_type, "player") && has_player_match_stats(conn)) {
+      paste0(
+        "SELECT stat, COUNT(", make_case("match_value"), ") + 1 AS rank",
+        " FROM player_match_stats WHERE stat IN (", stat_sql, ")",
+        " GROUP BY stat"
+      )
+    } else if (identical(subject_type, "player")) {
+      paste0(
+        "SELECT stat, COUNT(", make_case("total_value"), ") + 1 AS rank FROM (",
+        " SELECT stat, player_id, match_id,",
+        "   ROUND(CAST(SUM(value_number) AS numeric), 2) AS total_value",
+        " FROM player_period_stats WHERE stat IN (", stat_sql, ")",
+        " GROUP BY stat, player_id, match_id) sub GROUP BY stat"
+      )
+    } else {
+      paste0(
+        "SELECT stat, COUNT(", make_case("total_value"), ") + 1 AS rank FROM (",
+        " SELECT stat, squad_id, match_id,",
+        "   ROUND(CAST(SUM(value_number) AS numeric), 2) AS total_value",
+        " FROM team_period_stats WHERE stat IN (", stat_sql, ")",
+        " GROUP BY stat, squad_id, match_id) sub GROUP BY stat"
+      )
+    }
+  }, error = function(e) NULL)
+
+  if (is.null(query)) return(result)
+  rows <- tryCatch(query_rows(conn, query, list()), error = function(e) data.frame())
+  if (nrow(rows) && all(c("stat", "rank") %in% names(rows))) {
+    for (i in seq_len(nrow(rows))) {
+      s <- as.character(rows$stat[[i]])
+      if (s %in% names(result)) {
+        r <- suppressWarnings(as.integer(rows$rank[[i]]))
+        if (!is.na(r) && r > 0L) result[[s]] <- r
+      }
+    }
+  }
+  result
+}
+
+# Pure function: compute record badges from pre-fetched best vectors (no DB access).
+spotlight_badges <- function(stat, ranking, total_value, season_bests, archive_bests) {
+  if (is.null(total_value) || is.na(total_value)) return(character())
+  compare_fn   <- if (identical(ranking, "highest")) `>=` else `<=`
+  badges       <- character()
+  season_best  <- season_bests[[stat]]
+  archive_best <- archive_bests[[stat]]
+  if (!is.null(season_best)  && !is.na(season_best)  && compare_fn(as.numeric(total_value), as.numeric(season_best)))
+    badges <- c(badges, record_badge_label("season",  ranking))
+  if (!is.null(archive_best) && !is.na(archive_best) && compare_fn(as.numeric(total_value), as.numeric(archive_best)))
+    badges <- c(badges, record_badge_label("archive", ranking))
+  badges
+}
+
+# ---------------------------------------------------------------------------
+
 fetch_player_points_high <- function(conn, seasons = NULL, round = NULL, competition_phase = NULL, ranking = "highest", limit = 1L) {
   order_direction <- ranking_order_sql(ranking)
 
@@ -2113,728 +2361,119 @@ build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
     ranking = "highest",
     limit = 1L
   )
-  team_turnover_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "generalPlayTurnovers",
-    ranking = "lowest",
-    limit = 1L
+  # --- Batch spotlight queries (replaces ~195 sequential queries with ~14) ---
+  PLAYER_BATCH_STATS <- c(
+    "goalAssists", "feeds", "gain", "deflections", "intercepts",
+    "goals", "goalAttempts", "centrePassReceives", "rebounds",
+    "netPoints", "offensiveRebounds", "defensiveRebounds", "goal2", "attempts2"
   )
-  team_gain_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "gain",
-    ranking = "highest",
-    limit = 1L
+  TEAM_BATCH_HIGHEST <- c(
+    "gain", "deflections", "intercepts",
+    "goalsFromCentrePass", "goalsFromGain",
+    "netPoints", "offensiveRebounds", "defensiveRebounds", "goal2", "attempts2"
   )
-  team_deflection_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "deflections",
-    ranking = "highest",
-    limit = 1L
+  TEAM_BATCH_LOWEST <- c("penalties", "generalPlayTurnovers")
+
+  player_rows    <- fetch_player_spotlight_rows(conn, season_value, round_value, competition_phase, PLAYER_BATCH_STATS)
+  team_rows_high <- fetch_team_spotlight_rows(conn, season_value, round_value, competition_phase, TEAM_BATCH_HIGHEST, "highest")
+  team_rows_low  <- fetch_team_spotlight_rows(conn, season_value, round_value, competition_phase, TEAM_BATCH_LOWEST, "lowest")
+
+  player_season_bests  <- fetch_spotlight_bests(conn, "player", PLAYER_BATCH_STATS, season_value, "highest")
+  player_archive_bests <- fetch_spotlight_bests(conn, "player", PLAYER_BATCH_STATS, NULL, "highest")
+  team_season_high     <- fetch_spotlight_bests(conn, "team", TEAM_BATCH_HIGHEST, season_value, "highest")
+  team_archive_high    <- fetch_spotlight_bests(conn, "team", TEAM_BATCH_HIGHEST, NULL, "highest")
+  team_season_low      <- fetch_spotlight_bests(conn, "team", TEAM_BATCH_LOWEST, season_value, "lowest")
+  team_archive_low     <- fetch_spotlight_bests(conn, "team", TEAM_BATCH_LOWEST, NULL, "lowest")
+
+  non_na <- function(vals) Filter(function(v) !is.null(v) && !is.na(v), vals)
+  player_ranks <- batch_compute_archive_ranks(
+    conn, "player",
+    non_na(setNames(lapply(PLAYER_BATCH_STATS, function(s) extract_first_numeric(player_rows[[s]])), PLAYER_BATCH_STATS)),
+    "highest"
   )
-  team_intercept_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "intercepts",
-    ranking = "highest",
-    limit = 1L
+  team_ranks_h <- batch_compute_archive_ranks(
+    conn, "team",
+    non_na(setNames(lapply(TEAM_BATCH_HIGHEST, function(s) extract_first_numeric(team_rows_high[[s]])), TEAM_BATCH_HIGHEST)),
+    "highest"
   )
-  team_penalty_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "penalties",
-    ranking = "lowest",
-    limit = 1L
-  )
-  team_goalsFromCentrePass_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "goalsFromCentrePass",
-    ranking = "highest",
-    limit = 1L
-  )
-  team_goalsFromGain_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "goalsFromGain",
-    ranking = "highest",
-    limit = 1L
-  )
-  team_netPoints_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "netPoints",
-    ranking = "highest",
-    limit = 1L
-  )
-  team_offensiveRebounds_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "offensiveRebounds",
-    ranking = "highest",
-    limit = 1L
-  )
-  team_defensiveRebounds_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "defensiveRebounds",
-    ranking = "highest",
-    limit = 1L
-  )
-  team_goal2_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "goal2",
-    ranking = "highest",
-    limit = 1L
-  )
-  team_attempts2_row <- fetch_team_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "attempts2",
-    ranking = "highest",
-    limit = 1L
+  team_ranks_l <- batch_compute_archive_ranks(
+    conn, "team",
+    non_na(setNames(lapply(TEAM_BATCH_LOWEST, function(s) extract_first_numeric(team_rows_low[[s]])), TEAM_BATCH_LOWEST)),
+    "lowest"
   )
 
-  player_points_row <- fetch_player_points_high(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    ranking = "highest",
-    limit = 1L
-  )
-  player_assist_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "goalAssists",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_intercept_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "intercepts",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_feeds_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "feeds",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_gain_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "gain",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_deflection_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "deflections",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_goals_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "goals",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_goalAttempts_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "goalAttempts",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_centrePassReceives_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "centrePassReceives",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_rebounds_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "rebounds",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_netPoints_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "netPoints",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_offensiveRebounds_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "offensiveRebounds",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_defensiveRebounds_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "defensiveRebounds",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_goal2_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "goal2",
-    ranking = "highest",
-    limit = 1L
-  )
-  player_attempts2_row <- fetch_player_game_high_rows(
-    conn,
-    seasons = season_value,
-    round = round_value,
-    competition_phase = competition_phase,
-    stat = "attempts2",
-    ranking = "highest",
-    limit = 1L
-  )
+  entry_player <- function(stat, title) {
+    row <- player_rows[[stat]]
+    if (!length(row) || !nrow(row)) return(NULL)
+    val <- extract_first_numeric(row)
+    performance_entry_from_row(
+      row, title, subject_type = "player", ranking = "highest",
+      badges = spotlight_badges(stat, "highest", val, player_season_bests, player_archive_bests),
+      historical_rank = if (stat %in% names(player_ranks)) player_ranks[[stat]] else NA_integer_
+    )
+  }
+
+  entry_team <- function(stat, title, ranking = "highest") {
+    rows_src  <- if (identical(ranking, "highest")) team_rows_high else team_rows_low
+    s_bests   <- if (identical(ranking, "highest")) team_season_high  else team_season_low
+    a_bests   <- if (identical(ranking, "highest")) team_archive_high else team_archive_low
+    ranks_src <- if (identical(ranking, "highest")) team_ranks_h else team_ranks_l
+    row <- rows_src[[stat]]
+    if (!length(row) || !nrow(row)) return(NULL)
+    val <- extract_first_numeric(row)
+    performance_entry_from_row(
+      row, title, subject_type = "team", ranking = ranking,
+      badges = spotlight_badges(stat, ranking, val, s_bests, a_bests),
+      historical_rank = if (stat %in% names(ranks_src)) ranks_src[[stat]] else NA_integer_
+    )
+  }
 
   standout_players <- Filter(Negate(is.null), list(
     performance_entry_from_row(
-      player_points_row,
-      "Top score",
-      subject_type = "player",
-      ranking = "highest",
-      badges = points_record_badges(
-        conn,
-        subject_type = "player",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_points_row),
-        season = season_value
-      ),
+      player_points_row, "Top score",
+      subject_type = "player", ranking = "highest",
+      badges = points_record_badges(conn, subject_type = "player", ranking = "highest",
+        total_value = extract_first_numeric(player_points_row), season = season_value),
       historical_rank = compute_archive_rank(
-        conn, "player", "points", "highest", extract_first_numeric(player_points_row)
-      )
+        conn, "player", "points", "highest", extract_first_numeric(player_points_row))
     ),
-    performance_entry_from_row(
-      player_assist_row,
-      "Most goal assists",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "goalAssists",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_assist_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "goalAssists", "highest", extract_first_numeric(player_assist_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_feeds_row,
-      "Most feeds",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "feeds",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_feeds_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "feeds", "highest", extract_first_numeric(player_feeds_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_gain_row,
-      "Most gains",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "gain",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_gain_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "gain", "highest", extract_first_numeric(player_gain_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_deflection_row,
-      "Most deflections",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "deflections",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_deflection_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "deflections", "highest", extract_first_numeric(player_deflection_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_intercept_row,
-      "Most intercepts",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "intercepts",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_intercept_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "intercepts", "highest", extract_first_numeric(player_intercept_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_goals_row,
-      "Most goals",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "goals",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_goals_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "goals", "highest", extract_first_numeric(player_goals_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_goalAttempts_row,
-      "Most goal attempts",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "goalAttempts",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_goalAttempts_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "goalAttempts", "highest", extract_first_numeric(player_goalAttempts_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_centrePassReceives_row,
-      "Most centre pass receives",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "centrePassReceives",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_centrePassReceives_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "centrePassReceives", "highest", extract_first_numeric(player_centrePassReceives_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_rebounds_row,
-      "Most rebounds",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "rebounds",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_rebounds_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "rebounds", "highest", extract_first_numeric(player_rebounds_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_netPoints_row,
-      "Most net points",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "netPoints",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_netPoints_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "netPoints", "highest", extract_first_numeric(player_netPoints_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_offensiveRebounds_row,
-      "Most offensive rebounds",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "offensiveRebounds",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_offensiveRebounds_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "offensiveRebounds", "highest", extract_first_numeric(player_offensiveRebounds_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_defensiveRebounds_row,
-      "Most defensive rebounds",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "defensiveRebounds",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_defensiveRebounds_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "defensiveRebounds", "highest", extract_first_numeric(player_defensiveRebounds_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_goal2_row,
-      "Most super shots",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "goal2",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_goal2_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "goal2", "highest", extract_first_numeric(player_goal2_row)
-      )
-    ),
-    performance_entry_from_row(
-      player_attempts2_row,
-      "Most super shot attempts",
-      subject_type = "player",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "player",
-        stat = "attempts2",
-        ranking = "highest",
-        total_value = extract_first_numeric(player_attempts2_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "player", "attempts2", "highest", extract_first_numeric(player_attempts2_row)
-      )
-    )
+    entry_player("goalAssists",        "Most goal assists"),
+    entry_player("feeds",              "Most feeds"),
+    entry_player("gain",               "Most gains"),
+    entry_player("deflections",        "Most deflections"),
+    entry_player("intercepts",         "Most intercepts"),
+    entry_player("goals",              "Most goals"),
+    entry_player("goalAttempts",       "Most goal attempts"),
+    entry_player("centrePassReceives", "Most centre pass receives"),
+    entry_player("rebounds",           "Most rebounds"),
+    entry_player("netPoints",          "Most net points"),
+    entry_player("offensiveRebounds",  "Most offensive rebounds"),
+    entry_player("defensiveRebounds",  "Most defensive rebounds"),
+    entry_player("goal2",              "Most super shots"),
+    entry_player("attempts2",          "Most super shot attempts")
   ))
 
   standout_teams <- Filter(Negate(is.null), list(
     performance_entry_from_row(
-      team_points_row,
-      "Highest team score",
-      subject_type = "team",
-      ranking = "highest",
-      badges = points_record_badges(
-        conn,
-        subject_type = "team",
-        ranking = "highest",
-        total_value = extract_first_numeric(team_points_row),
-        season = season_value
-      ),
+      team_points_row, "Highest team score",
+      subject_type = "team", ranking = "highest",
+      badges = points_record_badges(conn, subject_type = "team", ranking = "highest",
+        total_value = extract_first_numeric(team_points_row), season = season_value),
       historical_rank = compute_archive_rank(
-        conn, "team", "points", "highest", extract_first_numeric(team_points_row)
-      )
+        conn, "team", "points", "highest", extract_first_numeric(team_points_row))
     ),
-    performance_entry_from_row(
-      team_gain_row,
-      "Most gains",
-      subject_type = "team",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "gain",
-        ranking = "highest",
-        total_value = extract_first_numeric(team_gain_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "gain", "highest", extract_first_numeric(team_gain_row)
-      )
-    ),
-    performance_entry_from_row(
-      team_deflection_row,
-      "Most deflections",
-      subject_type = "team",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "deflections",
-        ranking = "highest",
-        total_value = extract_first_numeric(team_deflection_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "deflections", "highest", extract_first_numeric(team_deflection_row)
-      )
-    ),
-    performance_entry_from_row(
-      team_intercept_row,
-      "Most intercepts",
-      subject_type = "team",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "intercepts",
-        ranking = "highest",
-        total_value = extract_first_numeric(team_intercept_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "intercepts", "highest", extract_first_numeric(team_intercept_row)
-      )
-    ),
-    performance_entry_from_row(
-      team_penalty_row,
-      "Fewest penalties",
-      subject_type = "team",
-      ranking = "lowest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "penalties",
-        ranking = "lowest",
-        total_value = extract_first_numeric(team_penalty_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "penalties", "lowest", extract_first_numeric(team_penalty_row)
-      )
-    ),
-    performance_entry_from_row(
-      team_turnover_row,
-      "Fewest turnovers",
-      subject_type = "team",
-      ranking = "lowest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "generalPlayTurnovers",
-        ranking = "lowest",
-        total_value = extract_first_numeric(team_turnover_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "generalPlayTurnovers", "lowest", extract_first_numeric(team_turnover_row)
-      )
-    ),
-    performance_entry_from_row(
-      team_goalsFromCentrePass_row,
-      "Most goals from centre pass",
-      subject_type = "team",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "goalsFromCentrePass",
-        ranking = "highest",
-        total_value = extract_first_numeric(team_goalsFromCentrePass_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "goalsFromCentrePass", "highest", extract_first_numeric(team_goalsFromCentrePass_row)
-      )
-    ),
-    performance_entry_from_row(
-      team_goalsFromGain_row,
-      "Most goals from gain",
-      subject_type = "team",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "goalsFromGain",
-        ranking = "highest",
-        total_value = extract_first_numeric(team_goalsFromGain_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "goalsFromGain", "highest", extract_first_numeric(team_goalsFromGain_row)
-      )
-    ),
-    performance_entry_from_row(
-      team_netPoints_row,
-      "Most net points",
-      subject_type = "team",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "netPoints",
-        ranking = "highest",
-        total_value = extract_first_numeric(team_netPoints_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "netPoints", "highest", extract_first_numeric(team_netPoints_row)
-      )
-    ),
-    performance_entry_from_row(
-      team_offensiveRebounds_row,
-      "Most offensive rebounds",
-      subject_type = "team",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "offensiveRebounds",
-        ranking = "highest",
-        total_value = extract_first_numeric(team_offensiveRebounds_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "offensiveRebounds", "highest", extract_first_numeric(team_offensiveRebounds_row)
-      )
-    ),
-    performance_entry_from_row(
-      team_defensiveRebounds_row,
-      "Most defensive rebounds",
-      subject_type = "team",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "defensiveRebounds",
-        ranking = "highest",
-        total_value = extract_first_numeric(team_defensiveRebounds_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "defensiveRebounds", "highest", extract_first_numeric(team_defensiveRebounds_row)
-      )
-    ),
-    performance_entry_from_row(
-      team_goal2_row,
-      "Most super shots",
-      subject_type = "team",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "goal2",
-        ranking = "highest",
-        total_value = extract_first_numeric(team_goal2_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "goal2", "highest", extract_first_numeric(team_goal2_row)
-      )
-    ),
-    performance_entry_from_row(
-      team_attempts2_row,
-      "Most super shot attempts",
-      subject_type = "team",
-      ranking = "highest",
-      badges = game_record_badges(
-        conn,
-        subject_type = "team",
-        stat = "attempts2",
-        ranking = "highest",
-        total_value = extract_first_numeric(team_attempts2_row),
-        season = season_value
-      ),
-      historical_rank = compute_archive_rank(
-        conn, "team", "attempts2", "highest", extract_first_numeric(team_attempts2_row)
-      )
-    )
+    entry_team("gain",                 "Most gains"),
+    entry_team("deflections",          "Most deflections"),
+    entry_team("intercepts",           "Most intercepts"),
+    entry_team("penalties",            "Fewest penalties",   "lowest"),
+    entry_team("generalPlayTurnovers", "Fewest turnovers",   "lowest"),
+    entry_team("goalsFromCentrePass",  "Most goals from centre pass"),
+    entry_team("goalsFromGain",        "Most goals from gain"),
+    entry_team("netPoints",            "Most net points"),
+    entry_team("offensiveRebounds",    "Most offensive rebounds"),
+    entry_team("defensiveRebounds",    "Most defensive rebounds"),
+    entry_team("goal2",                "Most super shots"),
+    entry_team("attempts2",            "Most super shot attempts")
   ))
 
   biggest_margin_match <- round_summary$biggest_margin_match
