@@ -404,7 +404,7 @@
   function renderSummary(payload) {
     const summary = payload.summary || {};
     const roundLabel = unwrapValue(payload.round_label) || "Latest completed round";
-    const seasonLabel = payload.season ? `${roundLabel}, ${formatNumber(payload.season)}` : roundLabel;
+    const seasonLabel = payload.season ? `${roundLabel}, ${payload.season}` : roundLabel;
 
     elements.heroLabel.textContent = seasonLabel;
     elements.heading.textContent = seasonLabel;

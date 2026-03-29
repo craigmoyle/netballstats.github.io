@@ -348,7 +348,7 @@ function renderRows(rows, subjectType = "player") {
       cells = [
         entry.squad_name || entry.team_name || "Unknown team",
         entry.opponent || "--",
-        formatNumber(entry.season),
+        entry.season != null ? String(entry.season) : "--",
         formatNumber(entry.round_number),
         formatNumber(entry.total_value),
         formatDate(entry.local_start_time)
@@ -369,7 +369,7 @@ function renderRows(rows, subjectType = "player") {
         playerCell,
         entry.squad_name || "--",
         entry.opponent || "--",
-        formatNumber(entry.season),
+        entry.season != null ? String(entry.season) : "--",
         formatNumber(entry.round_number),
         formatNumber(entry.total_value),
         formatDate(entry.local_start_time)
