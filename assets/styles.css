@@ -653,6 +653,10 @@ code {
   grid-column: span 2;
 }
 
+.filters--dashboard .field--toggle {
+  grid-column: span 3;
+}
+
 .filter-actions--primary {
   display: flex;
   align-items: center;
@@ -684,6 +688,24 @@ code {
 .field {
   display: grid;
   gap: 0.45rem;
+}
+
+.field--toggle {
+  align-content: start;
+  gap: 0.65rem;
+}
+
+.field--toggle .field-label {
+  line-height: 1.25;
+}
+
+.field--toggle .view-toggle {
+  width: 100%;
+}
+
+.field--toggle .view-toggle .button {
+  min-width: 0;
+  flex: 1 1 0;
 }
 
 .field--wide {
@@ -2399,6 +2421,10 @@ caption.table-caption {
   .filters--dashboard .field--stat-picker,
   .filters--dashboard .field--compact {
     grid-column: span 2;
+  }
+
+  .filters--dashboard .field--toggle {
+    grid-column: span 3;
   }
 
   .results-grid--home .results-panel--lead,

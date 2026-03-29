@@ -106,10 +106,10 @@
             <select id="player-stat" name="player-stat"></select>
           </div>
 
-          <div class="field field--secondary field--compact">
+          <div class="field field--secondary field--compact field--toggle">
             <span class="field-label">Archive mode</span>
             <input id="archive-mode" name="archive-mode" type="hidden" value="aggregate">
-            <div class="view-toggle compare-mode-toggle" role="group" aria-label="Archive mode">
+            <div class="view-toggle" role="group" aria-label="Archive mode">
               <button type="button" class="button button--small is-active" data-archive-mode="aggregate" aria-pressed="true">Totals</button>
               <button type="button" class="button button--small button--ghost" data-archive-mode="records" aria-pressed="false">Single-game records</button>
             </div>
@@ -142,10 +142,10 @@
               <option value="average">Average per game</option>
             </select>
           </div>
-          <div class="field field--secondary field--compact">
+          <div class="field field--secondary field--compact field--toggle">
             <span class="field-label">Leaderboard order</span>
             <input id="ranking-mode" name="ranking-mode" type="hidden" value="highest">
-            <div class="view-toggle compare-mode-toggle" role="group" aria-label="Leaderboard order">
+            <div class="view-toggle" role="group" aria-label="Leaderboard order">
               <button type="button" class="button button--small is-active" data-ranking-mode="highest" aria-pressed="true">Highest</button>
               <button type="button" class="button button--small button--ghost" data-ranking-mode="lowest" aria-pressed="false">Lowest</button>
             </div>
