@@ -1829,8 +1829,7 @@ fetch_team_spotlight_rows <- function(conn, seasons, round, competition_phase, s
   result
 }
 
-# Batch-fetch the best (MAX or MIN) value per stat for badge computation.
-# season=NULL returns all-time bests; otherwise restricts to that season.
+# Batch-fetch the best value per stat across all time (season=NULL) or within a season.
 # Returns a named numeric vector.
 fetch_spotlight_bests <- function(conn, subject_type, stats, season = NULL, ranking = "highest") {
   result <- setNames(rep(NA_real_, length(stats)), stats)
@@ -1875,6 +1874,78 @@ fetch_spotlight_bests <- function(conn, subject_type, stats, season = NULL, rank
     }
   }
   result
+}
+
+# Combined single-query fetch of archive bests AND archive ranks per stat.
+# Saves one DB round-trip vs calling fetch_spotlight_bests + batch_compute_archive_ranks.
+# stat_values: named list of stat -> numeric threshold (NA values pre-filtered).
+# Returns list(bests = named numeric, ranks = named integer).
+fetch_spotlight_archive_data <- function(conn, subject_type, stat_values, ranking = "highest") {
+  stats      <- names(stat_values)
+  stat_sql   <- safe_stat_in_sql(stats)
+  agg_fn     <- if (identical(ranking, "highest")) "MAX" else "MIN"
+  compare_op <- if (identical(ranking, "highest")) ">" else "<"
+
+  empty_bests <- setNames(rep(NA_real_,    length(stats)), stats)
+  empty_ranks <- setNames(rep(NA_integer_, length(stats)), stats)
+  if (!length(stats) || !nzchar(stat_sql)) return(list(bests = empty_bests, ranks = empty_ranks))
+
+  make_rank_case <- function(value_col) {
+    parts <- vapply(stats, function(s) {
+      v <- as.numeric(stat_values[[s]])
+      sprintf("WHEN stat = '%s' AND %s %s %.15g THEN 1", s, value_col, compare_op, v)
+    }, character(1))
+    paste0("CASE ", paste(parts, collapse = " "), " END")
+  }
+
+  query <- tryCatch({
+    if (identical(subject_type, "player") && has_player_match_stats(conn)) {
+      paste0(
+        "SELECT stat, ", agg_fn, "(match_value) AS best_value,",
+        " COUNT(", make_rank_case("match_value"), ") + 1 AS rank_for_stat",
+        " FROM player_match_stats WHERE stat IN (", stat_sql, ")",
+        " GROUP BY stat"
+      )
+    } else if (identical(subject_type, "player")) {
+      paste0(
+        "SELECT stat, ", agg_fn, "(total_value) AS best_value,",
+        " COUNT(", make_rank_case("total_value"), ") + 1 AS rank_for_stat FROM (",
+        " SELECT stat, player_id, match_id,",
+        "   ROUND(CAST(SUM(value_number) AS numeric), 2) AS total_value",
+        " FROM player_period_stats WHERE stat IN (", stat_sql, ")",
+        " GROUP BY stat, player_id, match_id) sub GROUP BY stat"
+      )
+    } else {
+      paste0(
+        "SELECT stat, ", agg_fn, "(total_value) AS best_value,",
+        " COUNT(", make_rank_case("total_value"), ") + 1 AS rank_for_stat FROM (",
+        " SELECT stat, squad_id, match_id,",
+        "   ROUND(CAST(SUM(value_number) AS numeric), 2) AS total_value",
+        " FROM team_period_stats WHERE stat IN (", stat_sql, ")",
+        " GROUP BY stat, squad_id, match_id) sub GROUP BY stat"
+      )
+    }
+  }, error = function(e) NULL)
+
+  if (is.null(query)) return(list(bests = empty_bests, ranks = empty_ranks))
+  rows <- tryCatch(query_rows(conn, query, list()), error = function(e) data.frame())
+
+  bests <- empty_bests
+  ranks <- empty_ranks
+  if (nrow(rows) && "stat" %in% names(rows)) {
+    for (i in seq_len(nrow(rows))) {
+      s <- as.character(rows$stat[[i]])
+      if (s %in% stats) {
+        if ("best_value" %in% names(rows))
+          bests[[s]] <- suppressWarnings(as.numeric(rows$best_value[[i]]))
+        if ("rank_for_stat" %in% names(rows)) {
+          r <- suppressWarnings(as.integer(rows$rank_for_stat[[i]]))
+          if (!is.na(r) && r > 0L) ranks[[s]] <- r
+        }
+      }
+    }
+  }
+  list(bests = bests, ranks = ranks)
 }
 
 # Batch-compute the historical rank for multiple (stat, value) pairs in one
@@ -2337,6 +2408,11 @@ build_round_fact <- function(title, value, detail, badges = character()) {
   )
 }
 
+# Per-process cache for round summary payloads (keyed by season+round+phase).
+# Cleared automatically when the Container App restarts (e.g. after a DB refresh).
+.round_summary_cache <- new.env(parent = emptyenv())
+.round_cache_ttl_secs <- 3600L  # 1 hour
+
 build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
   selected_round <- fetch_latest_completed_round(conn, season = season, round = round)
   if (!nrow(selected_round)) {
@@ -2346,6 +2422,13 @@ build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
   season_value <- suppressWarnings(as.integer(selected_round$season[[1]]))
   round_value <- suppressWarnings(as.integer(selected_round$round_number[[1]]))
   competition_phase <- as.character(selected_round$competition_phase[[1]] %||% "")
+
+  cache_key <- paste0(season_value, "_", round_value, "_", competition_phase)
+  cached <- .round_summary_cache[[cache_key]]
+  if (!is.null(cached) && as.numeric(difftime(Sys.time(), cached$ts, units = "secs")) < .round_cache_ttl_secs) {
+    return(cached$payload)
+  }
+
   matches <- fetch_round_matches(conn, season_value, competition_phase, round_value)
   if (!nrow(matches)) {
     return(NULL)
@@ -2386,29 +2469,35 @@ build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
   team_rows_high <- fetch_team_spotlight_rows(conn, season_value, round_value, competition_phase, TEAM_BATCH_HIGHEST, "highest")
   team_rows_low  <- fetch_team_spotlight_rows(conn, season_value, round_value, competition_phase, TEAM_BATCH_LOWEST, "lowest")
 
-  player_season_bests  <- fetch_spotlight_bests(conn, "player", PLAYER_BATCH_STATS, season_value, "highest")
-  player_archive_bests <- fetch_spotlight_bests(conn, "player", PLAYER_BATCH_STATS, NULL, "highest")
-  team_season_high     <- fetch_spotlight_bests(conn, "team", TEAM_BATCH_HIGHEST, season_value, "highest")
-  team_archive_high    <- fetch_spotlight_bests(conn, "team", TEAM_BATCH_HIGHEST, NULL, "highest")
-  team_season_low      <- fetch_spotlight_bests(conn, "team", TEAM_BATCH_LOWEST, season_value, "lowest")
-  team_archive_low     <- fetch_spotlight_bests(conn, "team", TEAM_BATCH_LOWEST, NULL, "lowest")
+  # Season bests (filtered — fast with indexed season column)
+  player_season_bests <- fetch_spotlight_bests(conn, "player", PLAYER_BATCH_STATS, season_value, "highest")
+  team_season_high    <- fetch_spotlight_bests(conn, "team", TEAM_BATCH_HIGHEST, season_value, "highest")
+  team_season_low     <- fetch_spotlight_bests(conn, "team", TEAM_BATCH_LOWEST, season_value, "lowest")
 
+  # Archive bests + ranks combined (single full-scan per subject/ranking)
   non_na <- function(vals) Filter(function(v) !is.null(v) && !is.na(v), vals)
-  player_ranks <- batch_compute_archive_ranks(
+  player_archive <- fetch_spotlight_archive_data(
     conn, "player",
     non_na(setNames(lapply(PLAYER_BATCH_STATS, function(s) extract_first_numeric(player_rows[[s]])), PLAYER_BATCH_STATS)),
     "highest"
   )
-  team_ranks_h <- batch_compute_archive_ranks(
+  team_archive_h <- fetch_spotlight_archive_data(
     conn, "team",
     non_na(setNames(lapply(TEAM_BATCH_HIGHEST, function(s) extract_first_numeric(team_rows_high[[s]])), TEAM_BATCH_HIGHEST)),
     "highest"
   )
-  team_ranks_l <- batch_compute_archive_ranks(
+  team_archive_l <- fetch_spotlight_archive_data(
     conn, "team",
     non_na(setNames(lapply(TEAM_BATCH_LOWEST, function(s) extract_first_numeric(team_rows_low[[s]])), TEAM_BATCH_LOWEST)),
     "lowest"
   )
+
+  player_archive_bests <- player_archive$bests
+  player_ranks         <- player_archive$ranks
+  team_archive_high    <- team_archive_h$bests
+  team_ranks_h         <- team_archive_h$ranks
+  team_archive_low     <- team_archive_l$bests
+  team_ranks_l         <- team_archive_l$ranks
 
   entry_player <- function(stat, title) {
     row <- player_rows[[stat]]
@@ -2582,7 +2671,7 @@ build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
     }
   ))
 
-  list(
+  payload <- list(
     season = season_value,
     competition_phase = competition_phase,
     round_number = round_value,
@@ -2594,6 +2683,9 @@ build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
     standout_teams = standout_teams,
     notable_facts = notable_facts
   )
+
+  .round_summary_cache[[cache_key]] <- list(payload = payload, ts = Sys.time())
+  payload
 }
 
 fetch_query_result_rows <- function(conn, intent) {

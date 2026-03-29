@@ -438,6 +438,8 @@ write_database <- function(tables, build_mode) {
 
     # team_period_stats: season/squad/stat for /stats and /trends endpoints
     DBI::dbExecute(conn, "CREATE INDEX idx_team_stats_lookup ON team_period_stats(season, squad_id, stat)")
+    # stat-first index for archive bests/ranks queries (round recap spotlight)
+    DBI::dbExecute(conn, "CREATE INDEX idx_team_stats_stat ON team_period_stats(stat, value_number DESC, squad_id, match_id)")
     # match_id index speeds up the JOIN with matches in leaderboard queries
     DBI::dbExecute(conn, "CREATE INDEX idx_team_stats_match ON team_period_stats(match_id)")
 
