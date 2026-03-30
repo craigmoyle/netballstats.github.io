@@ -28,6 +28,9 @@ param staticWebAppSku string = 'Standard'
 ])
 param staticWebAppLocation string = 'eastasia'
 
+@description('Container image for the API and DB refresh jobs. Defaults to the placeholder; overridden by SERVICE_API_IMAGE_NAME after first deploy.')
+param apiImageName string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+
 @description('Admin username for Azure Database for PostgreSQL Flexible Server.')
 param postgresAdminUsername string
 
@@ -156,6 +159,9 @@ var allowedCorsOrigins = empty(customFrontendHostname)
 var allowedCorsOriginsCsv = join(allowedCorsOrigins, ',')
 var keyVaultSecretsUserRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
 var acrPullRoleDefinitionId = subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+// Use the provided image name if non-empty; fall back to the placeholder on first provision
+// before azd deploy has run and populated SERVICE_API_IMAGE_NAME.
+var resolvedApiImage = empty(apiImageName) ? 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest' : apiImageName
 
 resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-07-01' = {
   name: workspaceName
@@ -598,7 +604,7 @@ resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
       containers: [
         {
           name: 'api'
-          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          image: resolvedApiImage
           env: [
             {
               name: 'NETBALL_STATS_REPO_ROOT'
@@ -820,30 +826,12 @@ resource dbRefreshJobSat 'Microsoft.App/jobs@2025-02-02-preview' = {
       containers: [
         {
           name: 'db-refresh'
-          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          image: resolvedApiImage
           command: [
             'Rscript'
             'scripts/build_database.R'
           ]
           env: dbRefreshEnv
-          resources: {
-            cpu: json('2')
-            memory: '4Gi'
-          }
-        }
-      ]
-    }
-  }
-  dependsOn: [
-    dbJobAcrPullAssignment
-    dbJobKeyVaultAssignment
-    dbJobApiPasswordKvAssignment
-    postgresDatabase
-    postgresFirewallRule
-  ]
-}
-
-// Sunday 18:00 AEST (UTC+10) = 08:00 UTC
 resource dbRefreshJobSun 'Microsoft.App/jobs@2025-02-02-preview' = {
   name: dbRefreshJobSunName
   location: location
@@ -888,7 +876,7 @@ resource dbRefreshJobSun 'Microsoft.App/jobs@2025-02-02-preview' = {
       containers: [
         {
           name: 'db-refresh'
-          image: 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+          image: resolvedApiImage
           command: [
             'Rscript'
             'scripts/build_database.R'

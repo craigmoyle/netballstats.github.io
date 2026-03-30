@@ -34,6 +34,9 @@
     },
     "postgresPrivateDnsZoneName": {
       "value": "${NETBALL_STATS_POSTGRES_PRIVATE_DNS_ZONE_NAME}"
+    },
+    "apiImageName": {
+      "value": "${SERVICE_API_IMAGE_NAME}"
     }
   }
 }

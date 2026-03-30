@@ -123,6 +123,9 @@ param postgresDelegatedSubnetPrefix string = ''
 @description('Optional override for the private DNS zone used when private PostgreSQL networking is enabled.')
 param postgresPrivateDnsZoneName string = ''
 
+@description('Container image for the API and DB refresh jobs. Populated by azd after first deploy via SERVICE_API_IMAGE_NAME. Empty on first provision — Bicep defaults to the placeholder image.')
+param apiImageName string = ''
+
 var resourceGroupTags = union(tags, {
   'azd-env-name': environmentName
 })
@@ -165,6 +168,7 @@ module appStack './modules/app-stack.bicep' = {
     containerAppsInfrastructureSubnetPrefix: containerAppsInfrastructureSubnetPrefix
     postgresDelegatedSubnetPrefix: postgresDelegatedSubnetPrefix
     postgresPrivateDnsZoneName: postgresPrivateDnsZoneName
+    apiImageName: apiImageName
   }
 }
 
