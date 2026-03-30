@@ -380,6 +380,18 @@ resource postgresDatabase 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2
   }
 }
 
+// Azure PostgreSQL requires extensions to be allow-listed before they can be
+// created. pg_trgm is used for LIKE '%...%' trigram indexes on player search names.
+resource postgresExtensionsParam 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2025-08-01' = {
+  parent: postgresServer
+  name: 'azure.extensions'
+  properties: {
+    value: 'pg_trgm'
+    source: 'user-override'
+  }
+  dependsOn: [postgresDatabase]
+}
+
 resource postgresFirewallRule 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2025-08-01' = if (!enablePrivatePostgresNetworking && allowAzureServicesPostgresFirewallRule) {
   parent: postgresServer
   name: allowAllAzureIpsRuleName
