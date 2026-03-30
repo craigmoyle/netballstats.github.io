@@ -202,6 +202,70 @@
     });
   }
 
+  const apiBaseUrl = (window.NETBALL_STATS_CONFIG.apiBaseUrl || "/api").replace(/\/$/, "");
+  const defaultTimeoutMs = 30000;
+  const fmtInt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
+  const fmtDecimal = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 2 });
+
+  function buildUrl(path, params = {}) {
+    const url = new URL(`${apiBaseUrl}${path}`, window.location.href);
+    Object.entries(params).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        if (value.length) {
+          url.searchParams.set(key, value.join(","));
+        }
+        return;
+      }
+
+      if (value !== undefined && value !== null && `${value}`.trim() !== "") {
+        url.searchParams.set(key, value);
+      }
+    });
+    return url;
+  }
+
+  async function fetchJson(path, params = {}) {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), defaultTimeoutMs);
+
+    try {
+      const response = await fetch(buildUrl(path, params), {
+        headers: {
+          Accept: "application/json"
+        },
+        signal: controller.signal
+      });
+
+      const payload = await response.json().catch(() => ({ error: "Unexpected server response." }));
+      if (!response.ok) {
+        const message = Array.isArray(payload.error) ? payload.error.join(" ") : payload.error;
+        throw new Error(message || `Request failed with status ${response.status}.`);
+      }
+
+      return payload;
+    } catch (error) {
+      if (error.name === "AbortError") {
+        throw new Error("The request timed out.");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  function formatNumber(value) {
+    if (value === null || value === undefined || value === "") {
+      return "-";
+    }
+
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return value;
+    }
+
+    return (Number.isInteger(numeric) ? fmtInt : fmtDecimal).format(numeric);
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".stack-table").forEach((table) => {
       syncResponsiveTable(table);
@@ -212,8 +276,11 @@
     {},
     window.NetballStatsUI || {},
     {
+      buildUrl,
       clearStatusTimers,
       cycleStatusBanner,
+      fetchJson,
+      formatNumber,
       formatStatLabel,
       showStatusBanner,
       statPrefersLowerValue,

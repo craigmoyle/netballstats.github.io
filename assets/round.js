@@ -2,6 +2,8 @@
   const {
     showStatusBanner = () => {},
     cycleStatusBanner = () => {},
+    fetchJson,
+    formatNumber,
     formatStatLabel = (stat) => stat,
     syncResponsiveTable = () => {}
   } = window.NetballStatsUI || {};
@@ -66,21 +68,6 @@
     return value;
   }
 
-  function formatNumber(value) {
-    value = unwrapValue(value);
-
-    if (value === null || value === undefined || value === "") {
-      return "--";
-    }
-
-    const numeric = Number(value);
-    if (Number.isNaN(numeric)) {
-      return `${value}`;
-    }
-
-    return numberFormatter.format(numeric);
-  }
-
   function formatDate(value, { includeTime = false } = {}) {
     value = unwrapValue(value);
 
@@ -116,31 +103,6 @@
     }
 
     return query;
-  }
-
-  async function fetchJson(path, query = new URLSearchParams()) {
-    const suffix = query.toString();
-    const response = await fetch(suffix ? `${path}?${suffix}` : path, {
-      headers: {
-        Accept: "application/json"
-      }
-    });
-    const bodyText = await response.text();
-    let payload = {};
-
-    if (bodyText) {
-      try {
-        payload = JSON.parse(bodyText);
-      } catch (error) {
-        throw new Error(`Unexpected response while loading ${path}.`);
-      }
-    }
-
-    if (!response.ok) {
-      throw new Error(payload.error || `Request failed with status ${response.status}.`);
-    }
-
-    return payload;
   }
 
   function emptyState(message, kicker) {
@@ -480,7 +442,7 @@
     });
 
     try {
-      const payload = await fetchJson("/api/round-summary", buildQuery());
+      const payload = await fetchJson("/round-summary", Object.fromEntries(buildQuery()));
       renderSummary(payload);
       renderFactCards(payload.notable_facts || []);
       renderMatches(payload.matches || []);

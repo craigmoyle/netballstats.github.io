@@ -1,6 +1,0 @@
-/*
-  X-Frame-Options: DENY
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
-  Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self' https://js.monitor.azure.com https://js.cdn.applicationinsights.io https://js0.cdn.applicationinsights.io https://js2.cdn.applicationinsights.io; connect-src 'self' https://netballstats-api.onrender.com https://*.in.applicationinsights.azure.com https://dc.services.visualstudio.com https://*.livediagnostics.monitor.azure.com; base-uri 'none'; frame-ancestors 'none'; form-action 'none'

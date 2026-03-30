@@ -1,7 +1,7 @@
 ---
 name: 'SE: Tech Writer'
 description: 'Technical writing specialist for creating developer documentation, technical blogs, tutorials, and educational content'
-model: GPT-5
+model: gpt-5.4
 tools: ['codebase', 'edit/editFiles', 'search', 'web/fetch']
 ---
 

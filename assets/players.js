@@ -1,8 +1,8 @@
-const config = window.NETBALL_STATS_CONFIG || {};
-const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
-const DEFAULT_TIMEOUT_MS = 30000;
 const {
-  cycleStatusBanner = () => {}
+  buildUrl,
+  cycleStatusBanner = () => {},
+  fetchJson,
+  formatNumber
 } = window.NetballStatsUI || {};
 const DIRECTORY_LOADING_MESSAGES = [
   "Loading player directory…",
@@ -12,8 +12,6 @@ const {
   bucketCount = () => "unknown",
   trackEvent = () => {}
 } = window.NetballStatsTelemetry || {};
-
-const fmtInt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
 
 const state = {
   players: []
@@ -28,44 +26,6 @@ const elements = {
   directoryGrid: document.getElementById("directory-grid")
 };
 
-function buildUrl(path, params = {}) {
-  const url = new URL(`${API_BASE_URL}${path}`, window.location.href);
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && `${value}`.trim() !== "") {
-      url.searchParams.set(key, value);
-    }
-  });
-  return url;
-}
-
-async function fetchJson(path, params = {}) {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(buildUrl(path, params), {
-      headers: {
-        Accept: "application/json"
-      },
-      signal: controller.signal
-    });
-
-    const payload = await response.json().catch(() => ({ error: "The API returned invalid JSON." }));
-    if (!response.ok) {
-      throw new Error(payload.error || `Request failed with status ${response.status}.`);
-    }
-
-    return payload;
-  } catch (error) {
-    if (error.name === "AbortError") {
-      throw new Error("The request timed out.");
-    }
-    throw error;
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-}
-
 function showStatus(message, tone = "neutral", options = {}) {
   if (!message) {
     window.NetballStatsUI?.showStatusBanner?.(elements.directoryStatus, "");
@@ -79,15 +39,6 @@ function showLoadingStatus(messages, kicker) {
     tone: "loading",
     kicker
   });
-}
-
-function formatNumber(value) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return value ?? "-";
-  }
-
-  return fmtInt.format(numeric);
 }
 
 function playerProfileUrl(playerId) {
@@ -192,7 +143,11 @@ async function initialise() {
   } catch (error) {
     showStatus(error.message || "Unable to load the player directory.", "error", { kicker: "Directory unavailable" });
     elements.directoryResultsMeta.textContent = "Player directory unavailable.";
-    elements.directoryGrid.innerHTML = '<div class="empty-state" data-kicker="Archive note">The player directory is unavailable. Try again shortly.</div>';
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.dataset.kicker = 'Archive note';
+    empty.textContent = 'The player directory is unavailable. Try again shortly.';
+    elements.directoryGrid.replaceChildren(empty);
   }
 }
 

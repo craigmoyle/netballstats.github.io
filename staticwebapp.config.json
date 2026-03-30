@@ -4,7 +4,8 @@
     "X-Frame-Options": "DENY",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
-    "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self' https://*.in.applicationinsights.azure.com https://dc.services.visualstudio.com https://*.livediagnostics.monitor.azure.com; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self' https://*.in.applicationinsights.azure.com https://dc.services.visualstudio.com https://*.livediagnostics.monitor.azure.com; base-uri 'none'; frame-ancestors 'none'; form-action 'none'; upgrade-insecure-requests"
   },
   "routes": [
     {

@@ -134,9 +134,11 @@ get_db_conn <- function() {
   if (!is.null(.persistent_conn) && DBI::dbIsValid(.persistent_conn)) {
     return(.persistent_conn)
   }
-  conn <- open_database_connection()
-  .persistent_conn <<- conn
-  conn
+  if (!is.null(.persistent_conn)) {
+    tryCatch(DBI::dbDisconnect(.persistent_conn), error = function(e) NULL)
+  }
+  .persistent_conn <<- open_database_connection()
+  .persistent_conn
 }
 
 json_error <- function(res, status, message) {
@@ -1788,7 +1790,9 @@ fetch_player_spotlight_rows <- function(conn, seasons, round, competition_phase,
         competition_phase = as.character(competition_phase %||% "")
       )),
       error = function(e) {
-        api_log("WARN", "spotlight_player_batch_failed", error_class = class(e)[[1]])
+        api_log("WARN", "spotlight_player_batch_failed",
+          error_class = paste(class(e), collapse = "/"),
+          error_message = conditionMessage(e))
         data.frame()
       }
     )
@@ -1852,7 +1856,9 @@ fetch_team_spotlight_rows <- function(conn, seasons, round, competition_phase, s
       competition_phase = as.character(competition_phase %||% "")
     )),
     error = function(e) {
-      api_log("WARN", "spotlight_team_batch_failed", error_class = class(e)[[1]])
+      api_log("WARN", "spotlight_team_batch_failed",
+        error_class = paste(class(e), collapse = "/"),
+        error_message = conditionMessage(e))
       data.frame()
     }
   )

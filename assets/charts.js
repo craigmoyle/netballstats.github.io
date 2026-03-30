@@ -1,19 +1,5 @@
 (function attachNetballCharts(global) {
-  const fmtInt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
-  const fmtDecimal = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 2 });
-
-  function formatNumber(value) {
-    if (value === null || value === undefined || value === "") {
-      return "-";
-    }
-
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) {
-      return value;
-    }
-
-    return (Number.isInteger(numeric) ? fmtInt : fmtDecimal).format(numeric);
-  }
+  const { formatNumber } = global.NetballStatsUI || {};
 
   function clearChart(container, message) {
     container.replaceChildren();

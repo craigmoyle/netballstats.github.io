@@ -584,7 +584,7 @@ resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
             weight: 100
           }
         ]
-        transport: 'Auto'
+        transport: 'Https'
       }
       registries: [
         {
@@ -669,6 +669,14 @@ resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
             {
               name: 'NETBALL_STATS_BROWSER_APPINSIGHTS_CONNECTION_STRING'
               value: browserTelemetryInsights.properties.ConnectionString
+            }
+            {
+              name: 'NETBALL_STATS_RATE_LIMIT_WINDOW_SECONDS'
+              value: '60'
+            }
+            {
+              name: 'NETBALL_STATS_RATE_LIMIT_MAX_REQUESTS'
+              value: '60'
             }
           ]
           probes: [
@@ -802,7 +810,7 @@ resource dbRefreshJobSat 'Microsoft.App/jobs@2025-02-02-preview' = {
         parallelism: 1
       }
       replicaTimeout: 3600
-      replicaRetryLimit: 1
+      replicaRetryLimit: 2
       registries: [
         {
           identity: dbJobIdentity.id
@@ -832,6 +840,20 @@ resource dbRefreshJobSat 'Microsoft.App/jobs@2025-02-02-preview' = {
             'scripts/build_database.R'
           ]
           env: dbRefreshEnv
+          resources: {
+            cpu: json('2')
+            memory: '4Gi'
+          }
+        }
+      ]
+    }
+  }
+  dependsOn: [
+    dbJobAcrPullAssignment
+    dbJobKeyVaultAssignment
+  ]
+}
+
 resource dbRefreshJobSun 'Microsoft.App/jobs@2025-02-02-preview' = {
   name: dbRefreshJobSunName
   location: location
@@ -852,7 +874,7 @@ resource dbRefreshJobSun 'Microsoft.App/jobs@2025-02-02-preview' = {
         parallelism: 1
       }
       replicaTimeout: 3600
-      replicaRetryLimit: 1
+      replicaRetryLimit: 2
       registries: [
         {
           identity: dbJobIdentity.id

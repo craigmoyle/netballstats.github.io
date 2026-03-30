@@ -62,7 +62,7 @@ parse_database_url <- function(url) {
     dbname = db_name,
     user = utils::URLdecode(parsed$username %||% ""),
     password = utils::URLdecode(parsed$password %||% ""),
-    sslmode = (parsed$query %||% list())$sslmode %||% Sys.getenv("NETBALL_STATS_DB_SSLMODE", "require")
+    sslmode = (parsed$query %||% list())$sslmode %||% Sys.getenv("NETBALL_STATS_DB_SSLMODE", "verify-full")
   )
 }
 
@@ -76,7 +76,7 @@ postgres_connection_args <- function() {
       dbname = trimws(Sys.getenv("NETBALL_STATS_DB_NAME", "")),
       user = trimws(Sys.getenv("NETBALL_STATS_DB_USER", "")),
       password = Sys.getenv("NETBALL_STATS_DB_PASSWORD", ""),
-      sslmode = Sys.getenv("NETBALL_STATS_DB_SSLMODE", "require")
+      sslmode = Sys.getenv("NETBALL_STATS_DB_SSLMODE", "verify-full")
     )
   }
 

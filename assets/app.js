@@ -1,6 +1,5 @@
 const config = window.NETBALL_STATS_CONFIG || {};
 const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
-const DEFAULT_TIMEOUT_MS = 30000;
 const MATCHES_LIMIT = 12;
 const LEADERS_LIMIT = 10;
 const CHART_RANK_LIMIT = 10;
@@ -20,7 +19,9 @@ const {
   renderSeasonColumnChart
 } = window.NetballCharts;
 const {
+  buildUrl,
   cycleStatusBanner = () => {},
+  fetchJson,
   formatStatLabel = (stat) => stat,
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
@@ -136,52 +137,6 @@ function showLoadingStatus(messages, kicker) {
     tone: "loading",
     kicker
   });
-}
-
-function buildUrl(path, params = {}) {
-  const url = new URL(`${API_BASE_URL}${path}`, window.location.href);
-  Object.entries(params).forEach(([key, value]) => {
-    if (Array.isArray(value)) {
-      if (value.length) {
-        url.searchParams.set(key, value.join(","));
-      }
-      return;
-    }
-
-    if (value !== undefined && value !== null && `${value}`.trim() !== "") {
-      url.searchParams.set(key, value);
-    }
-  });
-  return url;
-}
-
-async function fetchJson(path, params = {}) {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(buildUrl(path, params), {
-      headers: {
-        Accept: "application/json"
-      },
-      signal: controller.signal
-    });
-
-    const payload = await response.json().catch(() => ({ error: "Unexpected server response." }));
-    if (!response.ok) {
-      const message = Array.isArray(payload.error) ? payload.error.join(" ") : payload.error;
-      throw new Error(message || `Request failed with status ${response.status}.`);
-    }
-
-    return payload;
-  } catch (error) {
-    if (error.name === "AbortError") {
-      throw new Error("The request timed out.");
-    }
-    throw error;
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
 }
 
 async function fetchOptionalJson(path, params = {}) {
@@ -325,6 +280,7 @@ function getSelectedSeasons() {
 function renderSeasonChoices(seasons) {
   if (!elements.seasonChoices) return;
   elements.seasonChoices.replaceChildren();
+  const fragment = document.createDocumentFragment();
   seasons.forEach((season) => {
     const label = document.createElement("label");
     label.className = "season-choice";
@@ -338,8 +294,9 @@ function renderSeasonChoices(seasons) {
     text.textContent = `${season}`;
 
     label.append(input, text);
-    elements.seasonChoices.appendChild(label);
+    fragment.appendChild(label);
   });
+  elements.seasonChoices.appendChild(fragment);
 }
 
 function seasonSummaryLabel(seasons) {
@@ -374,11 +331,6 @@ function teamLabel(teamId) {
   }
   const selectedTeam = state.meta.teams.find((team) => `${team.squad_id}` === `${teamId}`);
   return selectedTeam ? selectedTeam.squad_name : "All teams";
-}
-
-function selectedLimit(value, fallback) {
-  const numeric = Number.parseInt(value, 10);
-  return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
 }
 
 function isAverageMetric() {

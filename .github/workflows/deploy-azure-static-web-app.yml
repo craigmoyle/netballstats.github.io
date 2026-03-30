@@ -28,6 +28,10 @@ jobs:
       - name: Build static site
         run: npm run build
 
+      - name: Verify build output
+        run: |
+          test -f dist/index.html || { echo "Build failed: dist/index.html missing"; exit 1; }
+
       - name: Deploy to Azure Static Web Apps
         uses: Azure/static-web-apps-deploy@v1
         with:

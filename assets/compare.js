@@ -1,6 +1,3 @@
-const config = window.NETBALL_STATS_CONFIG || {};
-const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
-const DEFAULT_TIMEOUT_MS = 30000;
 const MAX_PLAYERS = 6;
 const MAX_TEAMS = 8;
 const SUPER_SHOT_START_SEASON = 2020;
@@ -25,7 +22,9 @@ const {
   renderTrendChart
 } = window.NetballCharts;
 const {
+  buildUrl,
   cycleStatusBanner = () => {},
+  fetchJson,
   formatStatLabel = (stat) => stat,
   statPrefersLowerValue = () => false,
   syncResponsiveTable = () => {}
@@ -86,52 +85,6 @@ const elements = {
   compareTableBody: document.getElementById("compare-table-body"),
   compareTableFoot: document.getElementById("compare-table-foot")
 };
-
-function buildUrl(path, params = {}) {
-  const url = new URL(`${API_BASE_URL}${path}`, window.location.href);
-  Object.entries(params).forEach(([key, value]) => {
-    if (Array.isArray(value)) {
-      if (value.length) {
-        url.searchParams.set(key, value.join(","));
-      }
-      return;
-    }
-
-    if (value !== undefined && value !== null && `${value}`.trim() !== "") {
-      url.searchParams.set(key, value);
-    }
-  });
-  return url;
-}
-
-async function fetchJson(path, params = {}) {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(buildUrl(path, params), {
-      headers: {
-        Accept: "application/json"
-      },
-      signal: controller.signal
-    });
-
-    const payload = await response.json().catch(() => ({ error: "Unexpected server response." }));
-    if (!response.ok) {
-      const message = Array.isArray(payload.error) ? payload.error.join(" ") : payload.error;
-      throw new Error(message || `Request failed with status ${response.status}.`);
-    }
-
-    return payload;
-  } catch (error) {
-    if (error.name === "AbortError") {
-      throw new Error("The request timed out.");
-    }
-    throw error;
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
-}
 
 function showStatus(message, tone = "neutral", options = {}) {
   if (!message) {

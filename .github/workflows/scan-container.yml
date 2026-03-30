@@ -1,0 +1,44 @@
+name: Scan container image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile.azure'
+      - 'api/**'
+      - 'R/**'
+      - 'renv.lock'
+  pull_request:
+    paths:
+      - 'Dockerfile.azure'
+      - 'api/**'
+      - 'R/**'
+      - 'renv.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -f Dockerfile.azure -t netballstats-api:scan .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: netballstats-api:scan
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif

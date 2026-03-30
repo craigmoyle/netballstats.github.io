@@ -27,6 +27,7 @@ This file captures the repo-specific context, decisions, and operating guidance 
 - Keep validation and result caps strict. The current posture favours trustworthy, bounded queries over permissive behaviour.
 - Continue using parameterized SQL and explicit request validation across the API surface.
 - Avoid broad try/catch wrappers or silent fallbacks. Surface or log errors in the same explicit style already used in the repo.
+- The per-replica in-memory rate limiter does not aggregate across Container App replicas. This is acceptable while `apiMaxReplicas` is 1 but would need a centralized store (e.g. Redis) if scaling beyond a single replica.
 
 ## Telemetry decisions
 
@@ -108,6 +109,27 @@ This file captures the repo-specific context, decisions, and operating guidance 
 - Container images must keep the `renv` cache outside `/root` because the app runs as a non-root user and the library symlinks must remain traversable at runtime.
 - On Apple Silicon, keep the Azure API build targeting `linux/amd64` as configured in `azure.yaml`.
 
+### `azd provision` resets job images
+- `azd provision` resets Container App Job images to `mcr.microsoft.com/azuredocs/containerapps-helloworld:latest` (the Bicep placeholder).
+- Always run `azd deploy api` after any `azd provision` to restore the real R image via the postdeploy hook.
+- Without this step, DB rebuild jobs will fail immediately with `exec: "Rscript": executable file not found in $PATH`.
+
+### PostgreSQL extensions and parameters
+- Azure PostgreSQL Flexible Server requires extensions to be allow-listed via the `azure.extensions` server parameter before `CREATE EXTENSION` works in SQL.
+- Currently allow-listed: `pg_trgm,pgaudit`. Add new extensions there before referencing them in `build_database.R`.
+- `pgaudit.log` valid values: `none`, `read`, `write`, `function`, `role`, `ddl`, `misc`, `all`. The value `mod` is NOT valid.
+
+### DB refresh job and API user sync
+- `build_database.R` calls `configure_postgres_api_user()` to create/sync the read-only `netballstats_api` DB user.
+- This function requires `NETBALL_STATS_API_DB_USERNAME` and `NETBALL_STATS_API_DB_PASSWORD` env vars to be set on the job. If both are absent the function silently skips — the API user will not be created or have its password updated.
+- Both env vars are now present in `dbRefreshEnv` in `infra/modules/app-stack.bicep`. Do not remove them.
+- `dbJobIdentity` must have Key Vault Secrets User access to both `postgres-admin-password` and `postgres-api-password` secrets.
+
+### SSL with Azure PostgreSQL
+- The API and refresh jobs use `NETBALL_STATS_DB_SSLMODE=verify-full` and `NETBALL_STATS_DB_SSLROOTCERT=system`.
+- `sslrootcert=system` (libpq 14+) uses the OS trust store. Ubuntu Noble's `ca-certificates` package includes the DigiCert root CA that signs Azure PostgreSQL Flexible Server certificates. No cert download is needed.
+- Do not attempt to download the DigiCert cert from `dl.cacerts.digicert.com` — that URL has an SSL hostname mismatch.
+
 ## Registry cleanup workflow decisions
 
 - `.github/workflows/cleanup-registry.yml` uses GitHub OIDC with a federated Azure app registration.
@@ -145,9 +167,15 @@ This file captures the repo-specific context, decisions, and operating guidance 
 - `theme.js` already owns reveal-observer behaviour. Reintroducing observer setup in `config.js` or page scripts creates duplication and drift.
 - `assets/query.js` has historically been sensitive to missing DOM hooks. Guard page-specific selectors instead of assuming every element exists.
 - `azure.yaml` postdeploy keeps the database refresh jobs aligned with the API image. Frontend-only GitHub Actions deploys do not update those jobs.
+- **`azd provision` resets job images to the hello-world placeholder.** Always run `azd deploy api` after any `azd provision` or jobs will fail with `Rscript not found`.
 - If the API image/runtime changes, keep the `renv` cache outside `/root` or the non-root Container App user will hit broken library symlinks at runtime.
 - The registry cleanup workflow can authenticate successfully and still fail functionally if the service principal lacks `AcrPull`; it needs both `AcrPull` and `AcrDelete`.
 - Do not use `fetch_player_game_high_rows()` or `fetch_team_game_high_rows()` with `stat = 'points'`. "Points" is synthetic (goal1 + 2×goal2 / match scores); use `fetch_player_points_high()` and `fetch_team_points_high()` instead.
 - Do not use `ANY(ARRAY[...])` syntax for IN clauses. Use `append_integer_in_filter()` to stay SQLite-compatible.
 - The homepage hero `h1` uses a home-specific font-size override (`.hero-copy--home h1`) with a tighter `clamp()` than the global heading scale. Do not remove it — the global scale is too large for the 1240px shell at mid-range viewport widths.
 - Archive filter toggles use `field--toggle` class (not `compare-mode-toggle`) to avoid inheriting pill-button wrapping from the compare page styles.
+- Do not remove `NETBALL_STATS_API_DB_USERNAME` / `NETBALL_STATS_API_DB_PASSWORD` from `dbRefreshEnv` in Bicep. Without them the API DB user is never created/synced and the API will fail authentication after a fresh rebuild.
+- `render.yaml` and the root `Dockerfile` are legacy Render deployment files and should not be used; Azure deployment uses `Dockerfile.azure`.
+- The `_headers` file duplicates `staticwebapp.config.json` and may contain stale CSP origins (e.g. Render API).
+- `buildUrl()` and `fetchJson()` should be used from the shared `window.NetballStatsUI` module, not redefined per page script.
+- The Saturday DB refresh job (`dbRefreshJobSat`) should have explicit `resources` (cpu/memory) matching the Sunday job.
