@@ -30,7 +30,7 @@ jobs:
         run: docker build -f Dockerfile.azure -t netballstats-api:scan .
 
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           image-ref: netballstats-api:scan
           format: sarif
