@@ -1,0 +1,43 @@
+%%{init: {"theme": "base", "themeVariables": {"fontSize": "14px"}}}%%
+flowchart LR
+    %% External actors
+    EndUser([EndUser])
+    Operator([Operator])
+    GitHubActions([GitHubActions])
+    ChampionData([ChampionData])
+    AppInsights([AppInsights])
+    AzureAD([AzureAD])
+    AzureContainerRegistry([AzureContainerRegistry])
+
+    %% Trust boundary: PublicInternet
+    subgraph PublicInternet["Trust Boundary: PublicInternet"]
+        SWAFrontend[[SWAFrontend]]
+    end
+
+    %% Trust boundary: AzureContainerApps
+    subgraph AzureContainerApps["Trust Boundary: AzureContainerApps"]
+        PlumberAPI[[PlumberAPI]]
+        DBRefreshJob[[DBRefreshJob]]
+    end
+
+    %% Trust boundary: AzureData
+    subgraph AzureData["Trust Boundary: AzureData"]
+        PostgreSQL[(PostgreSQL)]
+        KeyVault[(KeyVault)]
+    end
+
+    %% Data flows
+    EndUser <-->|"DF01 HTTPS static content"| SWAFrontend
+    SWAFrontend <-->|"DF02 HTTPS /api/* proxy"| PlumberAPI
+    PlumberAPI <-->|"DF03 TLS/SQL read-only queries"| PostgreSQL
+    PlumberAPI <-->|"DF04 HTTPS telemetry events"| AppInsights
+    PlumberAPI <-->|"DF05 HTTPS secret retrieval"| KeyVault
+    PlumberAPI <-->|"DF06 HTTPS MI token"| AzureAD
+    DBRefreshJob <-->|"DF07 TLS/SQL admin rebuild"| PostgreSQL
+    DBRefreshJob <-->|"DF08 HTTPS stats pull"| ChampionData
+    DBRefreshJob <-->|"DF09 HTTPS secret retrieval"| KeyVault
+    GitHubActions <-->|"DF10 HTTPS static deploy"| SWAFrontend
+    GitHubActions <-->|"DF11 HTTPS image push/cleanup"| AzureContainerRegistry
+    GitHubActions <-->|"DF12 HTTPS OIDC auth"| AzureAD
+    Operator <-->|"DF13 HTTPS azd deploy"| AzureContainerRegistry
+    AzureContainerRegistry <-->|"DF14 HTTPS image pull"| PlumberAPI
