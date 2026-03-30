@@ -70,6 +70,24 @@ param postgresSkuTier string = 'Burstable'
 @minValue(32)
 param postgresStorageSizeGb int = 32
 
+// Security note: PostgreSQL is currently on a public endpoint with the broad
+// "Allow Azure Services" firewall rule. This is a known security debt (T1 threat
+// model finding FIND-02). The recommended path is to enable privatePostgresNetworkingMode
+// so the Container Apps environment is VNet-integrated and the database is only
+// reachable on the private network. Until that migration is completed, these two
+// parameters must remain at their current values to keep the Container App connected.
+// TODO: change allowAzureServicesPostgresFirewallRule to false and
+//       postgresPublicNetworkAccess to 'Disabled' after enabling private networking.
+@description('Whether PostgreSQL should expose a public endpoint. Set to Disabled once private networking is enabled.')
+@allowed([
+  'Enabled'
+  'Disabled'
+])
+param postgresPublicNetworkAccess string = 'Enabled'
+
+@description('Whether to create the broad Allow Azure Services firewall rule for PostgreSQL. Set to false once private networking is enabled.')
+param allowAzureServicesPostgresFirewallRule bool = true
+
 @description('CPU allocation for the API container app.')
 param apiCpu int = 1
 
@@ -83,9 +101,9 @@ param apiPort int = 8000
 @minValue(1)
 param apiMinReplicas int = 1
 
-@description('Maximum API replicas.')
+@description('Maximum API replicas. Keep at 1 unless a distributed rate-limiter is added — the in-process limiter is per-replica.')
 @minValue(1)
-param apiMaxReplicas int = 2
+param apiMaxReplicas int = 1
 
 @description('Optional additional frontend hostname to permit through CORS.')
 param customFrontendHostname string = ''
@@ -139,6 +157,8 @@ module appStack './modules/app-stack.bicep' = {
     postgresSkuName: postgresSkuName
     postgresSkuTier: postgresSkuTier
     postgresStorageSizeGb: postgresStorageSizeGb
+    postgresPublicNetworkAccess: postgresPublicNetworkAccess
+    allowAzureServicesPostgresFirewallRule: allowAzureServicesPostgresFirewallRule
     apiCpu: apiCpu
     apiMemory: apiMemory
     apiPort: apiPort

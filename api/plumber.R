@@ -314,7 +314,19 @@ build_telemetry_envelope <- function(kind, payload, req) {
     )
   )
   operation_name <- if (nzchar(telemetry_uri)) telemetry_uri else telemetry_name
-  client_ip <- telemetry_trim_string(req$HTTP_X_FORWARDED_FOR %||% req$REMOTE_ADDR %||% "unknown", 80L)
+  raw_ip  <- req$HTTP_X_FORWARDED_FOR %||% req$REMOTE_ADDR %||% "unknown"
+  # Anonymise before forwarding: zero last octet (IPv4) or last 80 bits (IPv6)
+  client_ip <- if (grepl("^\\d+\\.\\d+\\.\\d+\\.\\d+$", raw_ip)) {
+    sub("(\\d+\\.\\d+\\.\\d+\\.)\\d+", "\\10", raw_ip)
+  } else if (grepl(":", raw_ip)) {
+    parts <- strsplit(raw_ip, ":")[[1]]
+    if (length(parts) >= 5) {
+      paste0(c(head(parts, max(length(parts) - 5, 3)), rep("0", min(5, length(parts) - 3))), collapse = ":")
+    } else raw_ip
+  } else {
+    raw_ip
+  }
+  client_ip <- telemetry_trim_string(client_ip, 80L)
 
   tags <- list(
     "ai.operation.name" = operation_name,

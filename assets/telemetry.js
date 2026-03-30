@@ -1,5 +1,7 @@
 (function () {
-  const SDK_URL = "https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js";
+  // SDK is self-hosted to eliminate CDN dependency (FIND-04 fix).
+  // Update by running: curl -s "https://js.monitor.azure.com/scripts/b/ai.3.gbl.min.js" -o assets/ai.3.gbl.min.js
+  const SDK_URL = "/assets/ai.3.gbl.min.js";
   const state = {
     appInsights: null,
     browserConfig: null,

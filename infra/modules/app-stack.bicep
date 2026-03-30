@@ -67,15 +67,15 @@ param postgresSkuTier string = 'Burstable'
 @minValue(32)
 param postgresStorageSizeGb int = 32
 
-@description('Whether PostgreSQL should expose a public endpoint. Keep Enabled until private networking is configured for the API and DB refresh jobs.')
+@description('Whether PostgreSQL should expose a public endpoint. For production deployments, set privatePostgresNetworkingMode to enabled instead of enabling the public endpoint. See AGENTS.md for the private networking migration guide.')
 @allowed([
   'Enabled'
   'Disabled'
 ])
 param postgresPublicNetworkAccess string = 'Enabled'
 
-@description('Whether to create the broad Allow Azure services firewall rule for PostgreSQL. Keep this enabled until the API and DB refresh jobs use private networking or another explicit allow-list.')
-param allowAzureServicesPostgresFirewallRule bool = true
+@description('Whether to create the broad Allow Azure Services firewall rule for PostgreSQL. This rule permits any Azure-hosted resource (in any subscription) to connect. Disabled by default; enable only as a temporary stopgap when private networking is not yet configured.')
+param allowAzureServicesPostgresFirewallRule bool = false
 
 @description('Optional mode for staged private PostgreSQL networking. Set to enabled to provision a VNet-integrated Container Apps environment and private PostgreSQL network.')
 @allowed([
@@ -110,9 +110,9 @@ param apiPort int = 8000
 @minValue(1)
 param apiMinReplicas int = 1
 
-@description('Maximum API replicas.')
+@description('Maximum API replicas. Single replica is recommended for this read-only stats site: the in-process rate limiter is not shared across replicas, so a higher count allows bypass. Increase only after adding a distributed rate store (e.g. Redis).')
 @minValue(1)
-param apiMaxReplicas int = 2
+param apiMaxReplicas int = 1
 
 @description('Optional additional frontend hostname to permit through CORS.')
 param customFrontendHostname string = ''
@@ -164,6 +164,13 @@ resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2025-07
     retentionInDays: 30
     sku: {
       name: 'PerGB2018'
+    }
+    // Daily ingestion cap: limits cost from connection-string abuse.
+    // The browser telemetry connection string is intentionally semi-public
+    // (required by the App Insights browser SDK design) so a cap is the
+    // practical blast-radius control.
+    workspaceCapping: {
+      dailyQuotaGb: 1
     }
   }
 }
