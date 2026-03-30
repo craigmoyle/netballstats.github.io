@@ -635,7 +635,7 @@ resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
             }
             {
               name: 'NETBALL_STATS_DB_SSLROOTCERT'
-              value: '/usr/local/share/azure-postgres-ca.pem'
+              value: 'system'
             }
             {
               name: 'NETBALL_STATS_DB_CONNECT_TIMEOUT_SECONDS'
@@ -747,7 +747,7 @@ var dbRefreshEnv = [
   }
   {
     name: 'NETBALL_STATS_DB_SSLROOTCERT'
-    value: '/usr/local/share/azure-postgres-ca.pem'
+    value: 'system'
   }
   {
     name: 'NETBALL_STATS_DB_STATEMENT_TIMEOUT_MS'

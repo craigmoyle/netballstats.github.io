@@ -1,7 +1,6 @@
 FROM rocker/r-ver:4.5.2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
     git \
     libcurl4-openssl-dev \
     libpq-dev \
@@ -19,12 +18,6 @@ WORKDIR /app
 ENV RENV_PATHS_CACHE=/opt/renv/cache
 
 COPY . /app
-
-# Download the Azure Database for PostgreSQL root CA certificate so that
-# verify-full TLS connections can validate the server certificate.
-RUN curl -sSL "https://dl.cacerts.digicert.com/DigiCertGlobalRootCA.crt.pem" \
-    -o /usr/local/share/azure-postgres-ca.pem \
-  && chmod 644 /usr/local/share/azure-postgres-ca.pem
 
 RUN R -q -e " \
   options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
