@@ -281,10 +281,21 @@ resource keyVaultSecretsUserAssignment 'Microsoft.Authorization/roleAssignments@
   }
 }
 
-// DB job identity: scoped to the admin secret only (FIND-07: least privilege).
+// DB job identity: scoped to admin secret (connect as admin to rebuild DB).
 resource dbJobKeyVaultAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(postgresAdminPasswordSecret.id, dbJobIdentity.id, 'KeyVaultSecretsUser')
   scope: postgresAdminPasswordSecret
+  properties: {
+    principalId: dbJobIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: keyVaultSecretsUserRoleDefinitionId
+  }
+}
+
+// DB job identity also needs the API password to create/sync the netballstats_api DB user.
+resource dbJobApiPasswordKvAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(postgresApiPasswordSecret.id, dbJobIdentity.id, 'KeyVaultSecretsUser')
+  scope: postgresApiPasswordSecret
   properties: {
     principalId: dbJobIdentity.properties.principalId
     principalType: 'ServicePrincipal'
@@ -712,6 +723,7 @@ resource apiContainerApp 'Microsoft.App/containerApps@2025-07-01' = {
 
 // Shared environment variable list for both database refresh jobs.
 // Jobs connect as the admin user (write access required for full rebuild).
+// API_DB_USERNAME/PASSWORD let build_database.R create/sync the read-only netballstats_api user.
 var dbRefreshEnv = [
   {
     name: 'NETBALL_STATS_REPO_ROOT'
@@ -753,6 +765,14 @@ var dbRefreshEnv = [
     name: 'NETBALL_STATS_DB_STATEMENT_TIMEOUT_MS'
     value: '0'
   }
+  {
+    name: 'NETBALL_STATS_API_DB_USERNAME'
+    value: postgresApiUsername
+  }
+  {
+    name: 'NETBALL_STATS_API_DB_PASSWORD'
+    secretRef: 'postgres-api-password'
+  }
 ]
 
 // Saturday 21:00 AEST (UTC+10) = 11:00 UTC
@@ -789,6 +809,11 @@ resource dbRefreshJobSat 'Microsoft.App/jobs@2025-02-02-preview' = {
           identity: dbJobIdentity.id
           keyVaultUrl: postgresAdminPasswordSecret.properties.secretUriWithVersion
         }
+        {
+          name: 'postgres-api-password'
+          identity: dbJobIdentity.id
+          keyVaultUrl: postgresApiPasswordSecret.properties.secretUriWithVersion
+        }
       ]
     }
     template: {
@@ -812,6 +837,7 @@ resource dbRefreshJobSat 'Microsoft.App/jobs@2025-02-02-preview' = {
   dependsOn: [
     dbJobAcrPullAssignment
     dbJobKeyVaultAssignment
+    dbJobApiPasswordKvAssignment
     postgresDatabase
     postgresFirewallRule
   ]
@@ -851,6 +877,11 @@ resource dbRefreshJobSun 'Microsoft.App/jobs@2025-02-02-preview' = {
           identity: dbJobIdentity.id
           keyVaultUrl: postgresAdminPasswordSecret.properties.secretUriWithVersion
         }
+        {
+          name: 'postgres-api-password'
+          identity: dbJobIdentity.id
+          keyVaultUrl: postgresApiPasswordSecret.properties.secretUriWithVersion
+        }
       ]
     }
     template: {
@@ -874,6 +905,7 @@ resource dbRefreshJobSun 'Microsoft.App/jobs@2025-02-02-preview' = {
   dependsOn: [
     dbJobAcrPullAssignment
     dbJobKeyVaultAssignment
+    dbJobApiPasswordKvAssignment
     postgresDatabase
     postgresFirewallRule
   ]
