@@ -1407,6 +1407,26 @@ function(question = "", limit = "12", res) {
   })
 }
 
+#* @get /nwar
+#* @get /api/nwar
+function(season = "", seasons = "", team_id = "", min_games = "5", limit = "50", res) {
+  conn <- tryCatch(get_db_conn(), error = function(error) error)
+  if (inherits(conn, "error")) {
+    return(database_unavailable(res, conn))
+  }
+
+  tryCatch({
+    seasons   <- parse_season_filter(season, seasons)
+    team_id   <- parse_optional_int(team_id, "team_id", minimum = 1L)
+    min_games <- parse_limit(min_games, default = 5L, maximum = 100L)
+    limit     <- parse_limit(limit, default = 50L, maximum = 100L)
+    rows      <- fetch_nwar_rows(conn, seasons = seasons, team_id = team_id, min_games = min_games, limit = limit)
+    list(data = rows_to_records(rows))
+  }, error = function(error) {
+    handle_request_error(error, res)
+  })
+}
+
 #* @plumber
 function(pr) {
   # Startup warmup: populate in-process caches before the first request arrives.

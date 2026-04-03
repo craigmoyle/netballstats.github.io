@@ -10,6 +10,6 @@ const outputDir = path.join(repoRoot, 'dist');
 await rm(outputDir, { recursive: true, force: true });
 await mkdir(outputDir, { recursive: true });
 
-for (const entry of ['index.html', 'assets', 'compare', 'player', 'players', 'query', 'round', 'staticwebapp.config.json']) {
+for (const entry of ['index.html', 'assets', 'compare', 'nwar', 'player', 'players', 'query', 'round', 'staticwebapp.config.json']) {
   await cp(path.join(repoRoot, entry), path.join(outputDir, entry), { recursive: true });
 }

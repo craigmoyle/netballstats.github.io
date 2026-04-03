@@ -2837,3 +2837,94 @@ fetch_query_result_rows <- function(conn, intent) {
     intent$intent_type
   )
 }
+
+# Netball Wins Above Replacement (nWAR) constants.
+# NWAR_POINTS_PER_WIN: number of Net Points above replacement needed to equal one
+# additional win. Based on the empirical estimate that ~8–10 net goals separate
+# teams at different win rates in a Super Netball season, scaled for the broader
+# Champion Data Net Points currency.
+NWAR_POINTS_PER_WIN      <- 16.0
+# NWAR_REPLACEMENT_PERCENTILE: bottom fraction of qualified players used to define
+# the replacement-level baseline (e.g. 0.15 = bottom 15%).
+NWAR_REPLACEMENT_PERCENTILE <- 0.15
+
+# Calculates Netball Wins Above Replacement (nWAR) for all qualified players.
+#
+# Steps:
+#   1. Aggregate each player's total and average Net Points per game.
+#   2. Restrict to players with at least min_games qualifying matches.
+#   3. Compute replacement_level = mean avg net points of the bottom
+#      NWAR_REPLACEMENT_PERCENTILE of those players.
+#   4. Compute NPAR/game = avg_net_points_per_game - replacement_level.
+#   5. Compute nWAR = NPAR/game × games_played / NWAR_POINTS_PER_WIN.
+#
+# Note: without position data in the archive, no positional adjustment is applied.
+# GS/GA positions will naturally accumulate higher Net Points than WD/GD, so treat
+# nWAR as a general contribution ranking, not a cross-position comparison tool.
+fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L, limit = 50L) {
+  seasons_filter <- if (!is.null(seasons) && length(seasons)) as.integer(seasons) else NULL
+  stats_table <- if (has_player_match_stats(conn)) "player_match_stats" else "player_period_stats"
+  value_col   <- if (identical(stats_table, "player_match_stats")) "match_value" else "value_number"
+
+  query <- paste(
+    "SELECT stats.player_id, players.canonical_name AS player_name, MAX(stats.squad_name) AS squad_name,",
+    paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric), 2) AS total_net_points,"),
+    "COUNT(DISTINCT stats.match_id) AS games_played,",
+    paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric) / NULLIF(COUNT(DISTINCT stats.match_id), 0), 2) AS avg_net_points_per_game"),
+    paste0("FROM ", stats_table, " AS stats"),
+    "INNER JOIN players ON players.player_id = stats.player_id",
+    "WHERE stats.stat = ?stat"
+  )
+
+  filters <- apply_stat_filters(
+    query,
+    list(stat = "netPoints"),
+    seasons = seasons_filter,
+    team_id = team_id,
+    round_number = NULL,
+    table_alias = "stats"
+  )
+  filters$query <- paste0(
+    filters$query,
+    " GROUP BY stats.player_id, players.canonical_name",
+    " HAVING COUNT(DISTINCT stats.match_id) >= ?min_games"
+  )
+  filters$params$min_games <- as.integer(min_games)
+
+  all_rows <- query_rows(conn, filters$query, filters$params)
+
+  if (!nrow(all_rows)) {
+    return(data.frame(
+      player_id               = integer(0),
+      player_name             = character(0),
+      squad_name              = character(0),
+      games_played            = integer(0),
+      total_net_points        = numeric(0),
+      avg_net_points_per_game = numeric(0),
+      replacement_level       = numeric(0),
+      npar                    = numeric(0),
+      nwar                    = numeric(0),
+      stringsAsFactors        = FALSE
+    ))
+  }
+
+  avg_np   <- suppressWarnings(as.numeric(all_rows$avg_net_points_per_game))
+  games    <- suppressWarnings(as.integer(all_rows$games_played))
+  n_valid  <- sum(!is.na(avg_np))
+  n_repl   <- max(1L, ceiling(n_valid * NWAR_REPLACEMENT_PERCENTILE))
+  repl_lvl <- round(mean(head(sort(avg_np, na.last = TRUE), n_repl), na.rm = TRUE), 2)
+
+  npar <- round(avg_np - repl_lvl, 2)
+  nwar <- round(npar * as.numeric(games) / NWAR_POINTS_PER_WIN, 2)
+
+  all_rows$games_played            <- games
+  all_rows$total_net_points        <- suppressWarnings(as.numeric(all_rows$total_net_points))
+  all_rows$avg_net_points_per_game <- round(avg_np, 2)
+  all_rows$replacement_level       <- repl_lvl
+  all_rows$npar                    <- npar
+  all_rows$nwar                    <- nwar
+
+  all_rows <- all_rows[order(-all_rows$nwar, all_rows$player_name, na.last = TRUE), , drop = FALSE]
+  rownames(all_rows) <- NULL
+  head(all_rows, as.integer(limit))
+}
