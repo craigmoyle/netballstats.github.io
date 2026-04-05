@@ -10,29 +10,30 @@ DEFAULT_TEAM_STATS <- c(
   "badHands", "badPasses", "blocked", "blocks", "breaks",
   "centrePassReceives", "centrePassToGoalPerc", "contactPenalties",
   "deflectionPossessionGain", "deflections", "deflectionWithGain", "deflectionWithNoGain",
-  "feedWithAttempt", "feeds", "gain", "gainToGoalPerc", "generalPlayTurnovers",
-  "goal_from_zone1", "goal_from_zone2",
+  "disposals", "feedWithAttempt", "feeds", "gain", "gainToGoalPerc", "generalPlayTurnovers",
+  "goal1", "goal2", "goal_from_zone1", "goal_from_zone2",
   "goalAssists", "goalAttempts", "goalMisses", "goals", "goals1", "goals2",
   "goalsFromCentrePass", "goalsFromGain", "goalsFromTurnovers",
   "intercepts", "interceptPassThrown", "missedGoalTurnover", "missedShotConversion",
-  "netPoints", "obstructionPenalties", "offsides", "penalties",
-  "pickups", "points", "possessionChanges", "rebounds",
-  "secondPhaseReceive", "timeInPossession", "turnoverHeld", "turnoverToGoalPerc",
-  "unforcedTurnovers"
+  "netPoints", "obstructionPenalties", "offsides", "passes", "penalties",
+  "pickups", "points", "possessionChanges", "possessions", "rebounds",
+  "secondPhaseReceive", "timeInPossession", "tossUpWin",
+  "turnoverHeld", "turnoverToGoalPerc", "unforcedTurnovers"
 )
 
 DEFAULT_PLAYER_STATS <- c(
   "attempt_from_zone1", "attempt_from_zone2", "attempts1", "attempts2",
   "badHands", "badPasses", "blocked", "blocks", "breaks",
-  "centrePassReceives", "contactPenalties",
+  "centrePassReceives", "centrePassToGoalPerc", "contactPenalties",
   "deflections", "deflectionWithGain", "deflectionWithNoGain",
-  "feedWithAttempt", "feeds", "gain", "generalPlayTurnovers", "goal1", "goal2",
+  "disposals", "feedWithAttempt", "feeds", "gain", "gainToGoalPerc",
+  "generalPlayTurnovers", "goal1", "goal2",
   "goal_from_zone1", "goal_from_zone2",
   "goalAssists", "goalAttempts", "goalMisses", "goals", "intercepts",
   "interceptPassThrown", "minutesPlayed", "missedGoalTurnover", "netPoints",
-  "obstructionPenalties", "offsides", "penalties", "pickups", "points",
-  "possessionChanges", "quartersPlayed", "rebounds",
-  "secondPhaseReceive", "turnoverHeld", "unforcedTurnovers"
+  "obstructionPenalties", "offsides", "passes", "penalties", "pickups", "points",
+  "possessionChanges", "possessions", "quartersPlayed", "rebounds",
+  "secondPhaseReceive", "tossUpWin", "turnoverHeld", "unforcedTurnovers"
 )
 
 QUERY_STAT_DEFINITIONS <- list(
