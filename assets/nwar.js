@@ -62,7 +62,7 @@ function renderTable(rows) {
   const tbody = elements.nwarTbody;
   if (!tbody) return;
   if (!rows || !rows.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state" data-kicker="No data">No qualifying players found for these filters. Try a lower minimum-games threshold.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state" data-kicker="No data">No qualifying players found for these filters. Try a lower minimum-games threshold.</td></tr>';
     return;
   }
 
@@ -87,6 +87,9 @@ function renderTable(rows) {
     const teamCell = document.createElement("td");
     teamCell.textContent = row.squad_name || "—";
 
+    const positionCell = document.createElement("td");
+    positionCell.textContent = row.position_group || "—";
+
     const gamesCell = document.createElement("td");
     gamesCell.textContent = formatNumber(row.games_played);
 
@@ -105,7 +108,7 @@ function renderTable(rows) {
     nwarStrong.textContent = formatNwar(row.nwar);
     nwarCell.appendChild(nwarStrong);
 
-    tr.append(rankCell, playerCell, teamCell, gamesCell, avgCell, replCell, nparCell, nwarCell);
+    tr.append(rankCell, playerCell, teamCell, positionCell, gamesCell, avgCell, replCell, nparCell, nwarCell);
     fragment.appendChild(tr);
   });
 

@@ -84,6 +84,7 @@
                 <th scope="col">Rank</th>
                 <th scope="col">Player</th>
                 <th scope="col">Team</th>
+                <th scope="col">Position</th>
                 <th scope="col">Games</th>
                 <th scope="col">Avg Net Pts</th>
                 <th scope="col">Repl. Level</th>
@@ -92,7 +93,7 @@
               </tr>
             </thead>
             <tbody id="nwar-tbody">
-              <tr><td colspan="8" class="empty-state" data-kicker="Loading">Loading the nWAR leaderboard…</td></tr>
+              <tr><td colspan="9" class="empty-state" data-kicker="Loading">Loading the nWAR leaderboard…</td></tr>
             </tbody>
           </table>
         </div>
@@ -111,7 +112,7 @@
             <li><strong><abbr title="Net Points Above Replacement">NPAR</abbr>/Game</strong> (Net Points Above Replacement per game) — the player's average net points per game minus the replacement level.</li>
             <li><strong>nWAR</strong> = <abbr title="Net Points Above Replacement">NPAR</abbr>/Game × Games played ÷ 16 (the estimated net-point cost of one additional win).</li>
           </ol>
-          <p class="muted">Without position data in the archive, no positional adjustment is applied. Shooters will naturally outscore defenders in net points. Treat nWAR as a general contribution ranking rather than a direct cross-position comparison. A full positional adjustment would require per-match position data to be added to the archive.</p>
+          <p class="muted">Replacement levels are computed separately for each position group — Shooters (GS/GA), Midcourt (WA/C/WD), and Defenders (GD/GK) — using each player's period-1 starting position from the Champion Data archive. This means a top defender can rank alongside a top shooter on a like-for-like basis. When position data is unavailable for a player, the global replacement level is used.</p>
         </div>
       </section>
     </main>

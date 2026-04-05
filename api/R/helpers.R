@@ -1160,6 +1160,26 @@ has_player_match_stats <- function(conn) {
   result
 }
 
+has_player_match_positions <- function(conn) {
+  cached <- getOption("netballstats.pmp_available")
+  if (!is.null(cached)) return(isTRUE(cached))
+  result <- isTRUE(tryCatch(
+    DBI::dbExistsTable(conn, "player_match_positions"),
+    error = function(e) FALSE
+  ))
+  options(netballstats.pmp_available = result)
+  result
+}
+
+# Maps a Champion Data startingPositionCode to a broad positional group.
+# GS/GA are Shooters; WA/C/WD are Midcourt; GD/GK are Defenders.
+# Interchange and unrecognised codes fall through to "Other".
+position_group_from_code <- function(code) {
+  ifelse(code %in% c("GS", "GA"), "Shooter",
+    ifelse(code %in% c("WA", "C", "WD"), "Midcourt",
+      ifelse(code %in% c("GD", "GK"), "Defender", "Other")))
+}
+
 # Faster alternative to build_player_match_query that reads from the
 # player_match_stats pre-aggregated table (one row per player per match per
 # stat) instead of player_period_stats (one row per player per period per
@@ -2860,6 +2880,23 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
   # value_col is an internal constant — never user-supplied, safe to interpolate.
   value_col      <- if (identical(stats_table, "player_match_stats")) "match_value" else "value_number"
 
+  # Include per-match position data when player_match_positions exists (populated by
+  # build_database.R from Champion Data startingPositionCode). Uses MODE() WITHIN GROUP
+  # which is PostgreSQL-specific; the table only exists after a full DB rebuild, so this
+  # path is automatically skipped on SQLite local-dev instances.
+  has_positions <- has_player_match_positions(conn)
+  position_select <- if (has_positions) {
+    ", MODE() WITHIN GROUP (ORDER BY pmp.starting_position_code) AS position_code"
+  } else {
+    ", NULL AS position_code"
+  }
+  position_join <- if (has_positions) {
+    paste0("LEFT JOIN player_match_positions pmp",
+           " ON pmp.player_id = stats.player_id AND pmp.match_id = stats.match_id")
+  } else {
+    ""
+  }
+
   query <- paste(
     # MAX(squad_name) is used because a player who transferred mid-season can
     # appear under multiple squad names. The MAX picks one name arbitrarily
@@ -2868,8 +2905,10 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
     paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric), 2) AS total_net_points,"),
     "COUNT(DISTINCT stats.match_id) AS games_played,",
     paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric) / NULLIF(COUNT(DISTINCT stats.match_id), 0), 2) AS avg_net_points_per_game"),
+    position_select,
     paste0("FROM ", stats_table, " AS stats"),
     "INNER JOIN players ON players.player_id = stats.player_id",
+    position_join,
     "WHERE stats.stat = ?stat"
   )
 
@@ -2895,14 +2934,12 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
 # Steps:
 #   1. Aggregate each player's total and average Net Points per game.
 #   2. Restrict to players with at least min_games qualifying matches.
-#   3. Compute replacement_level = mean avg net points of the bottom
-#      NWAR_REPLACEMENT_PERCENTILE of those players.
+#   3. If position data is available, map players to position groups (Shooter /
+#      Midcourt / Defender) and compute a per-group replacement level = mean avg
+#      net points of the bottom NWAR_REPLACEMENT_PERCENTILE of that group.
+#      Without position data, a single global replacement level is used.
 #   4. Compute NPAR/game = avg_net_points_per_game - replacement_level.
 #   5. Compute nWAR = NPAR/game × games_played / NWAR_POINTS_PER_WIN.
-#
-# Note: without position data in the archive, no positional adjustment is applied.
-# GS/GA positions will naturally accumulate higher Net Points than WD/GD, so treat
-# nWAR as a general contribution ranking, not a cross-position comparison tool.
 fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L, limit = 50L) {
   filters  <- build_nwar_query(conn, seasons, team_id, min_games)
   all_rows <- query_rows(conn, filters$query, filters$params)
@@ -2915,6 +2952,8 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
       games_played            = integer(0),
       total_net_points        = numeric(0),
       avg_net_points_per_game = numeric(0),
+      position_code           = character(0),
+      position_group          = character(0),
       replacement_level       = numeric(0),
       npar                    = numeric(0),
       nwar                    = numeric(0),
@@ -2935,16 +2974,44 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
     stop("Unable to compute replacement level: no valid average net points.", call. = FALSE)
   }
 
-  n_repl   <- max(1L, ceiling(n_valid * NWAR_REPLACEMENT_PERCENTILE))
-  repl_lvl <- round(mean(head(sort(avg_np, na.last = TRUE), n_repl), na.rm = TRUE), 2)
+  # Determine position codes and groups. When player_match_positions is absent,
+  # position_code is NULL from the query — fall back to a global replacement level.
+  pos_code  <- if (!is.null(all_rows$position_code)) as.character(all_rows$position_code) else rep(NA_character_, nrow(all_rows))
+  pos_group <- position_group_from_code(pos_code)
 
-  npar <- round(avg_np - repl_lvl, 2)
+  # Compute global replacement level (fallback and reference).
+  n_repl_global <- max(1L, ceiling(n_valid * NWAR_REPLACEMENT_PERCENTILE))
+  repl_global   <- round(mean(head(sort(avg_np, na.last = TRUE), n_repl_global), na.rm = TRUE), 2)
+
+  # Compute per-position-group replacement levels when position data is present.
+  # Groups with fewer than 2 valid players fall back to the global level to avoid
+  # replacement levels driven by a single outlier.
+  has_position_data <- any(!is.na(pos_code))
+  if (has_position_data) {
+    groups <- unique(pos_group[!is.na(pos_group)])
+    repl_by_group <- vapply(groups, function(g) {
+      grp_avg   <- avg_np[pos_group == g & !is.na(pos_group)]
+      grp_valid <- grp_avg[!is.na(grp_avg)]
+      if (length(grp_valid) < 2L) return(repl_global)
+      n_r <- max(1L, ceiling(length(grp_valid) * NWAR_REPLACEMENT_PERCENTILE))
+      round(mean(head(sort(grp_valid, na.last = TRUE), n_r), na.rm = TRUE), 2)
+    }, numeric(1L))
+    names(repl_by_group) <- groups
+    repl_by_player <- repl_by_group[pos_group]
+    repl_by_player[is.na(repl_by_player)] <- repl_global
+  } else {
+    repl_by_player <- rep(repl_global, nrow(all_rows))
+  }
+
+  npar <- round(avg_np - repl_by_player, 2)
   nwar <- round(npar * as.numeric(games) / NWAR_POINTS_PER_WIN, 2)
 
   all_rows$games_played            <- games
   all_rows$total_net_points        <- as.numeric(all_rows$total_net_points)
   all_rows$avg_net_points_per_game <- round(avg_np, 2)
-  all_rows$replacement_level       <- repl_lvl
+  all_rows$position_code           <- pos_code
+  all_rows$position_group          <- pos_group
+  all_rows$replacement_level       <- repl_by_player
   all_rows$npar                    <- npar
   all_rows$nwar                    <- nwar
 
