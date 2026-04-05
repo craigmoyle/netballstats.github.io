@@ -29,7 +29,6 @@
     attempts1: "1 Point Goal Attempts",
     attempts2: "Super Shot Attempts",
     centrePassReceives: "Centre Pass Receives",
-    centrePassToGoalPerc: "Centre Pass to Goal %",
     contactPenalties: "Contacts",
     deflectionPossessionGain: "Deflection Possession Gains",
     deflectionWithGain: "Deflections (with Gain)",
@@ -38,7 +37,6 @@
     feedWithAttempt: "Feeds with Attempt",
     feeds: "Feeds into Circle",
     gain: "Gains",
-    gainToGoalPerc: "Gain to Goal %",
     generalPlayTurnovers: "General Play Turnovers",
     goal1: "1 Point Goals",
     goal2: "Super Shots",
@@ -53,7 +51,6 @@
     goalsFromTurnovers: "Goals from Turnovers",
     interceptPassThrown: "Intercept Passes Thrown",
     missedGoalTurnover: "Missed Goal Turnovers",
-    missedShotConversion: "Missed Shot Conversions",
     netPoints: "Net Points",
     obstructionPenalties: "Obstructions",
     points: "Points",
@@ -63,7 +60,6 @@
     timeInPossession: "Time in Possession",
     tossUpWin: "Toss Up Wins",
     turnoverHeld: "Turnovers Held",
-    turnoverToGoalPerc: "Turnover to Goal %",
     unforcedTurnovers: "Unforced Turnovers"
   });
 

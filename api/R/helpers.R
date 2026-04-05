@@ -8,25 +8,25 @@ repo_root <- function() {
 DEFAULT_TEAM_STATS <- c(
   "attempt_from_zone1", "attempt_from_zone2", "attempts1", "attempts2",
   "badHands", "badPasses", "blocked", "blocks", "breaks",
-  "centrePassReceives", "centrePassToGoalPerc", "contactPenalties",
-  "deflectionPossessionGain", "deflections", "deflectionWithGain", "deflectionWithNoGain",
-  "disposals", "feedWithAttempt", "feeds", "gain", "gainToGoalPerc", "generalPlayTurnovers",
+  "centrePassReceives", "contactPenalties",
+  "deflections", "deflectionWithGain", "deflectionWithNoGain",
+  "disposals", "feedWithAttempt", "feeds", "gain", "generalPlayTurnovers",
   "goal1", "goal2", "goal_from_zone1", "goal_from_zone2",
-  "goalAssists", "goalAttempts", "goalMisses", "goals", "goals1", "goals2",
+  "goalAssists", "goalAttempts", "goalMisses", "goals",
   "goalsFromCentrePass", "goalsFromGain", "goalsFromTurnovers",
-  "intercepts", "interceptPassThrown", "missedGoalTurnover", "missedShotConversion",
+  "intercepts", "interceptPassThrown", "missedGoalTurnover",
   "netPoints", "obstructionPenalties", "offsides", "passes", "penalties",
   "pickups", "points", "possessionChanges", "possessions", "rebounds",
   "secondPhaseReceive", "timeInPossession", "tossUpWin",
-  "turnoverHeld", "turnoverToGoalPerc", "unforcedTurnovers"
+  "turnoverHeld", "unforcedTurnovers"
 )
 
 DEFAULT_PLAYER_STATS <- c(
   "attempt_from_zone1", "attempt_from_zone2", "attempts1", "attempts2",
   "badHands", "badPasses", "blocked", "blocks", "breaks",
-  "centrePassReceives", "centrePassToGoalPerc", "contactPenalties",
+  "centrePassReceives", "contactPenalties",
   "deflections", "deflectionWithGain", "deflectionWithNoGain",
-  "disposals", "feedWithAttempt", "feeds", "gain", "gainToGoalPerc",
+  "disposals", "feedWithAttempt", "feeds", "gain",
   "generalPlayTurnovers", "goal1", "goal2",
   "goal_from_zone1", "goal_from_zone2",
   "goalAssists", "goalAttempts", "goalMisses", "goals", "intercepts",
