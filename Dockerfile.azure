@@ -11,7 +11,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g-dev \
     make \
     g++ \
-  && apt-get purge -y linux-libc-dev \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -25,6 +24,11 @@ RUN R -q -e " \
   install.packages('renv'); \
   renv::consent(provided = TRUE); \
   renv::restore(prompt = FALSE)"
+
+# Purge linux-libc-dev after R packages are compiled from source.
+# It is only needed at build time; removing it eliminates kernel-header
+# CVE alerts in Trivy scans without breaking the runtime image.
+RUN apt-get purge -y linux-libc-dev && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
 ENV NETBALL_STATS_REPO_ROOT=/app
 ENV NETBALL_STATS_HOST=0.0.0.0
