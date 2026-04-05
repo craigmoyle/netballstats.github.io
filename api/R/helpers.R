@@ -2848,25 +2848,22 @@ NWAR_POINTS_PER_WIN      <- 16.0
 # the replacement-level baseline (e.g. 0.15 = bottom 15%).
 NWAR_REPLACEMENT_PERCENTILE <- 0.15
 
-# Calculates Netball Wins Above Replacement (nWAR) for all qualified players.
+# Builds the SQL query and parameter list for the nWAR aggregate.
+# Returns a list(query, params) ready to pass to query_rows().
 #
-# Steps:
-#   1. Aggregate each player's total and average Net Points per game.
-#   2. Restrict to players with at least min_games qualifying matches.
-#   3. Compute replacement_level = mean avg net points of the bottom
-#      NWAR_REPLACEMENT_PERCENTILE of those players.
-#   4. Compute NPAR/game = avg_net_points_per_game - replacement_level.
-#   5. Compute nWAR = NPAR/game × games_played / NWAR_POINTS_PER_WIN.
-#
-# Note: without position data in the archive, no positional adjustment is applied.
-# GS/GA positions will naturally accumulate higher Net Points than WD/GD, so treat
-# nWAR as a general contribution ranking, not a cross-position comparison tool.
-fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L, limit = 50L) {
+# value_col is a hardcoded internal constant derived from the detected table
+# name — it is never sourced from user input and is safe to interpolate via
+# paste0(). Do not copy this pattern with user-supplied values.
+build_nwar_query <- function(conn, seasons, team_id, min_games) {
   seasons_filter <- if (!is.null(seasons) && length(seasons)) as.integer(seasons) else NULL
-  stats_table <- if (has_player_match_stats(conn)) "player_match_stats" else "player_period_stats"
-  value_col   <- if (identical(stats_table, "player_match_stats")) "match_value" else "value_number"
+  stats_table    <- if (has_player_match_stats(conn)) "player_match_stats" else "player_period_stats"
+  # value_col is an internal constant — never user-supplied, safe to interpolate.
+  value_col      <- if (identical(stats_table, "player_match_stats")) "match_value" else "value_number"
 
   query <- paste(
+    # MAX(squad_name) is used because a player who transferred mid-season can
+    # appear under multiple squad names. The MAX picks one name arbitrarily
+    # (alphabetical); this is display-only and does not affect nWAR calculations.
     "SELECT stats.player_id, players.canonical_name AS player_name, MAX(stats.squad_name) AS squad_name,",
     paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric), 2) AS total_net_points,"),
     "COUNT(DISTINCT stats.match_id) AS games_played,",
@@ -2890,10 +2887,27 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
     " HAVING COUNT(DISTINCT stats.match_id) >= ?min_games"
   )
   filters$params$min_games <- as.integer(min_games)
+  filters
+}
 
+# Calculates Netball Wins Above Replacement (nWAR) for all qualified players.
+#
+# Steps:
+#   1. Aggregate each player's total and average Net Points per game.
+#   2. Restrict to players with at least min_games qualifying matches.
+#   3. Compute replacement_level = mean avg net points of the bottom
+#      NWAR_REPLACEMENT_PERCENTILE of those players.
+#   4. Compute NPAR/game = avg_net_points_per_game - replacement_level.
+#   5. Compute nWAR = NPAR/game × games_played / NWAR_POINTS_PER_WIN.
+#
+# Note: without position data in the archive, no positional adjustment is applied.
+# GS/GA positions will naturally accumulate higher Net Points than WD/GD, so treat
+# nWAR as a general contribution ranking, not a cross-position comparison tool.
+fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L, limit = 50L) {
+  filters  <- build_nwar_query(conn, seasons, team_id, min_games)
   all_rows <- query_rows(conn, filters$query, filters$params)
 
-  if (!nrow(all_rows)) {
+  if (nrow(all_rows) == 0L) {
     return(data.frame(
       player_id               = integer(0),
       player_name             = character(0),
@@ -2908,9 +2922,19 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
     ))
   }
 
-  avg_np   <- suppressWarnings(as.numeric(all_rows$avg_net_points_per_game))
-  games    <- suppressWarnings(as.integer(all_rows$games_played))
-  n_valid  <- sum(!is.na(avg_np))
+  # DB expressions use ROUND(CAST(... AS numeric)) and COUNT(DISTINCT ...), so
+  # types should already be correct. Coerce without suppressing warnings so that
+  # any schema drift or DBI type mismatch surfaces immediately.
+  avg_np <- as.numeric(all_rows$avg_net_points_per_game)
+  games  <- as.integer(all_rows$games_played)
+  n_valid <- sum(!is.na(avg_np))
+
+  if (n_valid == 0L) {
+    api_log("WARN", "nwar_no_valid_avg",
+            error_message = "All avg_net_points values are NA after coercion; cannot compute replacement level.")
+    stop("Unable to compute replacement level: no valid average net points.", call. = FALSE)
+  }
+
   n_repl   <- max(1L, ceiling(n_valid * NWAR_REPLACEMENT_PERCENTILE))
   repl_lvl <- round(mean(head(sort(avg_np, na.last = TRUE), n_repl), na.rm = TRUE), 2)
 
@@ -2918,7 +2942,7 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
   nwar <- round(npar * as.numeric(games) / NWAR_POINTS_PER_WIN, 2)
 
   all_rows$games_played            <- games
-  all_rows$total_net_points        <- suppressWarnings(as.numeric(all_rows$total_net_points))
+  all_rows$total_net_points        <- as.numeric(all_rows$total_net_points)
   all_rows$avg_net_points_per_game <- round(avg_np, 2)
   all_rows$replacement_level       <- repl_lvl
   all_rows$npar                    <- npar
