@@ -1446,14 +1446,14 @@
     },
     "superNetballR": {
       "Package": "superNetballR",
-      "Version": "0.2.0",
+      "Version": "0.1.0",
       "Source": "GitHub",
       "RemoteType": "github",
       "RemoteHost": "api.github.com",
       "RemoteUsername": "craigmoyle",
       "RemoteRepo": "superNetballR_updated",
-      "RemoteRef": "9898d3a03332a7402b1c3abb50493c50ac07d549",
-      "RemoteSha": "9898d3a03332a7402b1c3abb50493c50ac07d549"
+      "RemoteRef": "5e28e0e32e3544cb87d9832e8b14deee7b297eb3",
+      "RemoteSha": "5e28e0e32e3544cb87d9832e8b14deee7b297eb3"
     },
     "swagger": {
       "Package": "swagger",
