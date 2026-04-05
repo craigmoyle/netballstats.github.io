@@ -60,6 +60,7 @@ function formatDecimal(value) {
 
 function renderTable(rows) {
   const tbody = elements.nwarTbody;
+  if (!tbody) return;
   if (!rows || !rows.length) {
     tbody.innerHTML = '<tr><td colspan="8" class="empty-state" data-kicker="No data">No qualifying players found for these filters. Try a lower minimum-games threshold.</td></tr>';
     return;
@@ -117,6 +118,7 @@ async function loadMetadata() {
     const meta = await fetchJson("/meta");
     state.seasons = (meta.seasons || []).slice();
     const seasonSelect = elements.nwarSeason;
+    if (!seasonSelect) return;
     const currentValue = seasonSelect.value;
     while (seasonSelect.options.length > 1) {
       seasonSelect.remove(1);
@@ -134,6 +136,7 @@ async function loadMetadata() {
 }
 
 async function loadNwar() {
+  if (!elements.nwarSeason || !elements.nwarMinGames || !elements.nwarTbody) return;
   const season = elements.nwarSeason.value;
   const minGames = elements.nwarMinGames.value;
   showLoadingStatus(LOADING_MESSAGES, "Calculating nWAR");
@@ -148,15 +151,15 @@ async function loadNwar() {
     renderTable(state.rows);
 
     const seasonLabel = season ? `${season} season` : "all seasons";
-    elements.nwarMeta.textContent = `${formatNumber(state.rows.length)} players ranked — ${seasonLabel}.`;
+    if (elements.nwarMeta) elements.nwarMeta.textContent = `${formatNumber(state.rows.length)} players ranked — ${seasonLabel}.`;
 
     const topPlayer = state.rows[0];
     if (topPlayer) {
-      elements.nwarHeroLabel.textContent = `${topPlayer.player_name} — ${formatNwar(topPlayer.nwar)} nWAR`;
-      elements.nwarHeroSummary.textContent = `${topPlayer.games_played} games, ${formatDecimal(topPlayer.avg_net_points_per_game)} avg net points.`;
+      if (elements.nwarHeroLabel) elements.nwarHeroLabel.textContent = `${topPlayer.player_name} — ${formatNwar(topPlayer.nwar)} nWAR`;
+      if (elements.nwarHeroSummary) elements.nwarHeroSummary.textContent = `${topPlayer.games_played} games, ${formatDecimal(topPlayer.avg_net_points_per_game)} avg net points.`;
     } else {
-      elements.nwarHeroLabel.textContent = "No qualifying players";
-      elements.nwarHeroSummary.textContent = "Try adjusting the minimum games filter.";
+      if (elements.nwarHeroLabel) elements.nwarHeroLabel.textContent = "No qualifying players";
+      if (elements.nwarHeroSummary) elements.nwarHeroSummary.textContent = "Try adjusting the minimum games filter.";
     }
 
     trackEvent("nwar_loaded", {
@@ -166,17 +169,19 @@ async function loadNwar() {
     showStatus("nWAR leaderboard ready.", "success", { kicker: "Rankings updated", autoHideMs: 2200 });
   } catch (error) {
     showStatus(error.message || "Unable to load nWAR rankings.", "error", { kicker: "Rankings unavailable" });
-    elements.nwarMeta.textContent = "nWAR rankings unavailable.";
-    elements.nwarTbody.innerHTML = '<tr><td colspan="8" class="empty-state" data-kicker="Archive note">The nWAR rankings are unavailable. Try again shortly.</td></tr>';
-    elements.nwarHeroLabel.textContent = "Unavailable";
-    elements.nwarHeroSummary.textContent = "Unable to load the nWAR leaderboard.";
+    if (elements.nwarMeta) elements.nwarMeta.textContent = "nWAR rankings unavailable.";
+    if (elements.nwarTbody) elements.nwarTbody.innerHTML = '<tr><td colspan="8" class="empty-state" data-kicker="Archive note">The nWAR rankings are unavailable. Try again shortly.</td></tr>';
+    if (elements.nwarHeroLabel) elements.nwarHeroLabel.textContent = "Unavailable";
+    if (elements.nwarHeroSummary) elements.nwarHeroSummary.textContent = "Unable to load the nWAR leaderboard.";
   }
 }
 
-elements.nwarFilters.addEventListener("submit", (event) => {
-  event.preventDefault();
-  loadNwar();
-});
+if (elements.nwarFilters) {
+  elements.nwarFilters.addEventListener("submit", (event) => {
+    event.preventDefault();
+    loadNwar();
+  });
+}
 
 async function initialise() {
   trackPageView("nwar");
