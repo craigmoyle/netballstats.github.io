@@ -28,7 +28,9 @@ RUN R -q -e " \
 # Purge linux-libc-dev after R packages are compiled from source.
 # It is only needed at build time; removing it eliminates kernel-header
 # CVE alerts in Trivy scans without breaking the runtime image.
-RUN apt-get purge -y linux-libc-dev && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+# Do NOT use apt-get autoremove here — it can pull libgomp1 and other
+# R runtime libraries that were only recorded as auto-installed deps.
+RUN apt-get purge -y linux-libc-dev && rm -rf /var/lib/apt/lists/*
 
 ENV NETBALL_STATS_REPO_ROOT=/app
 ENV NETBALL_STATS_HOST=0.0.0.0
