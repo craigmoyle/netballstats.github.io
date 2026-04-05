@@ -25,14 +25,14 @@ DEFAULT_PLAYER_STATS <- c(
   "attempt_from_zone1", "attempt_from_zone2", "attempts1", "attempts2",
   "badHands", "badPasses", "blocked", "blocks", "breaks",
   "centrePassReceives", "contactPenalties",
-  "deflections", "deflectionWithGain", "deflectionWithNoGain",
+  "defensiveRebounds", "deflections", "deflectionWithGain", "deflectionWithNoGain",
   "disposals", "feedWithAttempt", "feeds", "gain",
   "generalPlayTurnovers", "goal1", "goal2",
   "goal_from_zone1", "goal_from_zone2",
   "goalAssists", "goalAttempts", "goalMisses", "goals", "intercepts",
   "interceptPassThrown", "minutesPlayed", "missedGoalTurnover", "netPoints",
-  "obstructionPenalties", "offsides", "passes", "penalties", "pickups", "points",
-  "possessionChanges", "possessions", "quartersPlayed", "rebounds",
+  "obstructionPenalties", "offsides", "offensiveRebounds", "passes", "penalties",
+  "pickups", "points", "possessionChanges", "possessions", "quartersPlayed", "rebounds",
   "secondPhaseReceive", "tossUpWin", "turnoverHeld", "unforcedTurnovers"
 )
 

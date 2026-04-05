@@ -521,6 +521,34 @@ write_database <- function(tables, build_mode) {
     # nWAR JOIN access path: player_id + match_id lookup
     DBI::dbExecute(conn, "CREATE INDEX idx_pmp_player_match ON player_match_positions(player_id, match_id)")
 
+    # Derive offensiveRebounds / defensiveRebounds via position heuristic.
+    # Champion Data no longer provides these fields; we infer from startingPositionCode:
+    #   GS, GA  -> offensiveRebounds (shooting-circle players)
+    #   GK, GD  -> defensiveRebounds (defensive-circle players)
+    #   C/WA/WD -> unclassified; 0 for both (strict — no arbitrary split)
+    DBI::dbExecute(conn, paste(
+      "INSERT INTO player_match_stats",
+      "  (player_id, match_id, season, round_number, squad_id, squad_name, stat, match_value)",
+      "SELECT pms.player_id, pms.match_id, pms.season, pms.round_number,",
+      "  pms.squad_id, pms.squad_name, 'offensiveRebounds', pms.match_value",
+      "FROM player_match_stats pms",
+      "JOIN player_match_positions pmp",
+      "  ON pms.player_id = pmp.player_id AND pms.match_id = pmp.match_id",
+      "WHERE pms.stat = 'rebounds'",
+      "  AND pmp.starting_position_code IN ('GS', 'GA')"
+    ))
+    DBI::dbExecute(conn, paste(
+      "INSERT INTO player_match_stats",
+      "  (player_id, match_id, season, round_number, squad_id, squad_name, stat, match_value)",
+      "SELECT pms.player_id, pms.match_id, pms.season, pms.round_number,",
+      "  pms.squad_id, pms.squad_name, 'defensiveRebounds', pms.match_value",
+      "FROM player_match_stats pms",
+      "JOIN player_match_positions pmp",
+      "  ON pms.player_id = pmp.player_id AND pms.match_id = pmp.match_id",
+      "WHERE pms.stat = 'rebounds'",
+      "  AND pmp.starting_position_code IN ('GK', 'GD')"
+    ))
+
     # Pre-aggregate period-level team stats to match level. Reduces per-stat row count by ~4x,
     # eliminates GROUP BY in fetch_team_game_high_rows, and enables fast archive-rank range scans
     # analogous to the player_match_stats path.
