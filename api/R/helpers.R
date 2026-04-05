@@ -7,23 +7,23 @@ repo_root <- function() {
 
 DEFAULT_TEAM_STATS <- c(
   "attempts1", "attempts2", "badHands", "badPasses", "blocked", "blocks", "breaks",
-  "centrePassReceives", "contactPenalties", "defensiveRebounds", "deflections",
-  "disposals", "feeds", "gain", "generalPlayTurnovers", "goal1", "goal2",
+  "centrePassReceives", "contactPenalties", "deflections",
+  "feeds", "gain", "generalPlayTurnovers",
   "goalAssists", "goalAttempts", "goalMisses", "goals", "goalsFromCentrePass",
   "goalsFromGain", "goalsFromTurnovers", "intercepts", "netPoints",
-  "obstructionPenalties", "offensiveRebounds", "offsides", "passes", "penalties",
-  "pickups", "possessions", "rebounds", "timeInPossession", "tossUpWin",
-  "turnovers", "unforcedTurnovers"
+  "obstructionPenalties", "offsides", "penalties",
+  "pickups", "rebounds", "timeInPossession",
+  "unforcedTurnovers"
 )
 
 DEFAULT_PLAYER_STATS <- c(
   "attempts1", "attempts2", "badHands", "badPasses", "blocked", "blocks", "breaks",
-  "centrePassReceives", "contactPenalties", "defensiveRebounds", "deflections",
-  "disposals", "feeds", "gain", "generalPlayTurnovers", "goal1", "goal2",
+  "centrePassReceives", "contactPenalties", "deflections",
+  "feeds", "gain", "generalPlayTurnovers", "goal1", "goal2",
   "goalAssists", "goalAttempts", "goalMisses", "goals", "intercepts",
   "minutesPlayed", "missedGoalTurnover", "netPoints", "obstructionPenalties",
-  "offensiveRebounds", "offsides", "passes", "penalties", "pickups", "possessions",
-  "quartersPlayed", "rebounds", "tossUpWin", "turnovers", "unforcedTurnovers"
+  "offsides", "penalties", "pickups",
+  "quartersPlayed", "rebounds", "unforcedTurnovers"
 )
 
 QUERY_STAT_DEFINITIONS <- list(
@@ -2546,12 +2546,12 @@ build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
   PLAYER_BATCH_STATS <- c(
     "goalAssists", "feeds", "gain", "deflections", "intercepts",
     "goals", "goalAttempts", "centrePassReceives", "rebounds",
-    "netPoints", "offensiveRebounds", "defensiveRebounds", "goal2", "attempts2"
+    "netPoints", "goal2", "attempts2"
   )
   TEAM_BATCH_HIGHEST <- c(
     "gain", "deflections", "intercepts",
     "goalsFromCentrePass", "goalsFromGain",
-    "netPoints", "offensiveRebounds", "defensiveRebounds", "goal2", "attempts2"
+    "netPoints", "attempts2"
   )
   TEAM_BATCH_LOWEST <- c("penalties", "generalPlayTurnovers")
 
@@ -2634,8 +2634,6 @@ build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
     entry_player("centrePassReceives", "Most centre pass receives"),
     entry_player("rebounds",           "Most rebounds"),
     entry_player("netPoints",          "Most net points"),
-    entry_player("offensiveRebounds",  "Most offensive rebounds"),
-    entry_player("defensiveRebounds",  "Most defensive rebounds"),
     entry_player("goal2",              "Most super shots"),
     entry_player("attempts2",          "Most super shot attempts")
   ))
@@ -2657,9 +2655,6 @@ build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
     entry_team("goalsFromCentrePass",  "Most goals from centre pass"),
     entry_team("goalsFromGain",        "Most goals from gain"),
     entry_team("netPoints",            "Most net points"),
-    entry_team("offensiveRebounds",    "Most offensive rebounds"),
-    entry_team("defensiveRebounds",    "Most defensive rebounds"),
-    entry_team("goal2",                "Most super shots"),
     entry_team("attempts2",            "Most super shot attempts")
   ))
 
