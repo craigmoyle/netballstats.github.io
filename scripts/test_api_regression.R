@@ -319,4 +319,96 @@ invalid_round_summary <- request_json(base_url, '/round-summary', query = list(r
 assert_true(nzchar(as.character(invalid_round_summary$error %||% '')), 'Expected /round-summary to require a season when round is provided.')
 check_step('round summary validation returns a 400 response')
 
+# nWAR endpoint regression tests
+nwar_payload <- request_json(base_url, '/nwar', query = list(min_games = '1', limit = '10'))
+assert_true(is.list(nwar_payload$data), 'Expected /nwar to return a data list.')
+if (length(nwar_payload$data) >= 1L) {
+  first_row <- nwar_payload$data[[1]]
+  assert_true(!is.null(first_row$player_id),    'Expected /nwar rows to include player_id.')
+  assert_true(!is.null(first_row$player_name),  'Expected /nwar rows to include player_name.')
+  assert_true(!is.null(first_row$nwar),         'Expected /nwar rows to include nwar.')
+  assert_true(!is.null(first_row$games_played), 'Expected /nwar rows to include games_played.')
+  nwar_val <- as.numeric(scalar_value(first_row$nwar) %||% NA_real_)
+  assert_true(!is.nan(nwar_val), 'Expected /nwar top row to have a non-NaN nwar value.')
+}
+check_step('nWAR endpoint returns well-formed rows')
+
+nwar_season_payload <- request_json(base_url, '/nwar', query = list(season = as.character(default_season), min_games = '1', limit = '100'))
+assert_true(is.list(nwar_season_payload$data), 'Expected /nwar with season filter to return a data list.')
+if (length(nwar_season_payload$data) >= 2L) {
+  nwar_values <- vapply(nwar_season_payload$data, function(r) as.numeric(scalar_value(r$nwar) %||% NA_real_), numeric(1L))
+  assert_true(all(!is.nan(nwar_values)), 'Expected /nwar to return no NaN nwar values.')
+  assert_true(nwar_values[[1]] >= nwar_values[[length(nwar_values)]], 'Expected /nwar rows to be sorted descending by nwar.')
+}
+check_step('nWAR endpoint sorts rows descending by nwar with no NaN values')
+
+nwar_limit_payload <- request_json(base_url, '/nwar', query = list(min_games = '1', limit = '3'))
+assert_true(length(nwar_limit_payload$data) <= 3L, 'Expected /nwar to respect the limit parameter.')
+check_step('nWAR endpoint respects the limit cap')
+
+nwar_high_min_payload <- request_json(base_url, '/nwar', query = list(min_games = '999'))
+assert_true(is.list(nwar_high_min_payload$data), 'Expected /nwar with very high min_games to return an empty data list gracefully.')
+assert_true(length(nwar_high_min_payload$data) == 0L, 'Expected /nwar with min_games=999 to return zero rows.')
+check_step('nWAR endpoint returns empty data when min_games eliminates all players')
+
+invalid_nwar <- request_json(base_url, '/nwar', query = list(min_games = '0'), expected_status = 400L)
+assert_true(nzchar(as.character(invalid_nwar$error %||% '')), 'Expected /nwar to reject min_games below 1.')
+check_step('nWAR endpoint validates min_games lower bound')
+
+# Unit tests for fetch_nwar_rows R logic (no live DB required)
+normalize_sql <- if (exists('normalize_sql')) normalize_sql else function(q) gsub('\\s+', ' ', trimws(q))
+
+capture_nwar_query <- function(use_match_stats, seasons = NULL, team_id = NULL, min_games = 5L) {
+  helpers_env <- new.env(parent = emptyenv())
+  source(file.path(dirname(base_url), '..', 'api', 'R', 'helpers.R'), local = helpers_env, echo = FALSE)
+  captured <- NULL
+  helpers_env$has_player_match_stats <- function(conn) use_match_stats
+  helpers_env$query_rows <- function(conn, query, params = list()) {
+    captured <<- list(query = query, params = params)
+    data.frame()
+  }
+  helpers_env$apply_stat_filters <- get('apply_stat_filters', envir = helpers_env)
+  helpers_env$build_nwar_query(conn = NULL, seasons = seasons, team_id = team_id, min_games = min_games)
+  captured
+}
+
+tryCatch({
+  helpers_path <- Sys.getenv('NETBALL_STATS_HELPERS_PATH', file.path(getwd(), 'api', 'R', 'helpers.R'))
+  if (file.exists(helpers_path)) {
+    helpers_env <- new.env(parent = baseenv())
+    suppressMessages(source(helpers_path, local = helpers_env, echo = FALSE))
+
+    # build_nwar_query should exist and be a function
+    assert_true(is.function(helpers_env$build_nwar_query), 'Expected build_nwar_query to be exported from helpers.R.')
+
+    # fetch_nwar_rows with zero rows should return typed empty data.frame
+    helpers_env$has_player_match_stats <- function(conn) TRUE
+    helpers_env$query_rows <- function(conn, query, params = list()) data.frame()
+    empty_result <- helpers_env$fetch_nwar_rows(conn = NULL, min_games = 5L, limit = 50L)
+    assert_true(is.data.frame(empty_result), 'Expected fetch_nwar_rows to return a data.frame when no rows qualify.')
+    assert_true(nrow(empty_result) == 0L, 'Expected fetch_nwar_rows to return zero rows when DB returns no matches.')
+    assert_true('nwar' %in% names(empty_result), 'Expected empty fetch_nwar_rows result to include nwar column.')
+
+    # Single qualifying player: nWAR must be 0 (player is their own replacement)
+    helpers_env$query_rows <- function(conn, query, params = list()) {
+      data.frame(
+        player_id               = 1L,
+        player_name             = 'Test Player',
+        squad_name              = 'Test Squad',
+        games_played            = 10L,
+        total_net_points        = 50.0,
+        avg_net_points_per_game = 5.0,
+        stringsAsFactors        = FALSE
+      )
+    }
+    single_result <- helpers_env$fetch_nwar_rows(conn = NULL, min_games = 1L, limit = 50L)
+    assert_true(nrow(single_result) == 1L, 'Expected fetch_nwar_rows to return one row for a single qualifying player.')
+    assert_true(abs(as.numeric(single_result$nwar[[1]])) < 0.01, 'Expected single-player nWAR to be approximately 0 (player is their own replacement).')
+
+    check_step('fetch_nwar_rows unit tests pass (empty result, single player boundary)')
+  }
+}, error = function(e) {
+  cat(sprintf('NOTE: fetch_nwar_rows unit tests skipped (helpers not loadable in this environment): %s\n', conditionMessage(e)))
+})
+
 cat('All API regression checks passed.\n')

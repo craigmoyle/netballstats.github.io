@@ -251,7 +251,9 @@ code {
 .players-page .hero-copy .eyebrow,
 .players-page .hero-copy .intro-copy,
 .player-page .hero-copy .eyebrow,
-.player-page .hero-copy .intro-copy {
+.player-page .hero-copy .intro-copy,
+.nwar-page .hero-copy .eyebrow,
+.nwar-page .hero-copy .intro-copy {
   display: block;
 }
 
@@ -1375,7 +1377,9 @@ tr[data-rank="3"] td:first-child {
   #player-leaders-table td,
   #player-leaders-table th,
   #team-leaders-table td,
-  #team-leaders-table th {
+  #team-leaders-table th,
+  #nwar-table td,
+  #nwar-table th {
     white-space: nowrap;
   }
 }
@@ -3069,6 +3073,38 @@ caption.table-caption {
 [data-theme="light"] button:focus-visible,
 [data-theme="light"] a:focus-visible {
   outline-color: rgba(160, 95, 10, 0.85);
+}
+
+/* ----- nWAR explainer prose ----- */
+.stat-explainer p,
+.stat-explainer ol,
+.stat-explainer h3 {
+  max-width: 72ch;
+}
+
+.stat-explainer p + p,
+.stat-explainer p + h3,
+.stat-explainer h3 + ol {
+  margin-top: var(--space-sm);
+}
+
+.stat-explainer h3 {
+  font-family: var(--body-font);
+  font-size: var(--type-label);
+  font-weight: 700;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+  color: var(--accent-strong);
+  margin-top: var(--space-md);
+}
+
+.stat-explainer ol {
+  padding-left: 1.5rem;
+  line-height: 1.7;
+}
+
+.stat-explainer ol li + li {
+  margin-top: var(--space-2xs);
 }
 
 /* ----- Print ----- */

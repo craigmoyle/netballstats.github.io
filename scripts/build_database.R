@@ -229,6 +229,7 @@ prepare_match_tables <- function(entries, competitions) {
         competition_phase = entry$phase,
         competition_id = entry$competition_id,
         player_name = trimws(paste(firstname, surname)),
+        value_text = value,
         value_number = parse_numeric_value(value)
       ) %>%
       dplyr::select(
@@ -247,6 +248,7 @@ prepare_match_tables <- function(entries, competitions) {
         firstname,
         surname,
         stat,
+        value_text,
         value_number
       )
 
@@ -387,7 +389,7 @@ configure_postgres_api_user <- function(conn) {
   DBI::dbExecute(conn, paste0("GRANT CONNECT ON DATABASE ", quoted_database, " TO ", quoted_username))
   DBI::dbExecute(conn, paste0("GRANT USAGE ON SCHEMA public TO ", quoted_username))
 
-  for (table_name in c("competitions", "matches", "teams", "players", "player_aliases", "team_period_stats", "player_period_stats", "player_match_stats", "team_match_stats", "metadata")) {
+  for (table_name in c("competitions", "matches", "teams", "players", "player_aliases", "team_period_stats", "player_period_stats", "player_match_stats", "player_match_positions", "team_match_stats", "metadata")) {
     quoted_table <- DBI::dbQuoteIdentifier(conn, DBI::Id(schema = "public", table = table_name))
     DBI::dbExecute(conn, paste0("GRANT SELECT ON TABLE ", quoted_table, " TO ", quoted_username))
   }
@@ -502,6 +504,23 @@ write_database <- function(tables, build_mode) {
       "WHERE match_value IS NOT NULL"
     ))
 
+    # Derive per-player per-match starting position from period-level position stats.
+    # Captures startingPositionCode from period 1 of each match (the position a player
+    # begins in). Used by the nWAR endpoint for per-position-group replacement levels.
+    DBI::dbExecute(conn, "DROP TABLE IF EXISTS player_match_positions")
+    DBI::dbExecute(conn, paste(
+      "CREATE TABLE player_match_positions AS",
+      "SELECT pps.player_id, pps.match_id, pps.season, pps.round_number, pps.squad_id,",
+      "  MAX(pps.squad_name) AS squad_name,",
+      "  MAX(CASE WHEN pps.stat = 'startingPositionCode' AND pps.period = 1",
+      "       THEN pps.value_text END) AS starting_position_code",
+      "FROM player_period_stats AS pps",
+      "WHERE pps.stat = 'startingPositionCode'",
+      "GROUP BY pps.player_id, pps.match_id, pps.season, pps.round_number, pps.squad_id"
+    ))
+    # nWAR JOIN access path: player_id + match_id lookup
+    DBI::dbExecute(conn, "CREATE INDEX idx_pmp_player_match ON player_match_positions(player_id, match_id)")
+
     # Pre-aggregate period-level team stats to match level. Reduces per-stat row count by ~4x,
     # eliminates GROUP BY in fetch_team_game_high_rows, and enables fast archive-rank range scans
     # analogous to the player_match_stats path.
@@ -522,7 +541,7 @@ write_database <- function(tables, build_mode) {
 
     # Analyse only our tables (system catalogs require superuser; skip them).
     for (tbl in c("competitions", "matches", "teams", "players", "player_aliases",
-                  "team_period_stats", "player_period_stats", "player_match_stats", "team_match_stats", "metadata")) {
+                  "team_period_stats", "player_period_stats", "player_match_stats", "player_match_positions", "team_match_stats", "metadata")) {
       DBI::dbExecute(conn, paste0("ANALYZE ", DBI::dbQuoteIdentifier(conn, tbl)))
     }
   })

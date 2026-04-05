@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/assets/theme.js"></script>
+    <title>nWAR — Netball Wins Above Replacement | Netball Stats Database</title>
+    <meta name="description" content="Netball Wins Above Replacement (nWAR) ranks players by their estimated contribution to wins, based on net points above the replacement-level baseline.">
+    <link rel="preload" href="/assets/fonts/fraunces-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/teko-600-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script defer src="/assets/config.js"></script>
+    <script defer src="/assets/telemetry.js"></script>
+    <script defer src="/assets/nwar.js"></script>
+  </head>
+  <body class="nwar-page">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+
+    <header class="page-shell hero-shell reveal">
+      <nav class="page-nav" aria-label="Site navigation">
+        <a class="page-nav__link" href="/">Explore archive</a>
+        <a class="page-nav__link" href="/round/">Round recap</a>
+        <a class="page-nav__link" href="/players/">Player profiles</a>
+        <a class="page-nav__link" href="/query/">Ask the stats</a>
+        <a class="page-nav__link" href="/compare/">Compare</a>
+        <a class="page-nav__link page-nav__link--accent" href="/nwar/">nWAR</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light theme">Light</button>
+      </nav>
+
+      <section class="hero-panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Wins Above Replacement</p>
+          <h1>nWAR Leaderboard</h1>
+          <p class="intro-copy">How many extra wins has each player contributed compared to a replacement-level player?</p>
+        </div>
+
+        <aside class="hero-aside" aria-label="nWAR summary">
+          <div class="hero-aside__card">
+            <span class="hero-aside__label">Top performer</span>
+            <strong id="nwar-hero-label">Loading…</strong>
+            <p id="nwar-hero-summary">Loading the nWAR leaderboard.</p>
+          </div>
+        </aside>
+      </section>
+    </header>
+
+    <main id="main-content" class="page-shell page-main">
+      <section class="panel reveal">
+        <div id="nwar-status" class="status-banner" role="status" aria-live="polite" hidden></div>
+        <div class="panel__heading panel__heading--split">
+          <div>
+            <h2>Player nWAR rankings</h2>
+          </div>
+          <p class="muted" id="nwar-meta">Loading rankings…</p>
+        </div>
+
+        <form id="nwar-filters" class="filters filters--dashboard" aria-label="nWAR filters">
+          <div class="field">
+            <label for="nwar-season">Season</label>
+            <select id="nwar-season" name="season">
+              <option value="">All seasons</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="nwar-min-games">Min. games</label>
+            <select id="nwar-min-games" name="min_games">
+              <option value="3">3+ games</option>
+              <option value="5" selected>5+ games</option>
+              <option value="10">10+ games</option>
+              <option value="14">14+ games</option>
+            </select>
+          </div>
+          <div class="filter-actions">
+            <button type="submit" class="button">Apply</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel reveal">
+        <div class="table-wrapper">
+          <table id="nwar-table" aria-label="Netball Wins Above Replacement leaderboard">
+            <thead>
+              <tr>
+                <th scope="col">Rank</th>
+                <th scope="col">Player</th>
+                <th scope="col">Team</th>
+                <th scope="col">Position</th>
+                <th scope="col">Games</th>
+                <th scope="col">Avg Net Pts</th>
+                <th scope="col">Repl. Level</th>
+                <th scope="col"><abbr title="Net Points Above Replacement">NPAR</abbr>/Game</th>
+                <th scope="col">nWAR</th>
+              </tr>
+            </thead>
+            <tbody id="nwar-tbody">
+              <tr><td colspan="9" class="empty-state" data-kicker="Loading">Loading the nWAR leaderboard…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel reveal">
+        <div class="panel__heading">
+          <h2>How nWAR is calculated</h2>
+        </div>
+        <div class="stat-explainer">
+          <p>Netball Wins Above Replacement (nWAR) estimates how many additional wins each player contributes compared to a replacement-level player — roughly the average performance of the bottom 15% of qualified players in the dataset.</p>
+          <p>The metric uses Champion Data <strong>Net Points</strong> as its primary currency. Net Points reward positive actions (intercepts, gains, goal assists, deflections, rebounds) and penalise negative ones (turnovers, missed shots, penalties).</p>
+          <h3>Formula</h3>
+          <ol>
+            <li><strong>Replacement level</strong> — the mean average net points per game of the bottom 15% of qualified players meeting the minimum-games threshold.</li>
+            <li><strong><abbr title="Net Points Above Replacement">NPAR</abbr>/Game</strong> (Net Points Above Replacement per game) — the player's average net points per game minus the replacement level.</li>
+            <li><strong>nWAR</strong> = <abbr title="Net Points Above Replacement">NPAR</abbr>/Game × Games played ÷ 16 (the estimated net-point cost of one additional win).</li>
+          </ol>
+          <p class="muted">Replacement levels are computed separately for each position group — Shooters (GS/GA), Midcourt (WA/C/WD), and Defenders (GD/GK) — using each player's period-1 starting position from the Champion Data archive. This means a top defender can rank alongside a top shooter on a like-for-like basis. When position data is unavailable for a player, the global replacement level is used.</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
