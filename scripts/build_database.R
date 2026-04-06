@@ -640,14 +640,34 @@ write_database <- function(tables, build_mode) {
     ))
 
     # Build player_match_participation: one row per player per match where
-    # the player actually played at least 1 minute. Used to compute
-    # accurate matches_played counts (excludes bench appearances with 0 minutes).
+    # the player actually played at least 1 minute. Two cases:
+    #
+    # Case 1 (normal): minutesPlayed is properly tracked (>= 1). Used for
+    #   Super Netball 2017+ and ANZC 2015-2016 where Champion Data provides
+    #   real per-quarter minute values (e.g. 15 min per quarter played).
+    #
+    # Case 2 (fallback): the entire match has minutesPlayed = 0 for every
+    #   player — ANZC 2008-2014 where Champion Data populated the field with
+    #   zeros throughout historical seasons. In this case, include any player
+    #   who recorded at least one non-zero stat value (they demonstrably played).
     DBI::dbExecute(conn, "DROP TABLE IF EXISTS player_match_participation")
     DBI::dbExecute(conn, paste(
       "CREATE TABLE player_match_participation AS",
+      # Case 1: match has real minutesPlayed tracking — use it directly.
       "SELECT player_id, match_id, season, round_number, squad_id, squad_name",
       "FROM player_match_stats",
-      "WHERE stat = 'minutesPlayed' AND match_value >= 1"
+      "WHERE stat = 'minutesPlayed' AND match_value >= 1",
+      "UNION",
+      # Case 2: match has no real minutesPlayed data (all zeros for every player).
+      # Fall back to: any player with at least one non-zero numeric stat played.
+      "SELECT DISTINCT player_id, match_id, season, round_number, squad_id, squad_name",
+      "FROM player_match_stats",
+      "WHERE match_id NOT IN (",
+      "  SELECT DISTINCT match_id FROM player_match_stats",
+      "  WHERE stat = 'minutesPlayed' AND match_value >= 1",
+      ")",
+      "AND stat != 'minutesPlayed'",
+      "AND match_value > 0"
     ))
     DBI::dbExecute(conn, "CREATE INDEX idx_pmpart_player_match ON player_match_participation(player_id, match_id)")
     DBI::dbExecute(conn, "CREATE INDEX idx_pmpart_season ON player_match_participation(season, squad_id, player_id)")
