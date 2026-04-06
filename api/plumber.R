@@ -931,13 +931,20 @@ function(player_id = "", res) {
       return(json_error(res, 404, "Player not found."))
     }
 
+    has_participation <- has_player_match_stats(conn) && has_player_match_participation(conn)
     stats_rows <- if (has_player_match_stats(conn)) {
+      participation_join <- if (has_participation) {
+        "INNER JOIN player_match_participation pmpart ON pmpart.player_id = stats.player_id AND pmpart.match_id = stats.match_id"
+      } else {
+        ""
+      }
       query_rows(
         conn,
         paste(
-          "SELECT match_id, season, squad_name, stat, match_value AS value_number",
-          "FROM player_match_stats",
-          "WHERE player_id = ?player_id AND match_value IS NOT NULL"
+          "SELECT stats.match_id, stats.season, stats.squad_name, stats.stat, stats.match_value AS value_number",
+          "FROM player_match_stats stats",
+          participation_join,
+          "WHERE stats.player_id = ?player_id AND stats.match_value IS NOT NULL"
         ),
         list(player_id = player_id)
       )
