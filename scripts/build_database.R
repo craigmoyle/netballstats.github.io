@@ -518,9 +518,7 @@ write_database <- function(tables, build_mode) {
     DBI::dbExecute(conn, "DROP TABLE IF EXISTS player_match_positions")
     DBI::dbExecute(conn, paste(
       "CREATE TABLE player_match_positions AS",
-      "WITH",
-      "-- Dominant currentPositionCode per player per match (primary, most universal)",
-      "current_dom AS (",
+      "WITH current_dom AS (",
       "  SELECT pps.player_id, pps.match_id, pps.season, pps.round_number, pps.squad_id,",
       "    MAX(pps.squad_name) AS squad_name,",
       "    (SELECT pps2.value_text",
@@ -535,7 +533,6 @@ write_database <- function(tables, build_mode) {
       "  WHERE pps.stat = 'currentPositionCode'",
       "  GROUP BY pps.player_id, pps.match_id, pps.season, pps.round_number, pps.squad_id",
       "),",
-      "-- Period-1 startingPositionCode (supplementary override where available)",
       "start_code AS (",
       "  SELECT pps.player_id, pps.match_id,",
       "    MAX(CASE WHEN pps.period = 1 THEN pps.value_text END) AS starting_position_code",
