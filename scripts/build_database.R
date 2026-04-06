@@ -639,11 +639,34 @@ write_database <- function(tables, build_mode) {
       "  )"
     ))
 
+    # Build player_match_participation: one row per player per match where
+    # the player actually played at least 1 minute. Used to compute
+    # accurate matches_played counts (excludes bench appearances with 0 minutes).
+    DBI::dbExecute(conn, "DROP TABLE IF EXISTS player_match_participation")
+    DBI::dbExecute(conn, paste(
+      "CREATE TABLE player_match_participation AS",
+      "SELECT player_id, match_id, season, round_number, squad_id, squad_name",
+      "FROM player_match_stats",
+      "WHERE stat = 'minutesPlayed' AND match_value >= 1"
+    ))
+    DBI::dbExecute(conn, "CREATE INDEX idx_pmpart_player_match ON player_match_participation(player_id, match_id)")
+    DBI::dbExecute(conn, "CREATE INDEX idx_pmpart_season ON player_match_participation(season, squad_id, player_id)")
+
+    # Synthesise gamesPlayed stat: value 1 per match actually played (>= 1 min).
+    # Stored in player_match_stats so it flows through the standard leaderboard pipeline.
+    DBI::dbExecute(conn, paste(
+      "INSERT INTO player_match_stats",
+      "  (player_id, match_id, season, round_number, squad_id, squad_name, stat, match_value)",
+      "SELECT player_id, match_id, season, round_number, squad_id, squad_name, 'gamesPlayed', 1",
+      "FROM player_match_participation"
+    ))
+
     configure_postgres_api_user(conn)
 
     # Analyse only our tables (system catalogs require superuser; skip them).
     for (tbl in c("competitions", "matches", "teams", "players", "player_aliases",
-                  "team_period_stats", "player_period_stats", "player_match_stats", "player_match_positions", "team_match_stats", "metadata")) {
+                  "team_period_stats", "player_period_stats", "player_match_stats", "player_match_positions",
+                  "team_match_stats", "player_match_participation", "metadata")) {
       DBI::dbExecute(conn, paste0("ANALYZE ", DBI::dbQuoteIdentifier(conn, tbl)))
     }
   })

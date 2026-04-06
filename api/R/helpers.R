@@ -26,7 +26,7 @@ DEFAULT_PLAYER_STATS <- c(
   "badHands", "badPasses", "blocked", "blocks", "breaks",
   "centrePassReceives", "contactPenalties",
   "defensiveRebounds", "deflections", "deflectionWithGain", "deflectionWithNoGain",
-  "disposals", "feedWithAttempt", "feeds", "gain",
+  "disposals", "feedWithAttempt", "feeds", "gain", "gamesPlayed",
   "generalPlayTurnovers", "goal1", "goal2",
   "goal_from_zone1", "goal_from_zone2",
   "goalAssists", "goalAttempts", "goalMisses", "goals", "intercepts",
@@ -1181,6 +1181,17 @@ has_player_match_positions <- function(conn) {
   result
 }
 
+has_player_match_participation <- function(conn) {
+  cached <- getOption("netballstats.pmpart_available")
+  if (!is.null(cached)) return(isTRUE(cached))
+  result <- isTRUE(tryCatch(
+    DBI::dbExistsTable(conn, "player_match_participation"),
+    error = function(e) FALSE
+  ))
+  options(netballstats.pmpart_available = result)
+  result
+}
+
 # Maps a Champion Data startingPositionCode to a broad positional group.
 # GS/GA are Shooters; WA/C/WD are Midcourt; GD/GK are Defenders.
 # Interchange and unrecognised codes fall through to "Other".
@@ -1497,14 +1508,20 @@ fetch_player_leader_rows <- function(conn, seasons = NULL, team_id = NULL, round
   value_col   <- if (identical(stats_table, "player_match_stats")) "match_value" else "value_number"
   order_column <- if (identical(metric, "average")) "average_value" else "total_value"
   order_direction <- ranking_order_sql(ranking)
+  has_participation <- has_player_match_stats(conn) && has_player_match_participation(conn)
+  participation_join <- if (has_participation) {
+    "INNER JOIN player_match_participation pmpart ON pmpart.player_id = stats.player_id AND pmpart.match_id = stats.match_id"
+  } else ""
+  matches_played_expr <- if (has_participation) "pmpart.match_id" else "stats.match_id"
 
   query <- paste(
     "SELECT stats.player_id, players.canonical_name AS player_name, MAX(stats.squad_name) AS squad_name,",
     paste0("?stat AS stat, ROUND(CAST(SUM(stats.", value_col, ") AS numeric), 2) AS total_value,"),
-    "COUNT(DISTINCT stats.match_id) AS matches_played,",
-    paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric) / NULLIF(COUNT(DISTINCT stats.match_id), 0), 2) AS average_value"),
+    paste0("COUNT(DISTINCT ", matches_played_expr, ") AS matches_played,"),
+    paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric) / NULLIF(COUNT(DISTINCT ", matches_played_expr, "), 0), 2) AS average_value"),
     paste0("FROM ", stats_table, " AS stats"),
     "INNER JOIN players ON players.player_id = stats.player_id",
+    participation_join,
     "WHERE stats.stat = ?stat"
   )
   filters <- apply_stat_filters(
@@ -1539,14 +1556,20 @@ fetch_player_season_metric_rows <- function(conn, seasons = NULL, team_id = NULL
   # season level scans ~4x fewer rows.
   stats_table <- if (has_player_match_stats(conn)) "player_match_stats" else "player_period_stats"
   value_col   <- if (identical(stats_table, "player_match_stats")) "match_value" else "value_number"
+  has_participation <- has_player_match_stats(conn) && has_player_match_participation(conn)
+  participation_join <- if (has_participation) {
+    "INNER JOIN player_match_participation pmpart ON pmpart.player_id = stats.player_id AND pmpart.match_id = stats.match_id"
+  } else ""
+  matches_played_expr <- if (has_participation) "pmpart.match_id" else "stats.match_id"
 
   query <- paste(
     "SELECT stats.player_id, players.canonical_name AS player_name, MAX(stats.squad_name) AS squad_name,",
     paste0("stats.season, ?stat AS stat, ROUND(CAST(SUM(stats.", value_col, ") AS numeric), 2) AS total_value,"),
-    "COUNT(DISTINCT stats.match_id) AS matches_played,",
-    paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric) / NULLIF(COUNT(DISTINCT stats.match_id), 0), 2) AS average_value"),
+    paste0("COUNT(DISTINCT ", matches_played_expr, ") AS matches_played,"),
+    paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric) / NULLIF(COUNT(DISTINCT ", matches_played_expr, "), 0), 2) AS average_value"),
     paste0("FROM ", stats_table, " AS stats"),
     "INNER JOIN players ON players.player_id = stats.player_id",
+    participation_join,
     "WHERE stats.stat = ?stat"
   )
   filters <- apply_stat_filters(
@@ -2929,13 +2952,21 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
   } else {
     ""
   }
+  # Use player_match_participation to count only games where the player actually
+  # played >= 1 minute. The INNER JOIN also gates all stat SUM columns so bench
+  # appearances (minutesPlayed = 0) cannot contribute to the nWAR calculation.
+  has_participation <- has_player_match_participation(conn)
+  participation_join <- if (has_participation) {
+    "INNER JOIN player_match_participation pmpart ON pmpart.player_id = stats.player_id AND pmpart.match_id = stats.match_id"
+  } else ""
+  games_played_expr <- if (has_participation) "pmpart.match_id" else "stats.match_id"
 
   query <- paste(
     # MAX(squad_name) is used because a player who transferred mid-season can
     # appear under multiple squad names. The MAX picks one name arbitrarily
     # (alphabetical); this is display-only and does not affect nWAR calculations.
     "SELECT stats.player_id, players.canonical_name AS player_name, MAX(stats.squad_name) AS squad_name,",
-    "COUNT(DISTINCT stats.match_id) AS games_played,",
+    paste0("COUNT(DISTINCT ", games_played_expr, ") AS games_played,"),
     "SUM(CASE WHEN stats.stat = 'goal1' THEN stats.match_value ELSE 0 END) AS total_goal1,",
     "SUM(CASE WHEN stats.stat = 'goal2' THEN stats.match_value ELSE 0 END) AS total_goal2,",
     "SUM(CASE WHEN stats.stat = 'goals' THEN stats.match_value ELSE 0 END) AS total_goals_legacy,",
@@ -2957,6 +2988,7 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
     "FROM player_match_stats AS stats",
     "INNER JOIN players ON players.player_id = stats.player_id",
     position_join,
+    participation_join,
     "WHERE 1=1"
   )
 
@@ -2971,7 +3003,7 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
   filters$query <- paste0(
     filters$query,
     " GROUP BY stats.player_id, players.canonical_name",
-    " HAVING COUNT(DISTINCT stats.match_id) >= ?min_games"
+    paste0(" HAVING COUNT(DISTINCT ", games_played_expr, ") >= ?min_games")
   )
   filters$params$min_games <- as.integer(min_games)
   filters

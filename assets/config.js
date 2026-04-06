@@ -38,6 +38,7 @@
     feedWithAttempt: "Feeds with Attempt",
     feeds: "Feeds into Circle",
     gain: "Gains",
+    gamesPlayed: "Games Played",
     generalPlayTurnovers: "General Play Turnovers",
     goal1: "1 Point Goals",
     goal2: "Super Shots",
