@@ -2876,9 +2876,9 @@ fetch_query_result_rows <- function(conn, intent) {
 # NWAR_POINTS_PER_WIN: fantasy points per estimated win.
 # Calibration target: elite player earns ~6–8 nWAR per full season;
 # solid starter earns ~2–3 nWAR; fringe qualifier earns ~0.5–1 nWAR.
-# Recalibrate empirically after deploy by checking top player's nWAR.
-# Starting estimate targeting Jhaniele Fowler-Nembhard at ~7 nWAR for 2024.
-NWAR_POINTS_PER_WIN      <- 200.0
+# Derived empirically: (Jhaniele avg_fs − shooter_repl) × 16 games / 7 target
+# = (155.31 − 22.58) × 16 / 7 ≈ 303 → rounded to 300.
+NWAR_POINTS_PER_WIN      <- 300.0
 # NWAR_REPLACEMENT_PERCENTILE: bottom fraction of qualified players used to
 # define the replacement-level baseline (e.g. 0.15 = bottom 15%).
 NWAR_REPLACEMENT_PERCENTILE <- 0.15
