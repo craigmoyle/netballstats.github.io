@@ -4,6 +4,7 @@ const {
   cycleStatusBanner = () => {},
   fetchJson,
   formatNumber,
+  formatStatAbbrev = (stat) => stat,
   formatStatLabel = (stat) => stat,
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
@@ -225,10 +226,18 @@ function renderSeasonTable(profile) {
     : "Season totals for key stats.";
 
   elements.seasonStatsHead.replaceChildren();
-  ["Season", "Clubs", "Games", ...stats.map((stat) => statLabel(stat))].forEach((label) => {
+  ["Season", "Clubs", "Games"].forEach((label) => {
     const cell = document.createElement("th");
     cell.scope = "col";
     cell.textContent = label;
+    elements.seasonStatsHead.appendChild(cell);
+  });
+  stats.forEach((stat) => {
+    const cell = document.createElement("th");
+    cell.scope = "col";
+    cell.className = "season-table__stat-head";
+    cell.textContent = formatStatAbbrev(stat);
+    cell.title = statLabel(stat);
     elements.seasonStatsHead.appendChild(cell);
   });
 

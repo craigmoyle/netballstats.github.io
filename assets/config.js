@@ -66,6 +66,57 @@
     unforcedTurnovers: "Unforced Turnovers"
   });
 
+  const STAT_ABBREV_OVERRIDES = Object.freeze({
+    attempt_from_zone1: "Z1 Att",
+    attempt_from_zone2: "Z2 Att",
+    attempts1: "1Pt Att",
+    attempts2: "SS Att",
+    centrePassReceives: "CPR",
+    contactPenalties: "Contacts",
+    defensiveRebounds: "Def Reb",
+    deflectionPossessionGain: "DPG",
+    deflectionWithGain: "DWG",
+    deflectionWithNoGain: "DWNG",
+    deflections: "Defl",
+    disposals: "Disp",
+    feedWithAttempt: "FwA",
+    feeds: "Feeds",
+    gain: "Gains",
+    gamesPlayed: "GP",
+    generalPlayTurnovers: "GPT",
+    goal1: "1Pt G",
+    goal2: "SS",
+    goal_from_zone1: "Z1 G",
+    goal_from_zone2: "Z2 G",
+    goalAssists: "G Ast",
+    goalAttempts: "G Att",
+    goalMisses: "G Miss",
+    goals: "Goals",
+    goals1: "1Pt G",
+    goals2: "SS",
+    goalsFromCentrePass: "GfCP",
+    goalsFromGain: "GfG",
+    goalsFromTurnovers: "GfTO",
+    intercepts: "INT",
+    interceptPassThrown: "IPT",
+    missedGoalTurnover: "MGT",
+    netPoints: "Net Pts",
+    obstructionPenalties: "OBS",
+    offensiveRebounds: "Off Reb",
+    penalties: "Pen",
+    pickups: "PKU",
+    points: "Pts",
+    possessionChanges: "PC",
+    possessions: "Poss",
+    rebounds: "Reb",
+    secondPhaseReceive: "2P Rec",
+    timeInPossession: "TiP",
+    tossUpWin: "Toss",
+    turnoverHeld: "TO Held",
+    turnovers: "TO",
+    unforcedTurnovers: "UTO",
+  });
+
   const LOW_IS_BETTER_STATS = new Set([
     "contactPenalties",
     "generalPlayTurnovers",
@@ -89,6 +140,14 @@
       .replace(/_/g, " ");
 
     return cleanLabel(spaced.replace(/\b[a-z]/g, (match) => match.toUpperCase()));
+  }
+
+  function formatStatAbbrev(stat) {
+    const normalized = cleanLabel(stat);
+    if (!normalized) {
+      return "";
+    }
+    return STAT_ABBREV_OVERRIDES[normalized] || formatStatLabel(normalized);
   }
 
   function statPrefersLowerValue(stat) {
@@ -300,6 +359,7 @@
       cycleStatusBanner,
       fetchJson,
       formatNumber,
+      formatStatAbbrev,
       formatStatLabel,
       showStatusBanner,
       statPrefersLowerValue,

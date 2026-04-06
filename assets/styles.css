@@ -1775,6 +1775,17 @@ caption.table-caption {
   vertical-align: bottom;
 }
 
+/* Stat columns: rotated vertical text keeps headers narrow without wrapping */
+.season-table__stat-head {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  vertical-align: bottom;
+  width: 2.25rem;
+  padding: 0.5rem 0.35rem 0.65rem;
+  cursor: default;
+}
+
 .season-table td:nth-child(2) {
   overflow: hidden;
   text-overflow: ellipsis;
