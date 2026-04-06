@@ -505,43 +505,54 @@ write_database <- function(tables, build_mode) {
     ))
 
     # Derive per-player per-match starting position from period-level position stats.
-    # Uses startingPositionCode from period 1 as primary. For players who start on the
-    # bench (startingPositionCode = 'I' or NULL), falls back to the most-common
-    # currentPositionCode across all periods — giving them their dominant playing role.
+    #
+    # Primary source: currentPositionCode (reported every period a player is on court).
+    # Most common non-bench (not 'I'/'S') currentPositionCode across all periods in a
+    # match gives the player's dominant playing role. This is the most reliable source
+    # because Champion Data does not consistently report startingPositionCode in all
+    # seasons (2022+ coverage is significantly lower than earlier seasons).
+    #
+    # Override: where startingPositionCode is available for period 1 and is a field
+    # position (not 'I'/'S'), it takes precedence — it reflects the coach's deliberate
+    # assignment at the start of the quarter.
     DBI::dbExecute(conn, "DROP TABLE IF EXISTS player_match_positions")
     DBI::dbExecute(conn, paste(
       "CREATE TABLE player_match_positions AS",
-      "WITH starting AS (",
+      "WITH",
+      "-- Dominant currentPositionCode per player per match (primary, most universal)",
+      "current_dom AS (",
       "  SELECT pps.player_id, pps.match_id, pps.season, pps.round_number, pps.squad_id,",
       "    MAX(pps.squad_name) AS squad_name,",
-      "    MAX(CASE WHEN pps.stat = 'startingPositionCode' AND pps.period = 1",
-      "         THEN pps.value_text END) AS starting_position_code",
-      "  FROM player_period_stats AS pps",
-      "  WHERE pps.stat = 'startingPositionCode'",
-      "  GROUP BY pps.player_id, pps.match_id, pps.season, pps.round_number, pps.squad_id",
-      "),",
-      "current_dominant AS (",
-      "  SELECT pps.player_id, pps.match_id,",
-      "    (SELECT pps2.value_text FROM player_period_stats pps2",
+      "    (SELECT pps2.value_text",
+      "     FROM player_period_stats pps2",
       "     WHERE pps2.player_id = pps.player_id AND pps2.match_id = pps.match_id",
       "       AND pps2.stat = 'currentPositionCode'",
       "       AND pps2.value_text NOT IN ('I', 'S')",
       "     GROUP BY pps2.value_text",
       "     ORDER BY COUNT(*) DESC",
-      "     LIMIT 1) AS dominant_position_code",
+      "     LIMIT 1) AS current_position_code",
       "  FROM player_period_stats pps",
       "  WHERE pps.stat = 'currentPositionCode'",
+      "  GROUP BY pps.player_id, pps.match_id, pps.season, pps.round_number, pps.squad_id",
+      "),",
+      "-- Period-1 startingPositionCode (supplementary override where available)",
+      "start_code AS (",
+      "  SELECT pps.player_id, pps.match_id,",
+      "    MAX(CASE WHEN pps.period = 1 THEN pps.value_text END) AS starting_position_code",
+      "  FROM player_period_stats pps",
+      "  WHERE pps.stat = 'startingPositionCode'",
       "  GROUP BY pps.player_id, pps.match_id",
       ")",
-      "SELECT s.player_id, s.match_id, s.season, s.round_number, s.squad_id, s.squad_name,",
-      "  CASE",
-      "    WHEN s.starting_position_code NOT IN ('I', 'S') AND s.starting_position_code IS NOT NULL",
-      "      THEN s.starting_position_code",
-      "    ELSE cd.dominant_position_code",
-      "  END AS starting_position_code",
-      "FROM starting s",
-      "LEFT JOIN current_dominant cd",
-      "  ON s.player_id = cd.player_id AND s.match_id = cd.match_id"
+      "SELECT cd.player_id, cd.match_id, cd.season, cd.round_number, cd.squad_id, cd.squad_name,",
+      "  COALESCE(",
+      "    CASE WHEN sc.starting_position_code NOT IN ('I', 'S')",
+      "          AND sc.starting_position_code IS NOT NULL",
+      "         THEN sc.starting_position_code END,",
+      "    cd.current_position_code",
+      "  ) AS starting_position_code",
+      "FROM current_dom cd",
+      "LEFT JOIN start_code sc",
+      "  ON sc.player_id = cd.player_id AND sc.match_id = cd.match_id"
     ))
     # nWAR JOIN access path: player_id + match_id lookup
     DBI::dbExecute(conn, "CREATE INDEX idx_pmp_player_match ON player_match_positions(player_id, match_id)")

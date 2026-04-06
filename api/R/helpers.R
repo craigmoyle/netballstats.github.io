@@ -2867,11 +2867,13 @@ fetch_query_result_rows <- function(conn, intent) {
 }
 
 # Netball Wins Above Replacement (nWAR) constants.
-# NWAR_POINTS_PER_WIN: number of Net Points above replacement needed to equal one
-# additional win. Based on the empirical estimate that ~8–10 net goals separate
-# teams at different win rates in a Super Netball season, scaled for the broader
-# Champion Data Net Points currency.
-NWAR_POINTS_PER_WIN      <- 16.0
+# NWAR_POINTS_PER_WIN: Champion Data's netPoints stat is a composite player-contribution
+# metric, not raw goal differential. Typical values: top performers 80–111/game;
+# replacement-level players 20–38/game. Calibration target: the best single-season
+# performer earns ~6–8 nWAR; a solid rotation player earns ~1.5–2.5 nWAR; a fringe
+# qualifier earns ~0.3–0.5 nWAR.  Derived empirically from 2024 data: setting this
+# constant so the season leader (npar ≈ 73, games = 16) produces nWAR ≈ 6–7.
+NWAR_POINTS_PER_WIN      <- 175.0
 # NWAR_REPLACEMENT_PERCENTILE: bottom fraction of qualified players used to define
 # the replacement-level baseline (e.g. 0.15 = bottom 15%).
 NWAR_REPLACEMENT_PERCENTILE <- 0.15
@@ -2889,12 +2891,27 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
   value_col      <- if (identical(stats_table, "player_match_stats")) "match_value" else "value_number"
 
   # Include per-match position data when player_match_positions exists (populated by
-  # build_database.R from Champion Data startingPositionCode). Uses MODE() WITHIN GROUP
-  # which is PostgreSQL-specific; the table only exists after a full DB rebuild, so this
-  # path is automatically skipped on SQLite local-dev instances.
+  # build_database.R primarily from currentPositionCode, falling back to
+  # startingPositionCode). Uses MODE() WITHIN GROUP which is PostgreSQL-specific;
+  # the table only exists after a full DB rebuild, so this path is automatically
+  # skipped on SQLite local-dev instances.
+  #
+  # Two-level position resolution:
+  #   1. Per-season MODE of the player's starting_position_code across queried matches.
+  #   2. All-time dominant fallback: if the per-season MODE is NULL (player has no
+  #      position records in the queried season), look up their most common
+  #      position code across ALL seasons in player_match_positions.
   has_positions <- has_player_match_positions(conn)
   position_select <- if (has_positions) {
-    ", MODE() WITHIN GROUP (ORDER BY pmp.starting_position_code) AS position_code"
+    paste(
+      ", COALESCE(",
+      "  MODE() WITHIN GROUP (ORDER BY pmp.starting_position_code),",
+      "  (SELECT MODE() WITHIN GROUP (ORDER BY pmp2.starting_position_code)",
+      "   FROM player_match_positions pmp2",
+      "   WHERE pmp2.player_id = stats.player_id",
+      "     AND pmp2.starting_position_code NOT IN ('I', 'S'))",
+      ") AS position_code"
+    )
   } else {
     ", NULL AS position_code"
   }
