@@ -11,7 +11,7 @@ const {
 
 const LOADING_MESSAGES = [
   "Calculating wins above replacement…",
-  "Crunching net points…",
+  "Computing fantasy scores…",
   "Ranking contributions…"
 ];
 
@@ -94,7 +94,7 @@ function renderTable(rows) {
     gamesCell.textContent = formatNumber(row.games_played);
 
     const avgCell = document.createElement("td");
-    avgCell.textContent = formatDecimal(row.avg_net_points_per_game);
+    avgCell.textContent = formatDecimal(row.avg_fantasy_score);
 
     const replCell = document.createElement("td");
     replCell.textContent = formatDecimal(row.replacement_level);
@@ -159,7 +159,7 @@ async function loadNwar() {
     const topPlayer = state.rows[0];
     if (topPlayer) {
       if (elements.nwarHeroLabel) elements.nwarHeroLabel.textContent = `${topPlayer.player_name} — ${formatNwar(topPlayer.nwar)} nWAR`;
-      if (elements.nwarHeroSummary) elements.nwarHeroSummary.textContent = `${topPlayer.games_played} games, ${formatDecimal(topPlayer.avg_net_points_per_game)} avg net points.`;
+      if (elements.nwarHeroSummary) elements.nwarHeroSummary.textContent = `${topPlayer.games_played} games, ${formatDecimal(topPlayer.avg_fantasy_score)} avg fantasy pts.`;
     } else {
       if (elements.nwarHeroLabel) elements.nwarHeroLabel.textContent = "No qualifying players";
       if (elements.nwarHeroSummary) elements.nwarHeroSummary.textContent = "Try adjusting the minimum games filter.";

@@ -2867,30 +2867,31 @@ fetch_query_result_rows <- function(conn, intent) {
 }
 
 # Netball Wins Above Replacement (nWAR) constants.
-# NWAR_POINTS_PER_WIN: Champion Data's netPoints stat is a composite player-contribution
-# metric, not raw goal differential. Typical values: top performers 80–111/game;
-# replacement-level shooters ~0–2/game (many backup GS/GA qualify but contribute
-# near-zero); replacement-level defenders/midcourt ~9–13/game.
+#
+# Scoring is based on the 2025 Fantasy Netball Blog scoring system:
+#   https://fantasynetballblog.wordpress.com/2025/03/18/2025-fn-scoring-system/
+# This replaces the old Champion Data netPoints metric, which was unavailable
+# in early seasons (2017) and had calibration issues with replacement levels.
+#
+# NWAR_POINTS_PER_WIN: fantasy points per estimated win.
 # Calibration target: elite player earns ~6–8 nWAR per full season;
-# solid starter earns ~2–3 nWAR; fringe qualifier earns ~0.3–0.8 nWAR.
-# Derived empirically from 2024 data: targets Jhaniele Fowler-Nembhard (111.41 avg,
-# repl=0.5, 16 games) at ~7 nWAR → PPW = 110.91 × 16 / 7 ≈ 253 → rounded to 250.
-NWAR_POINTS_PER_WIN      <- 250.0
-# NWAR_REPLACEMENT_PERCENTILE: bottom fraction of qualified players used to define
-# the replacement-level baseline (e.g. 0.15 = bottom 15%).
+# solid starter earns ~2–3 nWAR; fringe qualifier earns ~0.5–1 nWAR.
+# Recalibrate empirically after deploy by checking top player's nWAR.
+# Starting estimate targeting Jhaniele Fowler-Nembhard at ~7 nWAR for 2024.
+NWAR_POINTS_PER_WIN      <- 200.0
+# NWAR_REPLACEMENT_PERCENTILE: bottom fraction of qualified players used to
+# define the replacement-level baseline (e.g. 0.15 = bottom 15%).
 NWAR_REPLACEMENT_PERCENTILE <- 0.15
 
 # Builds the SQL query and parameter list for the nWAR aggregate.
 # Returns a list(query, params) ready to pass to query_rows().
 #
-# value_col is a hardcoded internal constant derived from the detected table
-# name — it is never sourced from user input and is safe to interpolate via
-# paste0(). Do not copy this pattern with user-supplied values.
+# Requires player_match_stats (not period stats) for conditional aggregation
+# across multiple stat types. Returns NULL if only period stats exist.
 build_nwar_query <- function(conn, seasons, team_id, min_games) {
+  if (!has_player_match_stats(conn)) return(NULL)
+
   seasons_filter <- if (!is.null(seasons) && length(seasons)) as.integer(seasons) else NULL
-  stats_table    <- if (has_player_match_stats(conn)) "player_match_stats" else "player_period_stats"
-  # value_col is an internal constant — never user-supplied, safe to interpolate.
-  value_col      <- if (identical(stats_table, "player_match_stats")) "match_value" else "value_number"
 
   # Include per-match position data when player_match_positions exists (populated by
   # build_database.R primarily from currentPositionCode, falling back to
@@ -2898,8 +2899,13 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
   # the table only exists after a full DB rebuild, so this path is automatically
   # skipped on SQLite local-dev instances.
   #
+  # The position join uses a pre-aggregated subquery (one row per player+match) to
+  # avoid row multiplication. Without this, joining player_match_positions directly
+  # (which has one row per player+period+match) would multiply each stat row by the
+  # number of periods, overcounting all conditional SUMs.
+  #
   # Two-level position resolution:
-  #   1. Per-season MODE of the player's starting_position_code across queried matches.
+  #   1. Per-season MODE of the player's dominant match position across queried matches.
   #   2. All-time dominant fallback: if the per-season MODE is NULL (player has no
   #      position records in the queried season), look up their most common
   #      position code across ALL seasons in player_match_positions.
@@ -2917,9 +2923,17 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
   } else {
     ", NULL AS position_code"
   }
+  # Pre-aggregate positions to one row per player+match to avoid stat row multiplication.
   position_join <- if (has_positions) {
-    paste0("LEFT JOIN player_match_positions pmp",
-           " ON pmp.player_id = stats.player_id AND pmp.match_id = stats.match_id")
+    paste(
+      "LEFT JOIN (",
+      "  SELECT player_id, match_id,",
+      "    MODE() WITHIN GROUP (ORDER BY starting_position_code) AS starting_position_code",
+      "  FROM player_match_positions",
+      "  WHERE starting_position_code NOT IN ('I', 'S', '-')",
+      "  GROUP BY player_id, match_id",
+      ") pmp ON pmp.player_id = stats.player_id AND pmp.match_id = stats.match_id"
+    )
   } else {
     ""
   }
@@ -2929,19 +2943,35 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
     # appear under multiple squad names. The MAX picks one name arbitrarily
     # (alphabetical); this is display-only and does not affect nWAR calculations.
     "SELECT stats.player_id, players.canonical_name AS player_name, MAX(stats.squad_name) AS squad_name,",
-    paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric), 2) AS total_net_points,"),
     "COUNT(DISTINCT stats.match_id) AS games_played,",
-    paste0("ROUND(CAST(SUM(stats.", value_col, ") AS numeric) / NULLIF(COUNT(DISTINCT stats.match_id), 0), 2) AS avg_net_points_per_game"),
+    "SUM(CASE WHEN stats.stat = 'goal1' THEN stats.match_value ELSE 0 END) AS total_goal1,",
+    "SUM(CASE WHEN stats.stat = 'goal2' THEN stats.match_value ELSE 0 END) AS total_goal2,",
+    "SUM(CASE WHEN stats.stat = 'offensiveRebounds' THEN stats.match_value ELSE 0 END) AS total_off_reb,",
+    "SUM(CASE WHEN stats.stat = 'defensiveRebounds' THEN stats.match_value ELSE 0 END) AS total_def_reb,",
+    "SUM(CASE WHEN stats.stat = 'feeds' THEN stats.match_value ELSE 0 END) AS total_feeds,",
+    "SUM(CASE WHEN stats.stat = 'centrePassReceives' THEN stats.match_value ELSE 0 END) AS total_cpr,",
+    "SUM(CASE WHEN stats.stat = 'secondPhaseReceive' THEN stats.match_value ELSE 0 END) AS total_spr,",
+    "SUM(CASE WHEN stats.stat = 'gain' THEN stats.match_value ELSE 0 END) AS total_gain,",
+    "SUM(CASE WHEN stats.stat = 'intercepts' THEN stats.match_value ELSE 0 END) AS total_intercepts,",
+    "SUM(CASE WHEN stats.stat = 'deflections' THEN stats.match_value ELSE 0 END) AS total_deflections,",
+    "SUM(CASE WHEN stats.stat = 'pickups' THEN stats.match_value ELSE 0 END) AS total_pickups,",
+    "SUM(CASE WHEN stats.stat = 'goalMisses' THEN stats.match_value ELSE 0 END) AS total_missed_goals,",
+    "SUM(CASE WHEN stats.stat = 'generalPlayTurnovers' THEN stats.match_value ELSE 0 END) AS total_gpto,",
+    "SUM(CASE WHEN stats.stat = 'interceptPassThrown' THEN stats.match_value ELSE 0 END) AS total_pass_int,",
+    "SUM(CASE WHEN stats.stat = 'badPasses' THEN stats.match_value ELSE 0 END) AS total_bad_pass,",
+    "SUM(CASE WHEN stats.stat = 'badHands' THEN stats.match_value ELSE 0 END) AS total_bad_hands,",
+    "SUM(CASE WHEN stats.stat = 'penalties' THEN stats.match_value ELSE 0 END) AS total_penalties,",
+    "SUM(CASE WHEN stats.stat = 'quartersPlayed' THEN stats.match_value ELSE 0 END) AS total_quarters",
     position_select,
-    paste0("FROM ", stats_table, " AS stats"),
+    "FROM player_match_stats AS stats",
     "INNER JOIN players ON players.player_id = stats.player_id",
     position_join,
-    "WHERE stats.stat = ?stat"
+    "WHERE 1=1"
   )
 
   filters <- apply_stat_filters(
     query,
-    list(stat = "netPoints"),
+    list(),
     seasons = seasons_filter,
     team_id = team_id,
     round_number = NULL,
@@ -2958,57 +2988,101 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
 
 # Calculates Netball Wins Above Replacement (nWAR) for all qualified players.
 #
+# Scoring uses the 2025 Fantasy Netball Blog system (court time + attack +
+# defence − errors) instead of Champion Data's netPoints, so rankings are
+# meaningful across all seasons including those predating netPoints.
+#
 # Steps:
-#   1. Aggregate each player's total and average Net Points per game.
+#   1. Aggregate each player's per-match stats via conditional SQL SUM.
 #   2. Restrict to players with at least min_games qualifying matches.
-#   3. If position data is available, map players to position groups (Shooter /
+#   3. Compute fantasy score in R from component stat totals.
+#      CPR multiplier is position-specific: GD/WD = 3 pts each, others = 0.5.
+#      Court time = games × 10 + quarters_played × 5.
+#   4. If position data is available, map players to position groups (Shooter /
 #      Midcourt / Defender) and compute a per-group replacement level = mean avg
-#      net points of the bottom NWAR_REPLACEMENT_PERCENTILE of that group.
+#      fantasy score of the bottom NWAR_REPLACEMENT_PERCENTILE of that group.
 #      Without position data, a single global replacement level is used.
-#   4. Compute NPAR/game = avg_net_points_per_game - replacement_level.
-#   5. Compute nWAR = NPAR/game × games_played / NWAR_POINTS_PER_WIN.
+#   5. Compute FPAR/game = avg_fantasy_score - replacement_level.
+#   6. Compute nWAR = FPAR/game × games_played / NWAR_POINTS_PER_WIN.
 fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L, limit = 50L) {
-  filters  <- build_nwar_query(conn, seasons, team_id, min_games)
-  all_rows <- query_rows(conn, filters$query, filters$params)
+  filters <- build_nwar_query(conn, seasons, team_id, min_games)
 
-  if (nrow(all_rows) == 0L) {
-    return(data.frame(
-      player_id               = integer(0),
-      player_name             = character(0),
-      squad_name              = character(0),
-      games_played            = integer(0),
-      total_net_points        = numeric(0),
-      avg_net_points_per_game = numeric(0),
-      position_code           = character(0),
-      position_group          = character(0),
-      replacement_level       = numeric(0),
-      npar                    = numeric(0),
-      nwar                    = numeric(0),
-      stringsAsFactors        = FALSE
-    ))
+  empty_frame <- data.frame(
+    player_id         = integer(0),
+    player_name       = character(0),
+    squad_name        = character(0),
+    games_played      = integer(0),
+    total_fantasy_score = numeric(0),
+    avg_fantasy_score = numeric(0),
+    position_code     = character(0),
+    position_group    = character(0),
+    replacement_level = numeric(0),
+    npar              = numeric(0),
+    nwar              = numeric(0),
+    stringsAsFactors  = FALSE
+  )
+
+  if (is.null(filters)) {
+    api_log("WARN", "nwar_no_match_stats",
+            error_message = "Fantasy nWAR requires player_match_stats table; returning empty result.")
+    return(empty_frame)
   }
 
-  # DB expressions use ROUND(CAST(... AS numeric)) and COUNT(DISTINCT ...), so
-  # types should already be correct. Coerce without suppressing warnings so that
-  # any schema drift or DBI type mismatch surfaces immediately.
-  avg_np <- as.numeric(all_rows$avg_net_points_per_game)
-  games  <- as.integer(all_rows$games_played)
-  n_valid <- sum(!is.na(avg_np))
+  all_rows <- query_rows(conn, filters$query, filters$params)
+
+  if (nrow(all_rows) == 0L) return(empty_frame)
+
+  games   <- as.integer(all_rows$games_played)
+  pos_code <- if (!is.null(all_rows$position_code)) as.character(all_rows$position_code) else rep(NA_character_, nrow(all_rows))
+  pos_group <- position_group_from_code(pos_code)
+
+  # CPR multiplier: GD/WD receive rare centre passes worth 3 pts each;
+  # all other positions get 0.5 pts per CPR (1 per 2).
+  cpr_mult <- ifelse(!is.na(pos_code) & pos_code %in% c("GD", "WD"), 3.0, 0.5)
+
+  # Court time: 10 pts per game on court + 5 pts per quarter played.
+  # quartersPlayed stat may be absent in very early seasons; fall back to
+  # assuming a full 4-quarter game so court time is not zeroed out.
+  total_quarters <- as.numeric(all_rows$total_quarters)
+  total_quarters <- ifelse(
+    total_quarters == 0 & games > 0L,
+    as.numeric(games) * 4.0,
+    total_quarters
+  )
+  court_time_pts <- as.numeric(games) * 10.0 + total_quarters * 5.0
+
+  fantasy_score <-
+    court_time_pts +
+    as.numeric(all_rows$total_goal1)        *  2.0 +
+    as.numeric(all_rows$total_goal2)        *  6.0 +
+    as.numeric(all_rows$total_off_reb)      *  4.0 +
+    as.numeric(all_rows$total_feeds)        *  2.0 +
+    as.numeric(all_rows$total_cpr)          * cpr_mult +
+    as.numeric(all_rows$total_spr)          *  1.0 +
+    as.numeric(all_rows$total_gain)         *  6.0 +
+    as.numeric(all_rows$total_intercepts)   *  8.0 +
+    as.numeric(all_rows$total_deflections)  *  6.0 +
+    as.numeric(all_rows$total_def_reb)      *  4.0 +
+    as.numeric(all_rows$total_pickups)      *  6.0 +
+    as.numeric(all_rows$total_missed_goals) * -4.0 +
+    as.numeric(all_rows$total_gpto)         * -4.0 +
+    as.numeric(all_rows$total_pass_int)     * -4.0 +
+    as.numeric(all_rows$total_bad_pass)     * -4.0 +
+    as.numeric(all_rows$total_bad_hands)    * -4.0 +
+    as.numeric(all_rows$total_penalties)    * -0.5
+
+  avg_fs <- round(fantasy_score / pmax(as.numeric(games), 1L), 2)
+  n_valid <- sum(!is.na(avg_fs))
 
   if (n_valid == 0L) {
     api_log("WARN", "nwar_no_valid_avg",
-            error_message = "All avg_net_points values are NA after coercion; cannot compute replacement level.")
-    stop("Unable to compute replacement level: no valid average net points.", call. = FALSE)
+            error_message = "All avg_fantasy_score values are NA after computation; cannot compute replacement level.")
+    stop("Unable to compute replacement level: no valid average fantasy scores.", call. = FALSE)
   }
-
-  # Determine position codes and groups. When player_match_positions is absent,
-  # position_code is NULL from the query — fall back to a global replacement level.
-  pos_code  <- if (!is.null(all_rows$position_code)) as.character(all_rows$position_code) else rep(NA_character_, nrow(all_rows))
-  pos_group <- position_group_from_code(pos_code)
 
   # Compute global replacement level (fallback and reference).
   n_repl_global <- max(1L, ceiling(n_valid * NWAR_REPLACEMENT_PERCENTILE))
-  repl_global   <- round(mean(head(sort(avg_np, na.last = TRUE), n_repl_global), na.rm = TRUE), 2)
+  repl_global   <- round(mean(head(sort(avg_fs, na.last = TRUE), n_repl_global), na.rm = TRUE), 2)
 
   # Compute per-position-group replacement levels when position data is present.
   # Groups with fewer than 2 valid players fall back to the global level to avoid
@@ -3017,7 +3091,7 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
   if (has_position_data) {
     groups <- unique(pos_group[!is.na(pos_group)])
     repl_by_group <- vapply(groups, function(g) {
-      grp_avg   <- avg_np[pos_group == g & !is.na(pos_group)]
+      grp_avg   <- avg_fs[pos_group == g & !is.na(pos_group)]
       grp_valid <- grp_avg[!is.na(grp_avg)]
       if (length(grp_valid) < 2L) return(repl_global)
       n_r <- max(1L, ceiling(length(grp_valid) * NWAR_REPLACEMENT_PERCENTILE))
@@ -3030,18 +3104,24 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
     repl_by_player <- rep(repl_global, nrow(all_rows))
   }
 
-  npar <- round(avg_np - repl_by_player, 2)
+  npar <- round(avg_fs - repl_by_player, 2)
   nwar <- round(npar * as.numeric(games) / NWAR_POINTS_PER_WIN, 2)
 
-  all_rows$games_played            <- games
-  all_rows$total_net_points        <- as.numeric(all_rows$total_net_points)
-  all_rows$avg_net_points_per_game <- round(avg_np, 2)
-  all_rows$position_code           <- pos_code
-  all_rows$position_group          <- pos_group
-  all_rows$replacement_level       <- repl_by_player
-  all_rows$npar                    <- npar
-  all_rows$nwar                    <- nwar
+  all_rows$games_played         <- games
+  all_rows$total_fantasy_score  <- round(fantasy_score, 2)
+  all_rows$avg_fantasy_score    <- avg_fs
+  all_rows$position_code        <- pos_code
+  all_rows$position_group       <- pos_group
+  all_rows$replacement_level    <- repl_by_player
+  all_rows$npar                 <- npar
+  all_rows$nwar                 <- nwar
 
+  # Drop intermediate stat columns — only retain the computed summary fields.
+  keep_cols <- c("player_id", "player_name", "squad_name", "games_played",
+                 "total_fantasy_score", "avg_fantasy_score",
+                 "position_code", "position_group", "replacement_level",
+                 "npar", "nwar")
+  all_rows <- all_rows[, intersect(keep_cols, names(all_rows)), drop = FALSE]
   all_rows <- all_rows[order(-all_rows$nwar, all_rows$player_name, na.last = TRUE), , drop = FALSE]
   rownames(all_rows) <- NULL
   head(all_rows, as.integer(limit))
