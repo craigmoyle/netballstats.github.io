@@ -1773,6 +1773,7 @@ caption.table-caption {
   white-space: normal;
   line-height: 1.1;
   vertical-align: bottom;
+  text-align: left;
 }
 
 /* Stat columns: rotated vertical text keeps headers narrow without wrapping */

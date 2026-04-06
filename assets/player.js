@@ -226,18 +226,18 @@ function renderSeasonTable(profile) {
     : "Season totals for key stats.";
 
   elements.seasonStatsHead.replaceChildren();
-  ["Season", "Clubs", "Games"].forEach((label) => {
+  ["Season", "Clubs"].forEach((label) => {
     const cell = document.createElement("th");
     cell.scope = "col";
     cell.textContent = label;
     elements.seasonStatsHead.appendChild(cell);
   });
-  stats.forEach((stat) => {
+  [{ abbrev: "Gms", label: "Games", key: null }, ...stats.map((s) => ({ abbrev: formatStatAbbrev(s), label: statLabel(s), key: s }))].forEach(({ abbrev, label }) => {
     const cell = document.createElement("th");
     cell.scope = "col";
     cell.className = "season-table__stat-head";
-    cell.textContent = formatStatAbbrev(stat);
-    cell.title = statLabel(stat);
+    cell.textContent = abbrev;
+    cell.title = label;
     elements.seasonStatsHead.appendChild(cell);
   });
 
