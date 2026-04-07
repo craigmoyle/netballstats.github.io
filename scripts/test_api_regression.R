@@ -456,16 +456,34 @@ tryCatch({
     assert_true(nrow(empty_result) == 0L, 'Expected fetch_nwar_rows to return zero rows when DB returns no matches.')
     assert_true('nwar' %in% names(empty_result), 'Expected empty fetch_nwar_rows result to include nwar column.')
 
-    # Single qualifying player: nWAR must be 0 (player is their own replacement)
+    # Single qualifying player: nWAR must be 0 (player is their own replacement).
+    # Mock provides all fantasy-scoring stat columns required by fetch_nwar_rows;
+    # previous mock used the old netPoints columns and caused the unit test to
+    # silently error-out inside the tryCatch without asserting anything.
     helpers_env$query_rows <- function(conn, query, params = list()) {
       data.frame(
-        player_id               = 1L,
-        player_name             = 'Test Player',
-        squad_name              = 'Test Squad',
-        games_played            = 10L,
-        total_net_points        = 50.0,
-        avg_net_points_per_game = 5.0,
-        stringsAsFactors        = FALSE
+        player_id            = 1L,
+        player_name          = 'Test Player',
+        squad_name           = 'Test Squad',
+        games_played         = 10L,
+        total_goal1          = 0.0,
+        total_goal2          = 0.0,
+        total_goals_legacy   = 0.0,
+        has_goal1_data       = 1L,   # use goal1/goal2 path, both zero
+        total_off_reb        = 0.0,
+        total_def_reb        = 0.0,
+        total_feeds          = 0.0,
+        total_cpr            = 0.0,
+        total_spr            = 0.0,
+        total_gain           = 0.0,
+        total_intercepts     = 0.0,
+        total_deflections    = 0.0,
+        total_pickups        = 0.0,
+        total_missed_goals   = 0.0,
+        total_gpto           = 0.0,
+        total_penalties      = 0.0,
+        total_quarters       = 40.0,  # 4 quarters × 10 games
+        stringsAsFactors     = FALSE
       )
     }
     single_result <- helpers_env$fetch_nwar_rows(conn = NULL, min_games = 1L, limit = 50L)

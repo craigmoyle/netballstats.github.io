@@ -2950,17 +2950,32 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
   # Two-level position resolution:
   #   1. Per-season MODE of the player's dominant match position across queried matches.
   #   2. All-time dominant fallback: if the per-season MODE is NULL (player has no
-  #      position records in the queried season), look up their most common
-  #      position code across ALL seasons in player_match_positions.
+  #      position records in the queried season), use a pre-aggregated CTE that
+  #      computes each player's all-time dominant position in a single pass.
+  #      Previously this fallback was a correlated subquery that re-scanned
+  #      player_match_positions once per player per query — replaced here by the
+  #      alltime_pos CTE to eliminate the O(N_players) repeated full-table scans
+  #      that were causing statement timeouts on scoped requests.
   has_positions <- has_player_match_positions(conn)
+  # CTE computed once for all players; joined below via alltime_pos.player_id.
+  position_cte <- if (has_positions) {
+    paste(
+      "WITH alltime_pos AS (",
+      "  SELECT player_id,",
+      "    MODE() WITHIN GROUP (ORDER BY starting_position_code) AS dominant_position",
+      "  FROM player_match_positions",
+      "  WHERE starting_position_code IS NOT NULL",
+      "  GROUP BY player_id",
+      ")"
+    )
+  } else {
+    ""
+  }
   position_select <- if (has_positions) {
     paste(
       ", COALESCE(",
       "  MODE() WITHIN GROUP (ORDER BY pmp.starting_position_code),",
-      "  (SELECT MODE() WITHIN GROUP (ORDER BY pmp2.starting_position_code)",
-      "   FROM player_match_positions pmp2",
-      "   WHERE pmp2.player_id = stats.player_id",
-      "     AND pmp2.starting_position_code NOT IN ('I', 'S', '-'))",
+      "  MAX(alltime_pos.dominant_position)",
       ") AS position_code"
     )
   } else {
@@ -2968,9 +2983,13 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
   }
   # player_match_positions has one row per player+match (not per period), so a
   # direct LEFT JOIN is safe — no row multiplication occurs.
+  # alltime_pos has one row per player_id; LEFT JOIN is also non-multiplying.
   position_join <- if (has_positions) {
-    paste0("LEFT JOIN player_match_positions pmp",
-           " ON pmp.player_id = stats.player_id AND pmp.match_id = stats.match_id")
+    paste(
+      "LEFT JOIN player_match_positions pmp",
+      "  ON pmp.player_id = stats.player_id AND pmp.match_id = stats.match_id",
+      "LEFT JOIN alltime_pos ON alltime_pos.player_id = stats.player_id"
+    )
   } else {
     ""
   }
@@ -2984,6 +3003,10 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
   games_played_expr <- if (has_participation) "pmpart.match_id" else "stats.match_id"
 
   query <- paste(
+    # position_cte is non-empty only when has_positions is TRUE (PostgreSQL with
+    # player_match_positions table). On SQLite / no-position-table paths it is ""
+    # and paste() produces a harmless leading space before SELECT.
+    position_cte,
     # MAX(squad_name) is used because a player who transferred mid-season can
     # appear under multiple squad names. The MAX picks one name arbitrarily
     # (alphabetical); this is display-only and does not affect nWAR calculations.

@@ -503,6 +503,10 @@ write_database <- function(tables, build_mode) {
       "INCLUDE (player_id, squad_name, match_id)",
       "WHERE match_value IS NOT NULL"
     ))
+    # nWAR aggregate query: filters by season without a leading stat column, so a
+    # season-first composite index enables an efficient index scan rather than a
+    # full sequential scan of player_match_stats.
+    DBI::dbExecute(conn, "CREATE INDEX idx_pms_season_player ON player_match_stats(season, player_id, match_id)")
 
     # Derive per-player per-match starting position from period-level position stats.
     #
