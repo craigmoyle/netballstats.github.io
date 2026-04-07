@@ -2694,6 +2694,13 @@ caption.table-caption {
   }
 }
 
+@media (max-width: 1100px) {
+  .dossier-pillars,
+  .player-dossier__context-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 900px) {
   .panel__heading--split,
   .results-grid {
@@ -2753,6 +2760,16 @@ caption.table-caption {
 
   .player-toolbar .view-toggle .button {
     flex: 1 1 0;
+  }
+
+  .archive-control-desk__header,
+  .archive-results-intro {
+    gap: var(--space-xs);
+  }
+
+  .table-link__meta {
+    font-size: var(--type-xs);
+    letter-spacing: 0.04em;
   }
 
   .query-input-row {
