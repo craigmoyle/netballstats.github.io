@@ -85,6 +85,7 @@ const elements = {
   summaryPlayers: document.getElementById("summary-players"),
   summaryGoals: document.getElementById("summary-goals"),
   summaryRefreshed: document.getElementById("summary-refreshed"),
+  archiveContextNote: document.getElementById("archive-context-note"),
   matchesTableBody: document.querySelector("#matches-table tbody"),
   competitionSeasonBody: document.querySelector("#competition-season-table tbody"),
   teamLeadersBody: document.querySelector("#team-leaders-table tbody"),
@@ -205,6 +206,32 @@ function createLinkCell(href, text, className) {
   link.href = href;
   link.className = "table-link";
   link.textContent = text;
+  cell.appendChild(link);
+  return cell;
+}
+
+function renderArchiveContextNote() {
+  if (!elements.archiveContextNote) return;
+  const scope = describeSeasonScope();
+  elements.archiveContextNote.textContent = isRecordMode()
+    ? `Use the archive to surface the sharpest one-game performances in ${scope}, then open the dossier for full career context.`
+    : `Use the archive to scan the strongest totals in ${scope}, then open the dossier for season-by-season context.`;
+}
+
+function createPlayerLinkCell(playerId, text) {
+  const cell = document.createElement("td");
+  const link = document.createElement("a");
+  link.href = playerProfileUrl(playerId);
+  link.className = "table-link table-link--dossier";
+
+  const label = document.createElement("span");
+  label.textContent = text;
+
+  const meta = document.createElement("span");
+  meta.className = "table-link__meta";
+  meta.textContent = "Open dossier";
+
+  link.append(label, meta);
   cell.appendChild(link);
   return cell;
 }
@@ -562,6 +589,7 @@ function renderFilterSummary() {
       : `${rankingModeLabel()} players by the selected stat`;
   }
   updateValueHeadings();
+  renderArchiveContextNote();
 }
 
 function applyMeta(meta) {
@@ -685,7 +713,7 @@ function renderPlayerLeaders(rows) {
     if (isRecordMode()) {
       row.append(
         createCell(`${index + 1}`),
-        createLinkCell(playerProfileUrl(rowData.player_id), rowData.player_name),
+        createPlayerLinkCell(rowData.player_id, rowData.player_name),
         createTeamCell(rowData.squad_name || "-", colour),
         createCell(rowData.opponent || "-"),
         createCell(`${rowData.season}`),
@@ -696,7 +724,7 @@ function renderPlayerLeaders(rows) {
     } else {
       row.append(
         createCell(`${index + 1}`),
-        createLinkCell(playerProfileUrl(rowData.player_id), rowData.player_name),
+        createPlayerLinkCell(rowData.player_id, rowData.player_name),
         createTeamCell(rowData.squad_name || "-", colour),
         createCell(formatStatLabel(rowData.stat)),
         createCell(formatNumber(statValue(rowData))),

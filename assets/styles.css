@@ -1473,6 +1473,18 @@ tr[data-rank="3"] td:first-child {
   color: var(--accent-strong);
 }
 
+.table-link--dossier {
+  display: inline-grid;
+  gap: 0.18rem;
+}
+
+.table-link__meta {
+  color: var(--muted);
+  font-size: var(--type-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .table-link:hover,
 .page-nav__link:hover {
   text-decoration: underline;
