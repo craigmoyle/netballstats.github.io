@@ -249,8 +249,9 @@ function renderMeta(meta) {
   }
 
   const seasons = [...meta.seasons].sort((left, right) => left - right);
-  if (elements.heroSeasonRange) elements.heroSeasonRange.textContent = seasons[0] + "\u2013" + seasons[seasons.length - 1];
-  elements.querySeasonSummary.textContent = `${seasons[0]}-${seasons[seasons.length - 1]} archive · ${meta.player_stats.length} player stats · ${meta.team_stats.length} team stats.`;
+  const firstFullSeason = seasons.length > 1 ? seasons[1] : seasons[0];
+  if (elements.heroSeasonRange) elements.heroSeasonRange.textContent = `${seasons[0]} finals + ${firstFullSeason}\u2013${seasons[seasons.length - 1]}`;
+  elements.querySeasonSummary.textContent = `${seasons[0]} finals only · full seasons ${firstFullSeason}-${seasons[seasons.length - 1]} · ${meta.player_stats.length} player stats · ${meta.team_stats.length} team stats.`;
 }
 
 function renderInterpretation(parsed = {}) {
