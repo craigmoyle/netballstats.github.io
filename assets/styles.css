@@ -418,6 +418,13 @@ code {
   line-height: 1.65;
 }
 
+.field-hint--stat-note {
+  display: block;
+  margin-top: 0.45rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .field-hint-wrap {
   display: grid;
   grid-template-rows: 0fr;
@@ -637,6 +644,11 @@ code {
 .filters--dashboard {
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: var(--space-sm) var(--space-md);
+}
+
+.filters--analytics-locked #stat-mode {
+  border-color: var(--accent-cool);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-cool) 40%, transparent);
 }
 
 .filters--dashboard .field--season-hub {

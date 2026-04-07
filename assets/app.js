@@ -289,6 +289,34 @@ function populateSelect(select, options, placeholder) {
   }
 }
 
+function buildStatOptions(baseStats, analytics) {
+  return [
+    {
+      label: "Archive stats",
+      options: baseStats.map((stat) => ({ value: stat, label: formatStatLabel(stat) }))
+    },
+    {
+      label: "Analytics",
+      options: (analytics || []).map((entry) => ({ value: entry.key, label: entry.label }))
+    }
+  ];
+}
+
+function populateGroupedSelect(select, groups) {
+  select.replaceChildren();
+  groups.forEach((group) => {
+    const optgroup = document.createElement("optgroup");
+    optgroup.label = group.label;
+    group.options.forEach((option) => {
+      const element = document.createElement("option");
+      element.value = option.value;
+      element.textContent = option.label;
+      optgroup.appendChild(element);
+    });
+    select.appendChild(optgroup);
+  });
+}
+
 function setSelectedSeasons(values) {
   if (!elements.seasonChoices) return;
   const selected = new Set(values.map((value) => `${value}`));
@@ -374,6 +402,42 @@ function statModeLabel() {
 
 function statModeDescriptor() {
   return isAverageMetric() ? "average per game" : "total";
+}
+
+function statMetadataFor(stat, subject) {
+  if (!state.meta) {
+    return null;
+  }
+  const analytics = subject === "player" ? (state.meta.player_analytics || []) : (state.meta.team_analytics || []);
+  return analytics.find((entry) => entry.key === stat) || null;
+}
+
+function renderStatExplainer(element, subject) {
+  const selectedStat = subject === "player" ? state.filters.playerStat : state.filters.teamStat;
+  const metadata = statMetadataFor(selectedStat, subject);
+  if (!element) return;
+  if (!metadata) {
+    element.textContent = `Traditional ${subject} totals and averages.`;
+    return;
+  }
+  const modeLabel = (metadata.metric_modes || []).join(" / ");
+  element.textContent = `${metadata.family}: ${metadata.description} Formula: ${metadata.formula}. View: ${modeLabel}.`;
+}
+
+function syncAnalyticalStatMode() {
+  const playerMeta = statMetadataFor(state.filters.playerStat, "player");
+  const teamMeta = statMetadataFor(state.filters.teamStat, "team");
+  const locked = [playerMeta, teamMeta].some((entry) => entry && !(entry.metric_modes || []).includes("total"));
+
+  elements.filtersForm.classList.toggle("filters--analytics-locked", locked);
+  Array.from(elements.statMode.options).forEach((option) => {
+    option.disabled = locked && option.value === "total";
+  });
+
+  if (locked && state.filters.statMode === "total") {
+    state.filters.statMode = "average";
+    elements.statMode.value = "average";
+  }
 }
 
 function rankingModeLabel() {
@@ -601,16 +665,8 @@ function applyMeta(meta) {
     meta.teams.map((team) => ({ value: `${team.squad_id}`, label: team.squad_name })),
     "All teams"
   );
-  populateSelect(
-    elements.teamStat,
-    meta.team_stats.map((stat) => ({ value: stat, label: formatStatLabel(stat) })),
-    "Choose a team stat"
-  );
-  populateSelect(
-    elements.playerStat,
-    meta.player_stats.map((stat) => ({ value: stat, label: formatStatLabel(stat) })),
-    "Choose a player stat"
-  );
+  populateGroupedSelect(elements.teamStat, buildStatOptions(meta.team_stats || [], meta.team_analytics || []));
+  populateGroupedSelect(elements.playerStat, buildStatOptions(meta.player_stats || [], meta.player_analytics || []));
 
   const defaultSeason = meta.default_season ? `${meta.default_season}` : "";
   setSelectedSeasons(defaultSeason ? [defaultSeason] : []);
@@ -620,8 +676,11 @@ function applyMeta(meta) {
   elements.statMode.value = "total";
   setRankingMode("highest");
   setArchiveMode("aggregate");
-  elements.teamStat.value = meta.team_stats.includes("points") ? "points" : meta.team_stats[0] || "";
-  elements.playerStat.value = meta.player_stats.includes("points") ? "points" : meta.player_stats[0] || "";
+  elements.teamStat.value = (meta.team_stats || []).includes("points") ? "points" : (meta.team_stats || [])[0] || "";
+  elements.playerStat.value = (meta.player_stats || []).includes("points") ? "points" : (meta.player_stats || [])[0] || "";
+  renderStatExplainer(document.getElementById("team-stat-note"), "team");
+  renderStatExplainer(document.getElementById("player-stat-note"), "player");
+  syncAnalyticalStatMode();
   renderFilterSummary();
   setPanelView("competition-season", state.views["competition-season"]);
   setPanelView("team-leaders", state.views["team-leaders"]);
@@ -1070,6 +1129,18 @@ elements.filtersForm.addEventListener("input", () => {
 
 elements.filtersForm.addEventListener("change", () => {
   renderFilterSummary();
+});
+
+elements.teamStat.addEventListener("change", () => {
+  state.filters.teamStat = elements.teamStat.value;
+  renderStatExplainer(document.getElementById("team-stat-note"), "team");
+  syncAnalyticalStatMode();
+});
+
+elements.playerStat.addEventListener("change", () => {
+  state.filters.playerStat = elements.playerStat.value;
+  renderStatExplainer(document.getElementById("player-stat-note"), "player");
+  syncAnalyticalStatMode();
 });
 
 elements.seasonActionButtons.forEach((button) => {
