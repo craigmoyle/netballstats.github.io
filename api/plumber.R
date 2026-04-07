@@ -1524,7 +1524,7 @@ function(question = "", limit = "12", res) {
 #* @param season Optional single season year (e.g. 2023). Overridden by seasons.
 #* @param seasons Optional comma-separated season years (e.g. 2022,2023).
 #* @param team_id Optional integer squad/team ID to filter players.
-#* @param min_games Minimum qualifying matches for inclusion (default 5, max 100).
+#* @param min_games Minimum qualifying matches for inclusion (default 5, max 9999).
 #* @param limit Maximum rows to return (default 50, max 100).
 function(season = "", seasons = "", team_id = "", min_games = "5", limit = "50", res) {
   conn <- tryCatch(get_db_conn(), error = function(error) error)
@@ -1535,7 +1535,7 @@ function(season = "", seasons = "", team_id = "", min_games = "5", limit = "50",
   tryCatch({
     seasons   <- parse_season_filter(season, seasons)
     team_id   <- parse_optional_int(team_id, "team_id", minimum = 1L)
-    min_games <- parse_limit(min_games, default = 5L, maximum = 100L)
+    min_games <- parse_limit(min_games, default = 5L, maximum = 9999L)
     limit     <- parse_limit(limit, default = 50L, maximum = 100L)
     rows      <- fetch_nwar_rows(conn, seasons = seasons, team_id = team_id, min_games = min_games, limit = limit)
     list(data = rows_to_records(rows))

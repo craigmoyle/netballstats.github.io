@@ -265,6 +265,13 @@ possessive_subject <- helpers_env$extract_query_subject_phrase(
 assert_true(identical(possessive_subject, 'the Swifts'), 'Expected possessive team phrasing to normalize to the team subject.')
 check_step('parser normalizes possessive team phrasing')
 
+resolved_goals <- helpers_env$resolve_query_stat('Which players scored 20 or more goals in 2022?')
+assert_true(identical(resolved_goals, 'goals'), 'Expected resolve_query_stat to match goals alias across full pattern vector.')
+resolved_assists <- helpers_env$resolve_query_stat('top goal assists per game')
+assert_true(identical(resolved_assists, 'goalAssists'), 'Expected resolve_query_stat to resolve a multi-word alias.')
+assert_true(is.null(helpers_env$resolve_query_stat('gibberish xyzzy nonexistent')), 'Expected resolve_query_stat to return NULL for unrecognized input.')
+check_step('resolve_query_stat correctly matches across all alias patterns')
+
 player_builder_inputs <- list(
   stat = 'goals',
   seasons = c(2022L, 2023L),

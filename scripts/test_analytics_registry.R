@@ -3,6 +3,7 @@
 repo_root <- normalizePath(getwd(), mustWork = TRUE)
 analytics_env <- new.env(parent = baseenv())
 source(file.path(repo_root, "api", "R", "analytics.R"), local = analytics_env)
+source(file.path(repo_root, "api", "R", "helpers.R"), local = analytics_env)
 
 stopifnot(is.list(analytics_env$ANALYTICAL_METRICS))
 
@@ -44,5 +45,9 @@ notes <- analytics_env$build_player_analytics_notes(profile_stub)
 stopifnot(length(notes) >= 2L)
 stopifnot(any(grepl("attacking", notes, fixed = TRUE)))
 stopifnot(any(grepl("pressure", notes, fixed = TRUE)))
+
+stopifnot(identical(analytics_env$resolve_query_stat("Which players scored 20 or more goals in 2022?"), "goals"))
+stopifnot(identical(analytics_env$resolve_query_stat("top goal assists per game"), "goalAssists"))
+stopifnot(is.null(analytics_env$resolve_query_stat("gibberish xyzzy nonexistent")))
 
 cat("Analytical metric registry checks passed\n")

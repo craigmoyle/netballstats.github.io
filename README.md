@@ -13,6 +13,14 @@ The production operating model is now **Azure + PostgreSQL first**. Legacy Rende
 - read-only API endpoints with validation, rate limiting, security headers, and parameterized SQL
 - scheduled database refresh jobs that rebuild the archive from Champion Data via `superNetballR`
 
+## Analytical stats
+
+The archive now includes a first-release analytical layer for players and teams.
+
+- The first release is explainable by design: every metric ships with a one-line definition and a published formula.
+- Rate metrics use average mode in the archive when totals would be misleading.
+- This release does not add analytics to Ask the Stats, round recap, or a separate analytics landing page.
+
 ## Repository layout
 
 - `index.html` + `assets/`: static frontend

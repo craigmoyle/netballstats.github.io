@@ -733,7 +733,9 @@ build_query_stat_alias_rows <- function() {
 QUERY_STAT_ALIASES <- build_query_stat_alias_rows()
 
 resolve_query_stat <- function(text) {
-  matched <- grepl(QUERY_STAT_ALIASES$pattern, text, perl = TRUE)
+  # grepl() treats pattern as a scalar, using only the first element of a
+  # vector. Use vapply to apply each pattern individually.
+  matched <- vapply(QUERY_STAT_ALIASES$pattern, grepl, logical(1), x = text, perl = TRUE)
   candidates <- QUERY_STAT_ALIASES[matched, , drop = FALSE]
   if (!nrow(candidates)) {
     return(NULL)
