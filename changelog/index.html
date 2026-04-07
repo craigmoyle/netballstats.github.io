@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/assets/theme.js"></script>
+    <title>Changelog | Netball Stats Database</title>
+    <meta name="description" content="Recent changes to the netball stats archive, including analytical stats, editorial archive refreshes, and historical data fixes.">
+    <link rel="preload" href="/assets/fonts/fraunces-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/teko-600-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script defer src="/assets/config.js"></script>
+    <script defer src="/assets/telemetry.js"></script>
+  </head>
+  <body class="changelog-page">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+
+    <header class="page-shell hero-shell reveal">
+      <nav class="page-nav" aria-label="Site navigation">
+        <a class="page-nav__link" href="/">Explore archive</a>
+        <a class="page-nav__link" href="/round/">Round recap</a>
+        <a class="page-nav__link" href="/players/">Player profiles</a>
+        <a class="page-nav__link" href="/query/">Ask the stats</a>
+        <a class="page-nav__link" href="/compare/">Compare</a>
+        <a class="page-nav__link page-nav__link--accent" href="/changelog/">Changelog</a>
+        <a class="page-nav__link" href="/nwar/">nWAR</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light theme">Light</button>
+      </nav>
+
+      <section class="hero-panel changelog-hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Release ledger</p>
+          <h1>Changelog</h1>
+          <p class="intro-copy">A running editorial ledger of the archive's recent changes — new analytical layers, sharper player dossiers, cleaner archive reading cues, and fixes to the older ANZ Championship history.</p>
+        </div>
+
+        <aside class="hero-aside" aria-label="Latest changelog update">
+          <div class="hero-aside__card hero-aside__card--archive">
+            <span class="hero-aside__label">Latest update</span>
+            <strong>7 Apr 2026</strong>
+            <p>Analytical stats joined the archive and player dossiers on top of the editorial almanac refresh and the 2008–2014 participation fixes.</p>
+          </div>
+        </aside>
+      </section>
+
+      <section class="home-overview reveal" aria-label="Recent change summary">
+        <div class="home-overview__intro">
+          <p class="panel__eyebrow">Recent release window</p>
+          <h2>Three threads reshaped how the archive reads.</h2>
+          <p class="panel__lead">Recent work landed as a connected run: a first analytical layer, an editorial refresh for the archive shell, and a set of historical participation fixes that made older ANZ seasons read more truthfully.</p>
+        </div>
+        <div class="home-overview__stats">
+          <section class="summary-band" aria-label="Recent release summary">
+            <article class="summary-card summary-card--accent">
+              <span class="summary-card__label">Release blocks</span>
+              <span class="summary-card__value">3</span>
+            </article>
+            <article class="summary-card">
+              <span class="summary-card__label">Archive scope</span>
+              <span class="summary-card__value">2008–2026</span>
+            </article>
+            <article class="summary-card">
+              <span class="summary-card__label">New layer</span>
+              <span class="summary-card__value">Analytics</span>
+            </article>
+            <article class="summary-card">
+              <span class="summary-card__label">Refreshed pages</span>
+              <span class="summary-card__value">Archive + dossier</span>
+            </article>
+          </section>
+          <p class="muted refresh-note">Grouped by reader-facing changes rather than raw commit order, so you can see what actually shifted in the archive.</p>
+        </div>
+      </section>
+    </header>
+
+    <main id="main-content" class="page-shell page-main">
+      <section class="panel changelog-intro reveal">
+        <div class="panel__heading panel__heading--split">
+          <div>
+            <p class="panel__eyebrow">How to read this page</p>
+            <h2>Recent work, grouped by what changed on the site.</h2>
+          </div>
+          <p class="muted">The archive still begins with the 2008 ANZ Championship finals only, then runs through every full season from 2009 onward. This changelog tracks the most recent visible changes to that reading experience.</p>
+        </div>
+      </section>
+
+      <section class="changelog-stack" aria-label="Recent updates">
+        <article class="panel changelog-entry reveal">
+          <div class="changelog-entry__header">
+            <p class="results-panel__eyebrow">7 Apr 2026 · Analytical stats first release</p>
+            <h2>Players and teams now have an explainable analytical layer.</h2>
+            <p class="panel__lead">The archive gained first-release analytical metrics, formula notes, and player dossier callouts without turning the product into a black-box dashboard.</p>
+          </div>
+          <div class="changelog-entry__layout">
+            <div>
+              <ul class="changelog-list">
+                <li>Added analytical archive endpoints and metadata so player and team leaderboards can surface analytical metrics alongside raw totals.</li>
+                <li>Tightened analytical ordering, rounding, and tie-break behaviour so the new metrics read like the rest of the archive rather than as a separate system.</li>
+                <li>Restored contextual cues such as squad colours on analytical season-series output so trend views stay legible and branded.</li>
+                <li>Added grouped analytical controls on the archive, including one-line explainers and average-only locking where totals would be misleading.</li>
+                <li>Linked analytical stat notes to their controls for better screen-reader context and cleaner explanatory UX.</li>
+                <li>Added a player analytical dossier to profile pages and fixed the underlying query scoping so player-specific summaries still use the correct team context.</li>
+                <li>Documented the analytical layer, fixed stat-alias parsing across all supported query patterns, and broadened the nWAR high-`min_games` regression path needed for the final validation pass.</li>
+              </ul>
+            </div>
+            <aside class="changelog-entry__aside">
+              <h3>Where to see it</h3>
+              <p class="changelog-note">The analytical layer is live on the archive and player dossier surfaces. It does not yet extend to Ask the Stats, round recap, or a separate analytics landing page.</p>
+              <ul class="changelog-meta">
+                <li>
+                  <strong>Reader impact</strong>
+                  <span>Explainable formulas, analytical rankings, and player-level analytical notes.</span>
+                </li>
+                <li>
+                  <strong>Touches</strong>
+                  <span>Archive leaderboards, season series, player profiles, docs, and regression coverage.</span>
+                </li>
+              </ul>
+              <div class="changelog-link-list">
+                <a class="changelog-link" href="/">Open the archive</a>
+                <a class="changelog-link" href="/players/">Browse player dossiers</a>
+              </div>
+              <div class="changelog-chip-row" aria-label="Analytical update tags">
+                <span class="changelog-chip">Analytics</span>
+                <span class="changelog-chip">Archive</span>
+                <span class="changelog-chip">Player dossier</span>
+              </div>
+            </aside>
+          </div>
+        </article>
+
+        <article class="panel changelog-entry reveal">
+          <div class="changelog-entry__header">
+            <p class="results-panel__eyebrow">7 Apr 2026 · Editorial almanac refresh</p>
+            <h2>The archive and player profiles now read more like a sports almanac than a dashboard.</h2>
+            <p class="panel__lead">A full UX pass reshaped the archive shell, the leaderboard reading order, and the player profile into a more editorial, more legible reference surface.</p>
+          </div>
+          <div class="changelog-entry__layout">
+            <div>
+              <ul class="changelog-list">
+                <li>Added the new editorial almanac layout shells that now frame the archive and player views.</li>
+                <li>Reworked the archive homepage into a clearer control desk with a reading guide so the filtering flow feels deliberate rather than dashboard-like.</li>
+                <li>Expanded the player leaderboard and added dossier cues so the archive points readers toward the deeper player profile surfaces.</li>
+                <li>Turned the player profile into an editorial dossier with stronger hierarchy, context blocks, and season-ledger framing.</li>
+                <li>Kept the season ledger notes in sync with total versus average toggles so the copy tracks the mode the table is actually showing.</li>
+                <li>Strengthened the verifier and landed a final polish pass to tighten the overall editorial system.</li>
+              </ul>
+            </div>
+            <aside class="changelog-entry__aside">
+              <h3>What changed in feel</h3>
+              <p class="changelog-note">The archive still does the same job, but the reading order is sharper: scan, narrow, compare, then open the dossier.</p>
+              <ul class="changelog-meta">
+                <li>
+                  <strong>Reader impact</strong>
+                  <span>Cleaner hierarchy, better wayfinding, and more distinctive page identities.</span>
+                </li>
+                <li>
+                  <strong>Touches</strong>
+                  <span>Homepage shell, leaderboard context, player profile structure, and supporting QA.</span>
+                </li>
+              </ul>
+              <div class="changelog-link-list">
+                <a class="changelog-link" href="/">See the archive shell</a>
+                <a class="changelog-link" href="/player/80078/">Open a player dossier</a>
+              </div>
+              <div class="changelog-chip-row" aria-label="Editorial update tags">
+                <span class="changelog-chip">Editorial UX</span>
+                <span class="changelog-chip">Archive shell</span>
+                <span class="changelog-chip">Player profiles</span>
+              </div>
+            </aside>
+          </div>
+        </article>
+
+        <article class="panel changelog-entry reveal">
+          <div class="changelog-entry__header">
+            <p class="results-panel__eyebrow">7 Apr 2026 · Historical coverage and data corrections</p>
+            <h2>Older ANZ Championship seasons now read more honestly and more cleanly.</h2>
+            <p class="panel__lead">Recent fixes corrected participation counting, clarified the 2008 archive boundary, and made the season tables easier to scan.</p>
+          </div>
+          <div class="changelog-entry__layout">
+            <div>
+              <ul class="changelog-list">
+                <li>Lowered the archive season filter floor from 2017 to 2008 so older ANZ Championship coverage can be queried directly.</li>
+                <li>Added a `gamesPlayed` stat and corrected match counting so the archive tracks actual played appearances rather than loose roster presence.</li>
+                <li>Shifted player-profile games played to a participation-based filter (`&gt;= 1` minute) to remove inflated totals from non-appearances.</li>
+                <li>Updated the `superNetballR` source package to v0.3.1 and then fixed ANZ Championship 2008–2014 participation coverage in `player_match_participation`.</li>
+                <li>Clarified the public copy so the archive explicitly says 2008 finals only, with full-season coverage beginning in 2009.</li>
+                <li>Improved season-ledger readability with rotated abbreviations, a vertical Games header, and left-aligned table headers.</li>
+              </ul>
+            </div>
+            <aside class="changelog-entry__aside">
+              <h3>Why it matters</h3>
+              <p class="changelog-note">These fixes make player histories and older-season browsing line up more closely with what supporters expect from the historical record.</p>
+              <ul class="changelog-meta">
+                <li>
+                  <strong>Reader impact</strong>
+                  <span>More trustworthy games-played totals and clearer older-season coverage.</span>
+                </li>
+                <li>
+                  <strong>Touches</strong>
+                  <span>Archive filtering, player participation logic, source data, and season-table presentation.</span>
+                </li>
+              </ul>
+              <div class="changelog-link-list">
+                <a class="changelog-link" href="/">Explore 2008–2026 archive coverage</a>
+                <a class="changelog-link" href="/players/">Browse corrected player histories</a>
+              </div>
+              <div class="changelog-chip-row" aria-label="History fix tags">
+                <span class="changelog-chip">ANZ Championship</span>
+                <span class="changelog-chip">Games played</span>
+                <span class="changelog-chip">Table readability</span>
+              </div>
+            </aside>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
