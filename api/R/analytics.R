@@ -406,10 +406,7 @@ fetch_team_analytics_season_series_rows <- function(conn, metric_key, seasons = 
     "SELECT squad_id, squad_colour FROM teams WHERE 1 = 1",
     list(), "squad_id", squad_ids, "colour_squad"
   )
-  colour_rows <- tryCatch(
-    query_rows(conn, colour_base$query, colour_base$params),
-    error = function(e) data.frame(squad_id = integer(0), squad_colour = character(0))
-  )
+  colour_rows <- query_rows(conn, colour_base$query, colour_base$params)
   colour_map <- setNames(as.character(colour_rows$squad_colour), as.character(colour_rows$squad_id))
 
   combined <- lapply(squad_ids, function(sid) {
