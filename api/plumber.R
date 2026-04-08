@@ -1064,10 +1064,18 @@ function(season = "", seasons = "", team_id = "", round = "", limit = "12", res)
 #* @get /round-summary
 #* @get /api/round-summary
 function(season = "", round = "", res) {
-  conn <- tryCatch(get_db_conn(), error = function(error) error)
+  conn <- tryCatch(open_db(), error = function(error) error)
   if (inherits(conn, "error")) {
     return(database_unavailable(res, conn))
   }
+  on.exit(DBI::dbDisconnect(conn), add = TRUE)
+  DBI::dbExecute(
+    conn,
+    sprintf(
+      "SET statement_timeout TO %d",
+      parse_nonnegative_env_int("NETBALL_STATS_ROUND_SUMMARY_TIMEOUT_MS", 15000L)
+    )
+  )
 
   tryCatch({
     season <- parse_optional_int(season, "season", minimum = 2017L, maximum = 2100L)
