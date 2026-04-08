@@ -643,6 +643,30 @@ database_unavailable <- function(res, error) {
   json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.")
 }
 
+build_meta_payload <- function(conn) {
+  metadata <- query_rows(conn, "SELECT key, value FROM metadata")
+  metadata_map <- setNames(metadata$value, metadata$key)
+  seasons <- query_rows(conn, "SELECT DISTINCT season FROM matches ORDER BY season DESC")$season
+  teams <- query_rows(
+    conn,
+    "SELECT squad_id, squad_name, squad_code, squad_colour FROM teams ORDER BY squad_name"
+  )
+
+  list(
+    default_season = if (length(seasons)) seasons[[1]] else NA_integer_,
+    seasons = seasons,
+    teams = teams,
+    team_stats = metadata_stat_catalog(metadata_map, "team_stats_json", DEFAULT_TEAM_STATS),
+    player_stats = metadata_stat_catalog(metadata_map, "player_stats_json", DEFAULT_PLAYER_STATS),
+    build_mode = meta_json_scalar(metadata_map[["build_mode"]], default = "production"),
+    refreshed_at = meta_json_scalar(metadata_map[["refreshed_at"]]),
+    telemetry = list(
+      provider = meta_json_scalar(if (browser_telemetry_enabled()) "appinsights" else "none"),
+      browser_enabled = meta_json_scalar(browser_telemetry_enabled())
+    )
+  )
+}
+
 json_scalar <- function(value) {
   if (!is.list(value) && length(value) == 1L) {
     return(jsonlite::unbox(value))
@@ -804,29 +828,23 @@ function(res) {
     return(cached$payload)
   }
 
-  metadata <- query_rows(conn, "SELECT key, value FROM metadata")
-  metadata_map <- setNames(metadata$value, metadata$key)
-  seasons <- query_rows(conn, "SELECT DISTINCT season FROM matches ORDER BY season DESC")$season
-  teams <- query_rows(
-    conn,
-    "SELECT squad_id, squad_name, squad_code, squad_colour FROM teams ORDER BY squad_name"
-  )
-
-  payload <- list(
-    default_season = if (length(seasons)) seasons[[1]] else NA_integer_,
-    seasons = seasons,
-    teams = teams,
-    team_stats = metadata_stat_catalog(metadata_map, "team_stats_json", DEFAULT_TEAM_STATS),
-    player_stats = metadata_stat_catalog(metadata_map, "player_stats_json", DEFAULT_PLAYER_STATS),
-    build_mode = meta_json_scalar(metadata_map[["build_mode"]], default = "production"),
-    refreshed_at = meta_json_scalar(metadata_map[["refreshed_at"]]),
-    telemetry = list(
-      provider = meta_json_scalar(if (browser_telemetry_enabled()) "appinsights" else "none"),
-      browser_enabled = meta_json_scalar(browser_telemetry_enabled())
+  tryCatch({
+    payload <- build_meta_payload(conn)
+    .meta_cache[["meta"]] <- list(payload = payload, ts = Sys.time())
+    payload
+  }, error = function(error) {
+    api_log(
+      "WARN",
+      "meta_fetch_failed",
+      error_class = class(error)[[1]] %||% "unknown",
+      error_message = substr(conditionMessage(error), 1L, 200L),
+      served_stale_cache = !is.null(cached)
     )
-  )
-  .meta_cache[["meta"]] <- list(payload = payload, ts = Sys.time())
-  payload
+    if (!is.null(cached)) {
+      return(cached$payload)
+    }
+    json_error(res, 503, "Metadata is temporarily unavailable. Try again shortly.")
+  })
 }
 
 #* @post /telemetry
@@ -1449,22 +1467,7 @@ function(pr) {
 
     # Pre-warm /meta cache (called on every page load)
     meta_ok <- tryCatch({
-      metadata     <- query_rows(conn, "SELECT key, value FROM metadata")
-      metadata_map <- setNames(metadata$value, metadata$key)
-      seasons      <- query_rows(conn, "SELECT DISTINCT season FROM matches ORDER BY season DESC")$season
-      teams        <- query_rows(conn, "SELECT squad_id, squad_name, squad_code, squad_colour FROM teams ORDER BY squad_name")
-      payload <- list(
-        default_season = if (length(seasons)) seasons[[1]] else NA_integer_,
-        seasons = seasons, teams = teams,
-        team_stats   = metadata_stat_catalog(metadata_map, "team_stats_json", DEFAULT_TEAM_STATS),
-        player_stats = metadata_stat_catalog(metadata_map, "player_stats_json", DEFAULT_PLAYER_STATS),
-        build_mode   = meta_json_scalar(metadata_map[["build_mode"]], default = "production"),
-        refreshed_at = meta_json_scalar(metadata_map[["refreshed_at"]]),
-        telemetry = list(
-          provider     = meta_json_scalar(if (browser_telemetry_enabled()) "appinsights" else "none"),
-          browser_enabled = meta_json_scalar(browser_telemetry_enabled())
-        )
-      )
+      payload <- build_meta_payload(conn)
       .meta_cache[["meta"]] <- list(payload = payload, ts = Sys.time())
       TRUE
     }, error = function(e) FALSE)
