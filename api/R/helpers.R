@@ -182,7 +182,12 @@ json_error <- function(res, status, message) {
 }
 
 parse_optional_int <- function(value, name, minimum = NULL, maximum = NULL) {
-  if (is.null(value) || !nzchar(value)) {
+  if (is.null(value) || length(value) == 0L || all(is.na(value))) {
+    return(NULL)
+  }
+
+  value <- trimws(as.character(value[[1]]))
+  if (!nzchar(value)) {
     return(NULL)
   }
 
@@ -202,7 +207,12 @@ parse_optional_int <- function(value, name, minimum = NULL, maximum = NULL) {
 }
 
 parse_optional_int_vector <- function(value, name, minimum = NULL, maximum = NULL, max_items = 20L) {
-  if (is.null(value) || !nzchar(trimws(value))) {
+  if (is.null(value) || length(value) == 0L || all(is.na(value))) {
+    return(NULL)
+  }
+
+  value <- trimws(as.character(value))
+  if (!length(value) || !any(nzchar(value))) {
     return(NULL)
   }
 
