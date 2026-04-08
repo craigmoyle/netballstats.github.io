@@ -2128,6 +2128,15 @@ fetch_spotlight_bests <- function(conn, subject_type, stats, season = NULL, rank
       " GROUP BY stat, squad_id, match_id) sub GROUP BY stat"
     )
   }
+  rows <- tryCatch(
+    query_rows(conn, query, params),
+    error = function(e) {
+      api_log("WARN", "spotlight_bests_failed",
+        error_class = paste(class(e), collapse = "/"),
+        error_message = conditionMessage(e))
+      data.frame()
+    }
+  )
   if (nrow(rows) && all(c("stat", "best_value") %in% names(rows))) {
     for (i in seq_len(nrow(rows))) {
       s <- as.character(rows$stat[[i]])
