@@ -390,7 +390,7 @@ capture_nwar_query <- function(use_match_stats, seasons = NULL, team_id = NULL, 
 }
 
 # Returns the list(query, params) from fetch_nwar_positions without a live connection.
-capture_nwar_positions_query <- function(seasons_filter = NULL) {
+capture_nwar_positions_query <- function(seasons_filter = NULL, team_id = NULL) {
   helpers_env <- new.env(parent = globalenv())
   source(file.path(dirname(base_url), '..', 'api', 'R', 'helpers.R'), local = helpers_env, echo = FALSE)
   captured <- NULL
@@ -398,7 +398,7 @@ capture_nwar_positions_query <- function(seasons_filter = NULL) {
     captured <<- list(query = query, params = params)
     data.frame(player_id = integer(0), position_code = character(0), stringsAsFactors = FALSE)
   }
-  helpers_env$fetch_nwar_positions(conn = NULL, seasons_filter = seasons_filter)
+  helpers_env$fetch_nwar_positions(conn = NULL, seasons_filter = seasons_filter, team_id = team_id)
   captured
 }
 
@@ -474,15 +474,15 @@ if (file.exists(helpers_path)) {
     assert_true(!is.null(optimized_query$params$season_1),
                 'Expected build_nwar_query to parameterise the season filter (season_1).')
 
-    # Position query shape assertions.
+    # Position query shape: season-only filter.
     position_query <- capture_nwar_positions_query(seasons_filter = 2024L)
     assert_true(!is.null(position_query), 'Expected fetch_nwar_positions to return a query object.')
     position_sql <- normalize_sql(position_query$query)
 
     assert_true(grepl('COALESCE(', position_sql, fixed = TRUE),
-                'Expected position query to include an all-time fallback for missing season data.')
-    assert_true(grepl('MODE() WITHIN GROUP (ORDER BY CASE WHEN season IN (?pos_season_1)', position_sql, fixed = TRUE),
-                'Expected position query to parameterise the seasonal dominant-position branch.')
+                'Expected position query to include an all-time fallback.')
+    assert_true(grepl('CASE WHEN season IN (?pos_season_1)', position_sql, fixed = TRUE),
+                'Expected position query to scope per-filter branch to seasons.')
     assert_true(grepl("starting_position_code NOT IN \\('I', 'S', '-'\\)", position_sql),
                 'Expected position query to exclude interchange and bench marker codes.')
     assert_true(!grepl('(SELECT MODE()', position_sql, fixed = TRUE),
@@ -490,7 +490,27 @@ if (file.exists(helpers_path)) {
     assert_true(!is.null(position_query$params$pos_season_1),
                 'Expected fetch_nwar_positions to parameterise season filters.')
 
-    check_step('fetch_nwar_rows unit tests pass (empty result, single player boundary, optimized query shape)')
+    # Position query shape: team_id-only filter — guards the team-scoped position
+    # semantics regression where positions were resolved from all teams' matches.
+    team_pos_query <- capture_nwar_positions_query(seasons_filter = NULL, team_id = 5L)
+    assert_true(!is.null(team_pos_query), 'Expected fetch_nwar_positions with team_id to return a query object.')
+    team_pos_sql <- normalize_sql(team_pos_query$query)
+    assert_true(grepl('COALESCE(', team_pos_sql, fixed = TRUE),
+                'Expected team-filtered position query to include an all-time fallback.')
+    assert_true(grepl('CASE WHEN squad_id = ?pos_team_id', team_pos_sql, fixed = TRUE),
+                'Expected team-filtered position query to scope per-filter branch to the team.')
+    assert_true(!is.null(team_pos_query$params$pos_team_id),
+                'Expected fetch_nwar_positions to parameterise the team_id filter.')
+
+    # Position query shape: combined season + team_id filter.
+    combined_pos_query <- capture_nwar_positions_query(seasons_filter = 2024L, team_id = 5L)
+    combined_pos_sql <- normalize_sql(combined_pos_query$query)
+    assert_true(grepl('season IN (?pos_season_1)', combined_pos_sql, fixed = TRUE),
+                'Expected combined position query to include season scope.')
+    assert_true(grepl('squad_id = ?pos_team_id', combined_pos_sql, fixed = TRUE),
+                'Expected combined position query to include team scope.')
+
+    check_step('fetch_nwar_rows unit tests pass (empty result, single player boundary, optimized query shape, team-scoped position)')
   }
 }
 

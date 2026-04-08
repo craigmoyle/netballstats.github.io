@@ -3031,37 +3031,53 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
 # a MODE() WITHIN GROUP ordered-set aggregate on an already-wide scan.
 #
 # Two-level resolution in a single SQL pass:
-#   1. Per-season MODE: the CASE WHEN season IN (...) expression returns the
-#      player's starting_position_code only for matches in the queried seasons,
-#      so MODE picks the most frequent field position within those seasons.
-#   2. All-time fallback via COALESCE: when the per-season MODE is NULL (the
-#      player has no valid position records in the queried seasons), the outer
-#      MODE across all seasons provides the fallback.
-# When seasons_filter is NULL both MODE expressions are equivalent and COALESCE
-# is omitted — only the all-time MODE is computed.
+#   1. Per-filter MODE: the CASE WHEN expression returns starting_position_code
+#      only for matches that satisfy the active season and team_id filters, so
+#      MODE picks the dominant field position within that filtered match set.
+#      This preserves the same scoping semantics as the pre-refactor query which
+#      computed position from the same JOIN-filtered rows as the stat aggregate.
+#   2. All-time fallback via COALESCE: when the per-filter MODE is NULL (player
+#      has no valid position records in the filtered scope), the outer MODE across
+#      all seasons/teams provides the fallback, still excluding invalid markers.
+# When both seasons_filter and team_id are NULL the COALESCE is omitted and only
+# the all-time MODE is computed.
 #
 # Returns a data.frame(player_id, position_code). Called by fetch_nwar_rows().
-fetch_nwar_positions <- function(conn, seasons_filter) {
+fetch_nwar_positions <- function(conn, seasons_filter, team_id = NULL) {
   params <- list()
+  has_filter <- (!is.null(seasons_filter) && length(seasons_filter) > 0L) ||
+                (!is.null(team_id))
 
-  if (!is.null(seasons_filter) && length(seasons_filter) > 0L) {
-    # Parameterise the IN list for the per-season CASE WHEN branch.
-    phs <- character(length(seasons_filter))
-    for (i in seq_along(seasons_filter)) {
-      key <- sprintf("pos_season_%d", i)
-      phs[[i]] <- paste0("?", key)
-      params[[key]] <- seasons_filter[[i]]
+  if (has_filter) {
+    # Build the CASE WHEN condition for the per-filter branch. Both clauses are
+    # AND-combined when both filters are active.
+    filter_parts <- character(0)
+
+    if (!is.null(seasons_filter) && length(seasons_filter) > 0L) {
+      phs <- character(length(seasons_filter))
+      for (i in seq_along(seasons_filter)) {
+        key <- sprintf("pos_season_%d", i)
+        phs[[i]] <- paste0("?", key)
+        params[[key]] <- seasons_filter[[i]]
+      }
+      filter_parts <- c(filter_parts, sprintf("season IN (%s)", paste(phs, collapse = ", ")))
     }
-    in_list <- paste(phs, collapse = ", ")
+
+    if (!is.null(team_id)) {
+      filter_parts <- c(filter_parts, "squad_id = ?pos_team_id")
+      params[["pos_team_id"]] <- as.integer(team_id)
+    }
+
+    filter_expr <- paste(filter_parts, collapse = " AND ")
     pos_col <- paste(
       "COALESCE(",
-      sprintf("  MODE() WITHIN GROUP (ORDER BY CASE WHEN season IN (%s)", in_list),
+      sprintf("  MODE() WITHIN GROUP (ORDER BY CASE WHEN %s", filter_expr),
       "    THEN starting_position_code END),",
       "  MODE() WITHIN GROUP (ORDER BY starting_position_code)",
       ") AS position_code"
     )
   } else {
-    # No season restriction: compute the all-time dominant position directly.
+    # No filters: compute the all-time dominant position directly.
     pos_col <- "MODE() WITHIN GROUP (ORDER BY starting_position_code) AS position_code"
   }
 
@@ -3137,7 +3153,7 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
   seasons_filter <- if (!is.null(seasons) && length(seasons)) as.integer(seasons) else NULL
   has_positions  <- has_player_match_positions(conn)
   pos_code <- if (has_positions) {
-    pos_df <- fetch_nwar_positions(conn, seasons_filter)
+    pos_df <- fetch_nwar_positions(conn, seasons_filter, team_id = team_id)
     as.character(pos_df$position_code[match(all_rows$player_id, pos_df$player_id)])
   } else {
     rep(NA_character_, nrow(all_rows))
