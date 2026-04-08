@@ -205,6 +205,36 @@ possessive_subject <- helpers_env$extract_query_subject_phrase(
 assert_true(identical(possessive_subject, 'the Swifts'), 'Expected possessive team phrasing to normalize to the team subject.')
 check_step('parser normalizes possessive team phrasing')
 
+normalize_client_key <- function(http_x_forwarded_for, remote_addr) {
+  raw_forwarded <- http_x_forwarded_for %||% ""
+  client_key <- if (nzchar(raw_forwarded)) {
+    forwarded_token <- trimws(strsplit(raw_forwarded, ",", fixed = TRUE)[[1]][[1]])
+    if (nzchar(forwarded_token)) forwarded_token else NULL
+  } else {
+    NULL
+  }
+
+  if (is.null(client_key)) {
+    remote_addr %||% "unknown"
+  } else {
+    client_key
+  }
+}
+
+assert_true(
+  identical(normalize_client_key(' , 198.51.100.10', '127.0.0.1'), '127.0.0.1'),
+  'Expected blank forwarded IP tokens to fall back to REMOTE_ADDR.'
+)
+assert_true(
+  identical(normalize_client_key('   ', '127.0.0.2'), '127.0.0.2'),
+  'Expected whitespace-only forwarded IP tokens to fall back to REMOTE_ADDR.'
+)
+assert_true(
+  identical(normalize_client_key(',198.51.100.11', '127.0.0.3'), '127.0.0.3'),
+  'Expected leading-comma forwarded IP tokens to fall back to REMOTE_ADDR.'
+)
+check_step('rate limiter tolerates blank forwarded IP tokens')
+
 player_builder_inputs <- list(
   stat = 'goals',
   seasons = c(2022L, 2023L),

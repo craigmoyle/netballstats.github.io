@@ -57,8 +57,12 @@ request_limiter <- local({
     # prevent spoofing via attacker-appended values.
     raw_forwarded <- req$HTTP_X_FORWARDED_FOR %||% ""
     client_key <- if (nzchar(raw_forwarded)) {
-      trimws(strsplit(raw_forwarded, ",", fixed = TRUE)[[1]][[1]])
+      forwarded_token <- trimws(strsplit(raw_forwarded, ",", fixed = TRUE)[[1]][[1]])
+      if (nzchar(forwarded_token)) forwarded_token else NULL
     } else {
+      NULL
+    }
+    if (is.null(client_key)) {
       req$REMOTE_ADDR %||% "unknown"
     }
     now <- as.numeric(Sys.time())
