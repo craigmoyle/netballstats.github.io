@@ -1217,6 +1217,19 @@ has_player_match_participation <- function(conn) {
   result
 }
 
+# Returns TRUE when team_match_stats is available in the connected database.
+# The table is created by build_database.R; older DB builds won't have it.
+has_team_match_stats <- function(conn) {
+  cached <- getOption("netballstats.tms_available")
+  if (!is.null(cached)) return(isTRUE(cached))
+  result <- isTRUE(tryCatch(
+    DBI::dbExistsTable(conn, "team_match_stats"),
+    error = function(e) FALSE
+  ))
+  options(netballstats.tms_available = result)
+  result
+}
+
 # Maps a Champion Data startingPositionCode to a broad positional group.
 # GS/GA are Shooters; WA/C/WD are Midcourt; GD/GK are Defenders.
 # Interchange and unrecognised codes fall through to "Other".
@@ -1298,6 +1311,42 @@ build_team_match_query <- function(stat, seasons = NULL, team_id = NULL, opponen
 
   if (!is.null(comparison) && !is.null(threshold)) {
     query <- paste0(query, " HAVING SUM(stats.value_number) ", query_comparison_sql(comparison), " ?threshold")
+    params$threshold <- threshold
+  }
+
+  list(query = query, params = params)
+}
+
+# Faster alternative to build_team_match_query that reads from the
+# team_match_stats pre-aggregated table (one row per team per match per
+# stat) instead of team_period_stats (one row per team per period per
+# stat).  No GROUP BY required; threshold comparisons become WHERE clauses
+# instead of HAVING, so the stat+value index can be used directly.
+build_fast_team_match_query <- function(stat, seasons = NULL, team_id = NULL, opponent_id = NULL, comparison = NULL, threshold = NULL) {
+  query <- paste(
+    "SELECT tms.squad_id AS team_id, tms.squad_name,",
+    paste0(opponent_name_sql("tms.squad_id"), " AS opponent,"),
+    "tms.season AS season, tms.round_number AS round_number, tms.match_id AS match_id, matches.local_start_time AS local_start_time,",
+    "?stat AS stat, tms.match_value AS total_value",
+    "FROM team_match_stats AS tms",
+    "INNER JOIN matches ON matches.match_id = tms.match_id",
+    "WHERE tms.stat = ?stat"
+  )
+  params <- list(stat = stat)
+
+  filters <- apply_stat_filters(query, params, seasons = seasons, team_id = team_id, round_number = NULL, table_alias = "tms")
+  query <- filters$query
+  params <- filters$params
+
+  if (!is.null(opponent_id)) {
+    query <- paste0(
+      query,
+      " AND (", opponent_id_sql("tms.squad_id"), ") = ?opponent_id"
+    )
+    params$opponent_id <- opponent_id
+  }
+  if (!is.null(comparison) && !is.null(threshold)) {
+    query <- paste0(query, " AND tms.match_value ", query_comparison_sql(comparison), " ?threshold")
     params$threshold <- threshold
   }
 
@@ -1779,8 +1828,38 @@ fetch_player_game_high_rows <- function(conn, seasons = NULL, team_id = NULL, ro
 }
 
 fetch_team_game_high_rows <- function(conn, seasons = NULL, team_id = NULL, round = NULL, competition_phase = NULL, stat = "points", ranking = "highest", limit = 10L) {
+  seasons_filter <- if (!is.null(seasons) && length(seasons)) as.integer(seasons) else NULL
   order_direction <- ranking_order_sql(ranking)
 
+  if (has_team_match_stats(conn)) {
+    # Fast path: team_match_stats is pre-aggregated at match level — no
+    # GROUP BY needed. ORDER BY + LIMIT uses idx_tms_stat_value directly.
+    query <- paste(
+      "SELECT tms.squad_id, tms.squad_name,",
+      paste0(opponent_name_sql("tms.squad_id"), " AS opponent,"),
+      "tms.season, tms.round_number, tms.match_id, matches.local_start_time,",
+      "?stat AS stat, tms.match_value AS total_value",
+      "FROM team_match_stats AS tms",
+      "INNER JOIN matches ON matches.match_id = tms.match_id",
+      "WHERE tms.stat = ?stat"
+    )
+    filters <- apply_stat_filters(
+      query, list(stat = stat), seasons = seasons_filter, team_id = team_id,
+      round_number = round, table_alias = "tms"
+    )
+    if (!is.null(competition_phase)) {
+      filters$query <- paste0(filters$query, " AND COALESCE(matches.competition_phase, '') = ?competition_phase")
+      filters$params$competition_phase <- as.character(competition_phase)
+    }
+    filters$query <- paste0(
+      filters$query,
+      " ORDER BY tms.match_value ", order_direction, ", tms.season DESC, tms.round_number DESC, tms.squad_name ASC LIMIT ?limit"
+    )
+    filters$params$limit <- limit
+    return(query_rows(conn, filters$query, filters$params))
+  }
+
+  # Fallback: aggregate period rows at query time (slower on B1ms)
   query <- paste(
     "SELECT stats.squad_id, stats.squad_name,",
     paste0(opponent_name_sql("stats.squad_id", aggregate = TRUE), " AS opponent,"),
@@ -1790,11 +1869,10 @@ fetch_team_game_high_rows <- function(conn, seasons = NULL, team_id = NULL, roun
     "INNER JOIN matches ON matches.match_id = stats.match_id",
     "WHERE stats.stat = ?stat"
   )
-
   filters <- apply_stat_filters(
     query,
     list(stat = stat),
-    seasons = seasons,
+    seasons = seasons_filter,
     team_id = team_id,
     round_number = round,
     table_alias = "stats"
