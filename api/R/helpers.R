@@ -1998,6 +1998,49 @@ fetch_team_spotlight_rows <- function(conn, seasons, round, competition_phase, s
   if (!nzchar(stat_sql)) return(empty)
   order_dir <- ranking_order_sql(ranking)
 
+  if (has_team_match_stats(conn)) {
+    query <- paste0(
+      "WITH ranked AS (",
+      " SELECT tms.stat, tms.squad_id, tms.squad_name,",
+      "   ", opponent_name_sql("tms.squad_id"), " AS opponent,",
+      "   tms.season, tms.round_number, tms.match_id, matches.local_start_time,",
+      "   tms.match_value AS total_value,",
+      "   ROW_NUMBER() OVER (PARTITION BY tms.stat",
+      "     ORDER BY tms.match_value ", order_dir, ", tms.season DESC, tms.round_number DESC,",
+      "              tms.squad_name ASC) AS rn",
+      " FROM team_match_stats tms",
+      " INNER JOIN matches ON matches.match_id = tms.match_id",
+      " WHERE tms.stat IN (", stat_sql, ")",
+      "   AND tms.season = ?season",
+      "   AND tms.round_number = ?round_number",
+      "   AND COALESCE(matches.competition_phase, '') = ?competition_phase",
+      ")",
+      " SELECT stat, squad_id, squad_name, opponent,",
+      "   season, round_number, match_id, local_start_time, total_value",
+      " FROM ranked WHERE rn = 1"
+    )
+    rows <- tryCatch(
+      query_rows(conn, query, list(
+        season            = as.integer(seasons[[1]]),
+        round_number      = as.integer(round),
+        competition_phase = as.character(competition_phase %||% "")
+      )),
+      error = function(e) {
+        api_log("WARN", "spotlight_team_batch_failed",
+          error_class = paste(class(e), collapse = "/"),
+          error_message = conditionMessage(e))
+        data.frame()
+      }
+    )
+    result <- lapply(stats, function(s) {
+      r <- rows[!is.na(rows$stat) & rows$stat == s, , drop = FALSE]
+      if (nrow(r)) r else data.frame()
+    })
+    names(result) <- stats
+    return(result)
+  }
+
+  # Fallback: aggregate period rows at query time
   query <- paste0(
     "WITH agg AS (",
     " SELECT stats.stat, stats.squad_id, stats.squad_name,",
@@ -2070,6 +2113,12 @@ fetch_spotlight_bests <- function(conn, subject_type, stats, season = NULL, rank
       " FROM player_period_stats WHERE stat IN (", stat_sql, ")", season_clause,
       " GROUP BY stat, player_id, match_id) sub GROUP BY stat"
     )
+  } else if (identical(subject_type, "team") && has_team_match_stats(conn)) {
+    paste0(
+      "SELECT stat, ", agg_fn, "(match_value) AS best_value",
+      " FROM team_match_stats WHERE stat IN (", stat_sql, ")", season_clause,
+      " GROUP BY stat"
+    )
   } else {
     paste0(
       "SELECT stat, ", agg_fn, "(total_value) AS best_value FROM (",
@@ -2079,8 +2128,6 @@ fetch_spotlight_bests <- function(conn, subject_type, stats, season = NULL, rank
       " GROUP BY stat, squad_id, match_id) sub GROUP BY stat"
     )
   }
-
-  rows <- tryCatch(query_rows(conn, query, params), error = function(e) data.frame())
   if (nrow(rows) && all(c("stat", "best_value") %in% names(rows))) {
     for (i in seq_len(nrow(rows))) {
       s <- as.character(rows$stat[[i]])
