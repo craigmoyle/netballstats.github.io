@@ -458,11 +458,12 @@ check_step('nWAR endpoint validates min_games lower bound')
 
 # Unit tests for fetch_nwar_rows R logic (no live DB required)
 normalize_sql <- if (exists('normalize_sql')) normalize_sql else function(q) gsub('\\s+', ' ', trimws(q))
+helpers_path <- Sys.getenv('NETBALL_STATS_HELPERS_PATH', file.path(getwd(), 'api', 'R', 'helpers.R'))
 
 # Returns the list(query, params) from build_nwar_query without a live connection.
 capture_nwar_query <- function(use_match_stats, seasons = NULL, team_id = NULL, min_games = 5L) {
   helpers_env <- new.env(parent = globalenv())
-  source(file.path(dirname(base_url), '..', 'api', 'R', 'helpers.R'), local = helpers_env, echo = FALSE)
+  source(helpers_path, local = helpers_env, echo = FALSE)
   helpers_env$has_player_match_stats        <- function(conn) use_match_stats
   helpers_env$has_player_match_participation <- function(conn) FALSE
   helpers_env$build_nwar_query(conn = NULL, seasons = seasons, team_id = team_id, min_games = min_games)
@@ -471,7 +472,7 @@ capture_nwar_query <- function(use_match_stats, seasons = NULL, team_id = NULL, 
 # Returns the list(query, params) from fetch_nwar_positions without a live connection.
 capture_nwar_positions_query <- function(seasons_filter = NULL, team_id = NULL) {
   helpers_env <- new.env(parent = globalenv())
-  source(file.path(dirname(base_url), '..', 'api', 'R', 'helpers.R'), local = helpers_env, echo = FALSE)
+  source(helpers_path, local = helpers_env, echo = FALSE)
   captured <- NULL
   helpers_env$query_rows <- function(conn, query, params = list()) {
     captured <<- list(query = query, params = params)
@@ -481,7 +482,6 @@ capture_nwar_positions_query <- function(seasons_filter = NULL, team_id = NULL) 
   captured
 }
 
-helpers_path <- Sys.getenv('NETBALL_STATS_HELPERS_PATH', file.path(getwd(), 'api', 'R', 'helpers.R'))
 if (file.exists(helpers_path)) {
   helpers_env <- new.env(parent = globalenv())
   helpers_loaded <- tryCatch({
