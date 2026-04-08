@@ -16,6 +16,9 @@ resolve_request_client_key <- function(raw_forwarded, remote_addr) {
 
   raw_forwarded <- as.character(raw_forwarded)[[1]]
   remote_addr <- as.character(remote_addr)[[1]]
+  if (!nzchar(trimws(remote_addr))) {
+    remote_addr <- "unknown"
+  }
 
   if (nzchar(raw_forwarded)) {
     forwarded_token <- trimws(strsplit(raw_forwarded, ",", fixed = TRUE)[[1]][[1]])

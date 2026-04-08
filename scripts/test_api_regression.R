@@ -217,6 +217,14 @@ assert_true(
   identical(helpers_env$resolve_request_client_key(',198.51.100.11', '127.0.0.3'), '127.0.0.3'),
   'Expected leading-comma forwarded IP tokens to fall back to REMOTE_ADDR.'
 )
+assert_true(
+  identical(helpers_env$resolve_request_client_key('   ', ''), 'unknown'),
+  'Expected blank REMOTE_ADDR to fall back to unknown.'
+)
+assert_true(
+  identical(helpers_env$resolve_request_client_key('   ', '   '), 'unknown'),
+  'Expected whitespace REMOTE_ADDR to fall back to unknown.'
+)
 check_step('rate limiter tolerates blank forwarded IP tokens')
 
 player_builder_inputs <- list(
