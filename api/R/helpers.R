@@ -2178,6 +2178,13 @@ fetch_spotlight_archive_data <- function(conn, subject_type, stat_values, rankin
         " FROM player_period_stats WHERE stat IN (", stat_sql, ")",
         " GROUP BY stat, player_id, match_id) sub GROUP BY stat"
       )
+    } else if (identical(subject_type, "team") && has_team_match_stats(conn)) {
+      paste0(
+        "SELECT stat, ", agg_fn, "(match_value) AS best_value,",
+        " COUNT(", make_rank_case("match_value"), ") + 1 AS rank_for_stat",
+        " FROM team_match_stats WHERE stat IN (", stat_sql, ")",
+        " GROUP BY stat"
+      )
     } else {
       paste0(
         "SELECT stat, ", agg_fn, "(total_value) AS best_value,",
@@ -2189,8 +2196,6 @@ fetch_spotlight_archive_data <- function(conn, subject_type, stat_values, rankin
       )
     }
   }, error = function(e) NULL)
-
-  if (is.null(query)) return(list(bests = empty_bests, ranks = empty_ranks))
   rows <- tryCatch(query_rows(conn, query, list()), error = function(e) data.frame())
 
   bests <- empty_bests
@@ -2244,6 +2249,12 @@ batch_compute_archive_ranks <- function(conn, subject_type, stat_values, ranking
         "   ROUND(CAST(SUM(value_number) AS numeric), 2) AS total_value",
         " FROM player_period_stats WHERE stat IN (", stat_sql, ")",
         " GROUP BY stat, player_id, match_id) sub GROUP BY stat"
+      )
+    } else if (identical(subject_type, "team") && has_team_match_stats(conn)) {
+      paste0(
+        "SELECT stat, COUNT(", make_case("match_value"), ") + 1 AS rank",
+        " FROM team_match_stats WHERE stat IN (", stat_sql, ")",
+        " GROUP BY stat"
       )
     } else {
       paste0(
@@ -2452,6 +2463,15 @@ compute_archive_rank <- function(conn, subject_type = c("team", "player"), stat,
           list(stat = stat, total_value = as.numeric(total_value))
         )
       }
+    } else if (has_team_match_stats(conn)) {
+      query_rows(
+        conn,
+        paste0(
+          "SELECT COUNT(*) + 1 AS rank FROM team_match_stats",
+          " WHERE stat = ?stat AND match_value ", compare_op, " ?total_value"
+        ),
+        list(stat = stat, total_value = as.numeric(total_value))
+      )
     } else {
       query_rows(
         conn,
@@ -2973,7 +2993,8 @@ fetch_query_result_rows <- function(conn, intent) {
 
   team_query <- identical(intent$subject_type, "team") || identical(intent$subject_type, "teams")
   if (team_query) {
-    builder <- build_team_match_query
+    # Use the pre-aggregated table when available; fall back to period-level aggregation.
+    builder <- if (has_team_match_stats(conn)) build_fast_team_match_query else build_team_match_query
     base_query <- builder(
       stat = intent$stat,
       seasons = seasons_filter,
@@ -2982,7 +3003,7 @@ fetch_query_result_rows <- function(conn, intent) {
       comparison = intent$comparison,
       threshold = intent$threshold
     )
-    tbl_alias <- "stats"
+    tbl_alias <- if (identical(builder, build_fast_team_match_query)) "tms" else "stats"
     order_name_expr <- paste0(tbl_alias, ".squad_name")
   } else {
     # Use the pre-aggregated table when available; fall back to period-level aggregation.

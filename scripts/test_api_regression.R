@@ -282,6 +282,34 @@ for (comparison_name in names(comparison_cases)) {
 }
 check_step('player match query builders preserve comparison operator mapping')
 
+team_builder_inputs <- list(
+  stat = 'goals',
+  seasons = c(2022L, 2023L),
+  team_id = 806L,
+  opponent_id = 804L,
+  comparison = 'gte',
+  threshold = 60
+)
+period_team_query <- do.call(helpers_env$build_team_match_query, team_builder_inputs)
+fast_team_query <- do.call(helpers_env$build_fast_team_match_query, team_builder_inputs)
+period_team_sql <- normalize_sql(period_team_query$query)
+fast_team_sql <- normalize_sql(fast_team_query$query)
+
+assert_true(identical(period_team_query$params, fast_team_query$params), 'Expected team match query builders to keep parameter payloads aligned.')
+assert_contains(period_team_sql, 'FROM team_period_stats AS stats', 'Expected team-period builder to query team_period_stats.')
+assert_contains(fast_team_sql, 'FROM team_match_stats AS tms', 'Expected team-match builder to query team_match_stats.')
+assert_contains(period_team_sql, 'stats.season IN (?season_1, ?season_2)', 'Expected team-period builder to retain season array filters.')
+assert_contains(fast_team_sql, 'tms.season IN (?season_1, ?season_2)', 'Expected team-match builder to retain season array filters.')
+assert_contains(period_team_sql, 'AND stats.squad_id = ?team_id', 'Expected team-period builder to retain team filters.')
+assert_contains(fast_team_sql, 'AND tms.squad_id = ?team_id', 'Expected team-match builder to retain team filters.')
+assert_contains(period_team_sql, 'END) = ?opponent_id', 'Expected team-period builder to retain opponent filters.')
+assert_contains(fast_team_sql, 'END) = ?opponent_id', 'Expected team-match builder to retain opponent filters.')
+assert_contains(period_team_sql, 'HAVING SUM(stats.value_number) >= ?threshold', 'Expected team-period builder thresholds to stay in HAVING clauses.')
+assert_contains(fast_team_sql, 'AND tms.match_value >= ?threshold', 'Expected team-match builder thresholds to stay in WHERE clauses.')
+assert_contains(period_team_sql, 'GROUP BY stats.squad_id, stats.squad_name, stats.season, stats.round_number, stats.match_id, matches.local_start_time', 'Expected team-period builder to keep match-level grouping.')
+assert_true(!grepl(' GROUP BY ', fast_team_sql, fixed = TRUE), 'Expected team-match builder to avoid redundant GROUP BY clauses.')
+check_step('team match query builders keep filters and threshold placement aligned')
+
 capture_player_game_high_query <- function(use_match_stats, ...) {
   original_has_player_match_stats <- helpers_env$has_player_match_stats
   original_query_rows <- helpers_env$query_rows
@@ -332,6 +360,57 @@ assert_contains(period_player_game_high_sql, "AND COALESCE(matches.competition_p
 assert_contains(fast_player_game_high_sql, 'ORDER BY pms.match_value ASC', 'Expected player game-high fast path to preserve lowest-ranking ordering.')
 assert_contains(period_player_game_high_sql, 'GROUP BY stats.player_id, players.canonical_name, stats.squad_name, stats.season, stats.round_number, stats.match_id, matches.local_start_time ORDER BY total_value ASC', 'Expected player game-high fallback path to preserve match grouping before ordering.')
 check_step('player game-high query paths keep filter and ordering clauses aligned')
+
+capture_team_game_high_query <- function(use_team_match_stats, ...) {
+  original_has_team_match_stats <- helpers_env$has_team_match_stats
+  original_query_rows <- helpers_env$query_rows
+  captured <- NULL
+
+  on.exit({
+    helpers_env$has_team_match_stats <- original_has_team_match_stats
+    helpers_env$query_rows <- original_query_rows
+  }, add = TRUE)
+
+  helpers_env$has_team_match_stats <- function(conn) use_team_match_stats
+  helpers_env$query_rows <- function(conn, query, params = list()) {
+    captured <<- list(query = query, params = params)
+    data.frame()
+  }
+
+  helpers_env$fetch_team_game_high_rows(
+    conn = NULL,
+    ...
+  )
+
+  captured
+}
+
+team_game_high_inputs <- list(
+  seasons = c(2021L, 2022L),
+  team_id = 804L,
+  round = 5L,
+  competition_phase = 'Final',
+  stat = 'goals',
+  ranking = 'lowest',
+  limit = 4L
+)
+fast_team_game_high_query <- do.call(capture_team_game_high_query, c(list(use_team_match_stats = TRUE), team_game_high_inputs))
+period_team_game_high_query <- do.call(capture_team_game_high_query, c(list(use_team_match_stats = FALSE), team_game_high_inputs))
+fast_team_game_high_sql <- normalize_sql(fast_team_game_high_query$query)
+period_team_game_high_sql <- normalize_sql(period_team_game_high_query$query)
+
+assert_true(identical(fast_team_game_high_query$params, period_team_game_high_query$params), 'Expected team game-high query paths to keep parameter payloads aligned.')
+assert_contains(fast_team_game_high_sql, 'tms.season IN (?season_1, ?season_2)', 'Expected team game-high fast path to retain season arrays.')
+assert_contains(period_team_game_high_sql, 'stats.season IN (?season_1, ?season_2)', 'Expected team game-high fallback path to retain season arrays.')
+assert_contains(fast_team_game_high_sql, 'AND tms.squad_id = ?team_id', 'Expected team game-high fast path to retain team filters.')
+assert_contains(period_team_game_high_sql, 'AND stats.squad_id = ?team_id', 'Expected team game-high fallback path to retain team filters.')
+assert_contains(fast_team_game_high_sql, 'AND tms.round_number = ?round_number', 'Expected team game-high fast path to retain round filters.')
+assert_contains(period_team_game_high_sql, 'AND stats.round_number = ?round_number', 'Expected team game-high fallback path to retain round filters.')
+assert_contains(fast_team_game_high_sql, "AND COALESCE(matches.competition_phase, '') = ?competition_phase", 'Expected team game-high fast path to retain competition phase filters.')
+assert_contains(period_team_game_high_sql, "AND COALESCE(matches.competition_phase, '') = ?competition_phase", 'Expected team game-high fallback path to retain competition phase filters.')
+assert_contains(fast_team_game_high_sql, 'ORDER BY tms.match_value ASC', 'Expected team game-high fast path to preserve lowest-ranking ordering.')
+assert_contains(period_team_game_high_sql, 'GROUP BY stats.squad_id, stats.squad_name, stats.season, stats.round_number, stats.match_id, matches.local_start_time ORDER BY total_value ASC', 'Expected team game-high fallback path to preserve match grouping before ordering.')
+check_step('team game-high query paths keep filter and ordering clauses aligned')
 
 invalid_summary <- request_json(base_url, '/summary', query = list(season = 1900), expected_status = 400L)
 assert_true(nzchar(as.character(invalid_summary$error %||% '')), 'Expected invalid requests to return an error payload.')
