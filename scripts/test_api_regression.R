@@ -485,12 +485,25 @@ invalid_nwar <- request_json(base_url, '/nwar', query = list(min_games = '0'), e
 assert_true(nzchar(as.character(invalid_nwar$error %||% '')), 'Expected /nwar to reject min_games below 1.')
 check_step('nWAR endpoint validates min_games lower bound')
 
+nwar_baseline_payload <- request_json(base_url, '/nwar', query = list(min_games = '1', limit = '10'))
+assert_true(is.list(nwar_baseline_payload$data), 'Expected unfiltered /nwar to return a data list.')
+
 nwar_anzc_payload <- request_json(base_url, '/nwar', query = list(era = 'anzc', min_games = '1', limit = '10'))
 assert_true(is.list(nwar_anzc_payload$data), 'Expected /nwar?era=anzc to return a data list.')
+if (length(nwar_baseline_payload$data) >= 1L && length(nwar_anzc_payload$data) >= 1L) {
+  baseline_ids <- vapply(nwar_baseline_payload$data, function(r) as.character(scalar_value(r$player_id) %||% ''), character(1L))
+  anzc_ids <- vapply(nwar_anzc_payload$data, function(r) as.character(scalar_value(r$player_id) %||% ''), character(1L))
+  assert_true(!identical(anzc_ids, baseline_ids), 'Expected /nwar?era=anzc to change the returned rows relative to the unfiltered query.')
+}
 check_step('nWAR endpoint accepts the anzc era filter')
 
 nwar_ssn_payload <- request_json(base_url, '/nwar', query = list(era = 'ssn', min_games = '1', limit = '10'))
 assert_true(is.list(nwar_ssn_payload$data), 'Expected /nwar?era=ssn to return a data list.')
+if (length(nwar_baseline_payload$data) >= 1L && length(nwar_ssn_payload$data) >= 1L) {
+  baseline_ids <- vapply(nwar_baseline_payload$data, function(r) as.character(scalar_value(r$player_id) %||% ''), character(1L))
+  ssn_ids <- vapply(nwar_ssn_payload$data, function(r) as.character(scalar_value(r$player_id) %||% ''), character(1L))
+  assert_true(!identical(ssn_ids, baseline_ids), 'Expected /nwar?era=ssn to change the returned rows relative to the unfiltered query.')
+}
 check_step('nWAR endpoint accepts the ssn era filter')
 
 nwar_defender_payload <- request_json(base_url, '/nwar', query = list(position_group = 'defender', min_games = '1', limit = '25'))
@@ -498,6 +511,11 @@ assert_true(is.list(nwar_defender_payload$data), 'Expected /nwar?position_group=
 if (length(nwar_defender_payload$data) >= 1L) {
   defender_groups <- vapply(nwar_defender_payload$data, function(r) scalar_value(r$position_group) %||% NA_character_, character(1L))
   assert_true(all(defender_groups == 'Defender'), 'Expected defender-filtered /nwar rows to all resolve to Defender.')
+}
+if (length(nwar_baseline_payload$data) >= 1L && length(nwar_defender_payload$data) >= 1L) {
+  baseline_positions <- vapply(nwar_baseline_payload$data, function(r) scalar_value(r$position_group) %||% NA_character_, character(1L))
+  defender_positions <- vapply(nwar_defender_payload$data, function(r) scalar_value(r$position_group) %||% NA_character_, character(1L))
+  assert_true(!identical(defender_positions, baseline_positions), 'Expected /nwar?position_group=defender to change the returned rows relative to the unfiltered query.')
 }
 check_step('nWAR endpoint filters rows by position group')
 
