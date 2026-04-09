@@ -28,6 +28,7 @@ const elements = {
   nwarFilters: document.getElementById("nwar-filters"),
   nwarSeason: document.getElementById("nwar-season"),
   nwarMinGames: document.getElementById("nwar-min-games"),
+  nwarValueHeading: document.getElementById("nwar-value-heading"),
   nwarTbody: document.getElementById("nwar-tbody")
 };
 
@@ -58,6 +59,19 @@ function formatDecimal(value) {
   return Number(value).toFixed(2);
 }
 
+function isAllSeasonsView() {
+  return !elements.nwarSeason?.value;
+}
+
+function displayedNwarValue(row, usePerSeason = false) {
+  return usePerSeason ? row.nwar_per_season : row.nwar;
+}
+
+function updateNwarHeading(usePerSeason = false) {
+  if (!elements.nwarValueHeading) return;
+  elements.nwarValueHeading.textContent = usePerSeason ? "nWAR/Season" : "nWAR";
+}
+
 function renderMessageRow(message, kicker = "") {
   const tbody = elements.nwarTbody;
   if (!tbody) return;
@@ -75,9 +89,10 @@ function renderMessageRow(message, kicker = "") {
   window.NetballStatsUI?.syncResponsiveTable?.(document.getElementById("nwar-table"));
 }
 
-function renderTable(rows) {
+function renderTable(rows, usePerSeason = false) {
   const tbody = elements.nwarTbody;
   if (!tbody) return;
+  updateNwarHeading(usePerSeason);
   if (!rows || !rows.length) {
     renderMessageRow("No qualifying players found for these filters. Try a lower minimum-games threshold.", "No data");
     return;
@@ -89,7 +104,7 @@ function renderTable(rows) {
     const tr = document.createElement("tr");
     tr.dataset.rank = String(rank);
 
-    const nwarValue = Number(row.nwar);
+    const nwarValue = Number(displayedNwarValue(row, usePerSeason));
 
     const playerCell = document.createElement("td");
     const playerLink = document.createElement("a");
@@ -122,7 +137,7 @@ function renderTable(rows) {
     const nwarCell = document.createElement("td");
     const nwarStrong = document.createElement("strong");
     if (nwarValue < 0) nwarStrong.className = "result-loser";
-    nwarStrong.textContent = formatNwar(row.nwar);
+    nwarStrong.textContent = formatNwar(displayedNwarValue(row, usePerSeason));
     nwarCell.appendChild(nwarStrong);
 
     tr.append(rankCell, playerCell, teamCell, positionCell, gamesCell, avgCell, replCell, nparCell, nwarCell);
@@ -159,6 +174,7 @@ async function loadNwar() {
   if (!elements.nwarSeason || !elements.nwarMinGames || !elements.nwarTbody) return;
   const season = elements.nwarSeason.value;
   const minGames = elements.nwarMinGames.value;
+  const allSeasonsView = isAllSeasonsView();
   showLoadingStatus(LOADING_MESSAGES, "Calculating nWAR");
 
   const params = { limit: "100" };
@@ -168,15 +184,28 @@ async function loadNwar() {
   try {
     const payload = await fetchJson("/nwar", params);
     state.rows = payload.data || [];
-    renderTable(state.rows);
+    renderTable(state.rows, allSeasonsView);
 
     const seasonLabel = season ? `${season} season` : "all seasons";
-    if (elements.nwarMeta) elements.nwarMeta.textContent = `${formatNumber(state.rows.length)} players ranked — ${seasonLabel}.`;
+    if (elements.nwarMeta) {
+      elements.nwarMeta.textContent = allSeasonsView
+        ? `${formatNumber(state.rows.length)} players ranked — ${seasonLabel}, ordered by nWAR per season.`
+        : `${formatNumber(state.rows.length)} players ranked — ${seasonLabel}.`;
+    }
 
     const topPlayer = state.rows[0];
     if (topPlayer) {
-      if (elements.nwarHeroLabel) elements.nwarHeroLabel.textContent = `${topPlayer.player_name} — ${formatNwar(topPlayer.nwar)} nWAR`;
-      if (elements.nwarHeroSummary) elements.nwarHeroSummary.textContent = `${topPlayer.games_played} games, ${formatDecimal(topPlayer.avg_fantasy_score)} avg fantasy pts.`;
+      const topMetric = displayedNwarValue(topPlayer, allSeasonsView);
+      if (elements.nwarHeroLabel) {
+        elements.nwarHeroLabel.textContent = allSeasonsView
+          ? `${topPlayer.player_name} — ${formatNwar(topMetric)} nWAR/season`
+          : `${topPlayer.player_name} — ${formatNwar(topMetric)} nWAR`;
+      }
+      if (elements.nwarHeroSummary) {
+        elements.nwarHeroSummary.textContent = allSeasonsView
+          ? `${formatNumber(topPlayer.seasons_played)} seasons, ${formatNumber(topPlayer.games_played)} games, ${formatNwar(topPlayer.nwar)} career nWAR.`
+          : `${topPlayer.games_played} games, ${formatDecimal(topPlayer.avg_fantasy_score)} avg fantasy pts.`;
+      }
     } else {
       if (elements.nwarHeroLabel) elements.nwarHeroLabel.textContent = "No qualifying players";
       if (elements.nwarHeroSummary) elements.nwarHeroSummary.textContent = "Try adjusting the minimum games filter.";
@@ -190,6 +219,7 @@ async function loadNwar() {
   } catch (error) {
     showStatus(error.message || "Unable to load nWAR rankings.", "error", { kicker: "Rankings unavailable" });
     if (elements.nwarMeta) elements.nwarMeta.textContent = "nWAR rankings unavailable.";
+    updateNwarHeading(allSeasonsView);
     renderMessageRow("The nWAR rankings are unavailable. Try again shortly.", "Archive note");
     if (elements.nwarHeroLabel) elements.nwarHeroLabel.textContent = "Unavailable";
     if (elements.nwarHeroSummary) elements.nwarHeroSummary.textContent = "Unable to load the nWAR leaderboard.";

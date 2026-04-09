@@ -429,11 +429,20 @@ if (length(nwar_payload$data) >= 1L) {
   assert_true(!is.null(first_row$player_id),    'Expected /nwar rows to include player_id.')
   assert_true(!is.null(first_row$player_name),  'Expected /nwar rows to include player_name.')
   assert_true(!is.null(first_row$nwar),         'Expected /nwar rows to include nwar.')
+  assert_true(!is.null(first_row$nwar_per_season), 'Expected /nwar rows to include nwar_per_season.')
+  assert_true(!is.null(first_row$seasons_played),  'Expected /nwar rows to include seasons_played.')
   assert_true(!is.null(first_row$games_played), 'Expected /nwar rows to include games_played.')
   nwar_val <- as.numeric(scalar_value(first_row$nwar) %||% NA_real_)
   assert_true(!is.nan(nwar_val), 'Expected /nwar top row to have a non-NaN nwar value.')
 }
 check_step('nWAR endpoint returns well-formed rows')
+
+if (length(nwar_payload$data) >= 2L) {
+  nwar_per_season_values <- vapply(nwar_payload$data, function(r) as.numeric(scalar_value(r$nwar_per_season) %||% NA_real_), numeric(1L))
+  assert_true(all(!is.nan(nwar_per_season_values)), 'Expected all-seasons /nwar to return no NaN nwar_per_season values.')
+  assert_true(nwar_per_season_values[[1]] >= nwar_per_season_values[[length(nwar_per_season_values)]], 'Expected all-seasons /nwar rows to be sorted descending by nwar_per_season.')
+}
+check_step('all-seasons nWAR endpoint sorts rows descending by nwar_per_season')
 
 nwar_season_payload <- request_json(base_url, '/nwar', query = list(season = as.character(default_season), min_games = '1', limit = '100'))
 assert_true(is.list(nwar_season_payload$data), 'Expected /nwar with season filter to return a data list.')
@@ -505,6 +514,8 @@ if (file.exists(helpers_path)) {
     assert_true(is.data.frame(empty_result), 'Expected fetch_nwar_rows to return a data.frame when no rows qualify.')
     assert_true(nrow(empty_result) == 0L, 'Expected fetch_nwar_rows to return zero rows when DB returns no matches.')
     assert_true('nwar' %in% names(empty_result), 'Expected empty fetch_nwar_rows result to include nwar column.')
+    assert_true('nwar_per_season' %in% names(empty_result), 'Expected empty fetch_nwar_rows result to include nwar_per_season column.')
+    assert_true('seasons_played' %in% names(empty_result), 'Expected empty fetch_nwar_rows result to include seasons_played column.')
 
     # Single qualifying player: nWAR must be 0 (player is their own replacement).
     # Mock provides all fantasy-scoring stat columns required by fetch_nwar_rows.
@@ -513,6 +524,7 @@ if (file.exists(helpers_path)) {
         player_id            = 1L,
         player_name          = 'Test Player',
         squad_name           = 'Test Squad',
+        seasons_played       = 1L,
         games_played         = 10L,
         total_goal1          = 0.0,
         total_goal2          = 0.0,
@@ -531,12 +543,13 @@ if (file.exists(helpers_path)) {
         total_gpto           = 0.0,
         total_penalties      = 0.0,
         total_quarters       = 40.0,
-        stringsAsFactors     = FALSE
+    stringsAsFactors     = FALSE
       )
     }
     single_result <- helpers_env$fetch_nwar_rows(conn = NULL, min_games = 1L, limit = 50L)
     assert_true(nrow(single_result) == 1L, 'Expected fetch_nwar_rows to return one row for a single qualifying player.')
     assert_true(abs(as.numeric(single_result$nwar[[1]])) < 0.01, 'Expected single-player nWAR to be approximately 0 (player is their own replacement).')
+    assert_true(abs(as.numeric(single_result$nwar_per_season[[1]])) < 0.01, 'Expected single-player nWAR per season to be approximately 0 (player is their own replacement).')
 
     # Optimized query shape assertions (no live DB needed).
     optimized_query <- capture_nwar_query(use_match_stats = TRUE, seasons = 2024L, min_games = 5L)

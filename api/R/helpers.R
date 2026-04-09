@@ -3147,6 +3147,7 @@ build_nwar_query <- function(conn, seasons, team_id, min_games) {
     # appear under multiple squad names. The MAX picks one name arbitrarily
     # (alphabetical); this is display-only and does not affect nWAR calculations.
     "SELECT stats.player_id, players.canonical_name AS player_name, MAX(stats.squad_name) AS squad_name,",
+    "COUNT(DISTINCT stats.season) AS seasons_played,",
     paste0("COUNT(DISTINCT ", games_played_expr, ") AS games_played,"),
     "SUM(CASE WHEN stats.stat = 'goal1' THEN stats.match_value ELSE 0 END) AS total_goal1,",
     "SUM(CASE WHEN stats.stat = 'goal2' THEN stats.match_value ELSE 0 END) AS total_goal2,",
@@ -3281,6 +3282,9 @@ fetch_nwar_positions <- function(conn, seasons_filter, team_id = NULL) {
 #      groups with fewer than 2 valid players).
 #   6. Compute FPAR/game = avg_fantasy_score - replacement_level.
 #   7. Compute nWAR = FPAR/game × games_played / NWAR_POINTS_PER_WIN.
+#   8. When no season filter is applied, also compute nWAR/season and rank the
+#      all-seasons leaderboard by that normalized value so longer careers do
+#      not dominate purely on accumulated volume.
 fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L, limit = 50L) {
   filters <- build_nwar_query(conn, seasons, team_id, min_games)
 
@@ -3288,6 +3292,7 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
     player_id         = integer(0),
     player_name       = character(0),
     squad_name        = character(0),
+    seasons_played    = integer(0),
     games_played      = integer(0),
     total_fantasy_score = numeric(0),
     avg_fantasy_score = numeric(0),
@@ -3295,6 +3300,7 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
     position_group    = character(0),
     replacement_level = numeric(0),
     npar              = numeric(0),
+    nwar_per_season   = numeric(0),
     nwar              = numeric(0),
     stringsAsFactors  = FALSE
   )
@@ -3309,7 +3315,12 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
 
   if (nrow(all_rows) == 0L) return(empty_frame)
 
-  games   <- as.integer(all_rows$games_played)
+  games <- as.integer(all_rows$games_played)
+  seasons_played <- if ("seasons_played" %in% names(all_rows)) {
+    pmax(1L, as.integer(all_rows$seasons_played))
+  } else {
+    rep.int(1L, nrow(all_rows))
+  }
 
   # Resolve dominant position code via the separate lightweight position query
   # (fetch_nwar_positions). This runs a single GROUP BY on player_match_positions
@@ -3402,7 +3413,10 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
 
   npar <- round(avg_fs - repl_by_player, 2)
   nwar <- round(npar * as.numeric(games) / NWAR_POINTS_PER_WIN, 2)
+  nwar_per_season <- round(nwar / pmax(as.numeric(seasons_played), 1), 2)
+  ranking_metric <- if (is.null(seasons) || !length(seasons)) nwar_per_season else nwar
 
+  all_rows$seasons_played       <- seasons_played
   all_rows$games_played         <- games
   all_rows$total_fantasy_score  <- round(fantasy_score, 2)
   all_rows$avg_fantasy_score    <- avg_fs
@@ -3410,15 +3424,16 @@ fetch_nwar_rows <- function(conn, seasons = NULL, team_id = NULL, min_games = 5L
   all_rows$position_group       <- pos_group
   all_rows$replacement_level    <- repl_by_player
   all_rows$npar                 <- npar
+  all_rows$nwar_per_season      <- nwar_per_season
   all_rows$nwar                 <- nwar
 
   # Drop intermediate stat columns — only retain the computed summary fields.
-  keep_cols <- c("player_id", "player_name", "squad_name", "games_played",
+  keep_cols <- c("player_id", "player_name", "squad_name", "seasons_played", "games_played",
                  "total_fantasy_score", "avg_fantasy_score",
                  "position_code", "position_group", "replacement_level",
-                 "npar", "nwar")
+                 "npar", "nwar_per_season", "nwar")
   all_rows <- all_rows[, intersect(keep_cols, names(all_rows)), drop = FALSE]
-  all_rows <- all_rows[order(-all_rows$nwar, all_rows$player_name, na.last = TRUE), , drop = FALSE]
+  all_rows <- all_rows[order(-ranking_metric, -all_rows$nwar, all_rows$player_name, na.last = TRUE), , drop = FALSE]
   rownames(all_rows) <- NULL
   head(all_rows, as.integer(limit))
 }

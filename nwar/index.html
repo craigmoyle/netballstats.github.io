@@ -90,7 +90,7 @@
                 <th scope="col">Avg FP</th>
                 <th scope="col">Repl. Level</th>
                 <th scope="col"><abbr title="Fantasy Points Above Replacement">FPAR</abbr>/Game</th>
-                <th scope="col">nWAR</th>
+                <th scope="col" id="nwar-value-heading">nWAR</th>
               </tr>
             </thead>
             <tbody id="nwar-tbody">
@@ -121,6 +121,7 @@
             <li><strong><abbr title="Fantasy Points Above Replacement">FPAR</abbr>/Game</strong> — the player's average fantasy points per game minus their position group's replacement level.</li>
             <li><strong>nWAR</strong> = <abbr title="Fantasy Points Above Replacement">FPAR</abbr>/Game × Games played ÷ scaling constant (calibrated so an elite season ≈ 6–8 nWAR).</li>
           </ol>
+          <p class="muted">In the all-seasons view, the table is ordered by <strong>nWAR per season</strong> (career nWAR divided by seasons played) so longer careers do not dominate the ranking on volume alone.</p>
           <p class="muted">Replacement levels are computed separately for each position group — Shooters (GS/GA), Midcourt (WA/C/WD), and Defenders (GD/GK) — using each player's most common position in the queried season. When position data is unavailable, the global replacement level is used.</p>
         </div>
       </section>
