@@ -747,6 +747,25 @@ build_query_stat_alias_rows <- function() {
 
 QUERY_STAT_ALIASES <- build_query_stat_alias_rows()
 
+resolve_query_stat_fallback <- function(text) {
+  fallback_patterns <- list(
+    goalAssists = c("\\bgoal\\s+assists?\\b", "\\bassists?\\b"),
+    goalAttempts = c("\\bgoal\\s+attempts?\\b", "\\bshot\\s+attempts?\\b", "\\bshots\\b", "\\battempts\\b"),
+    goal1 = c("\\b(?:1|one)\\s+point\\s+goals?\\b"),
+    goal2 = c("\\b(?:2|two)\\s+point\\s+goals?\\b"),
+    goals = c("\\bgoal\\s+totals?\\b", "\\bgoals\\b")
+  )
+
+  for (stat_name in names(fallback_patterns)) {
+    patterns <- fallback_patterns[[stat_name]]
+    if (any(vapply(patterns, function(pattern) grepl(pattern, text, perl = TRUE), logical(1)))) {
+      return(stat_name)
+    }
+  }
+
+  NULL
+}
+
 resolve_query_stat <- function(text) {
   matched <- vapply(
     QUERY_STAT_ALIASES$pattern,
@@ -755,7 +774,7 @@ resolve_query_stat <- function(text) {
   )
   candidates <- QUERY_STAT_ALIASES[matched, , drop = FALSE]
   if (!nrow(candidates)) {
-    return(NULL)
+    return(resolve_query_stat_fallback(text))
   }
   unique(as.character(candidates$stat))[[1]]
 }

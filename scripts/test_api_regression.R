@@ -208,6 +208,15 @@ assert_true(
   ),
   'Expected resolve_query_stat to match stat aliases beyond the first configured pattern.'
 )
+assert_true(
+  identical(
+    helpers_env$resolve_query_stat(
+      helpers_env$normalize_query_phrase('Which teams scored 60+ goals in 2025?')
+    ),
+    'goals'
+  ),
+  'Expected resolve_query_stat to support representative team goals phrasing.'
+)
 check_step('query parser resolves stat aliases for representative scored/goals phrasing')
 possessive_subject <- helpers_env$extract_query_subject_phrase(
   "What is the Swifts' highest goals total against the Vixens?",
