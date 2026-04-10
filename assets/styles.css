@@ -858,6 +858,19 @@ code {
   grid-column: span 3;
 }
 
+#nwar-filters {
+  align-items: end;
+}
+
+#nwar-filters .nwar-filters__field--season,
+#nwar-filters .nwar-filters__field--min-games {
+  grid-column: span 3;
+}
+
+#nwar-filters .filter-actions {
+  align-self: end;
+}
+
 .filter-actions--primary {
   display: flex;
   align-items: center;
@@ -3081,6 +3094,19 @@ caption.table-caption {
 
   .filters--dashboard .field--toggle {
     grid-column: span 3;
+  }
+
+  #nwar-filters .nwar-filters__field {
+    grid-column: span 2;
+  }
+
+  #nwar-filters .nwar-filters__field--season,
+  #nwar-filters .nwar-filters__field--min-games {
+    grid-column: span 3;
+  }
+
+  #nwar-filters .filter-actions {
+    grid-column: 1 / -1;
   }
 
   .results-grid--home .results-panel--lead,
