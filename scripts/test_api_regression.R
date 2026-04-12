@@ -534,6 +534,146 @@ invalid_nwar_position_group <- request_json(base_url, '/nwar', query = list(posi
 assert_true(nzchar(as.character(invalid_nwar_position_group$error %||% '')), 'Expected /nwar to reject unsupported position_group values.')
 check_step('nWAR endpoint validates position_group values')
 
+# Home venue impact endpoint regression tests
+home_venue_helpers_env <- new.env(parent = globalenv())
+sys.source(file.path(getwd(), 'api', 'R', 'helpers.R'), envir = home_venue_helpers_env)
+assert_true(is.function(home_venue_helpers_env$build_home_venue_impact_base_query), 'Expected build_home_venue_impact_base_query to be exported from helpers.R.')
+assert_true(is.function(home_venue_helpers_env$summarise_home_venue_impact_rows), 'Expected summarise_home_venue_impact_rows to be exported from helpers.R.')
+
+home_venue_query <- home_venue_helpers_env$build_home_venue_impact_base_query(
+  seasons = c(2023L, 2024L),
+  team_id = 8118L,
+  venue_name = 'John Cain Arena'
+)
+home_venue_sql <- normalize_sql(home_venue_query$query)
+assert_contains(home_venue_sql, 'home_score IS NOT NULL', 'Expected home venue impact base query to exclude incomplete matches.')
+assert_contains(home_venue_sql, 'away_score IS NOT NULL', 'Expected home venue impact base query to exclude incomplete matches.')
+assert_contains(home_venue_sql, 'UNION ALL', 'Expected home venue impact base query to expand matches into home and away rows.')
+assert_contains(home_venue_sql, 'team_match_stats', 'Expected home venue impact base query to use team_match_stats for penalties.')
+assert_contains(home_venue_sql, "team_id = ?team_id", 'Expected home venue impact base query to support team filters on the team-perspective rows.')
+assert_contains(home_venue_sql, 'venue_name = ?venue_name', 'Expected home venue impact base query to support exact venue filters.')
+
+home_venue_fake_rows <- data.frame(
+  match_id = c(1L, 1L, 2L, 2L, 3L, 3L, 4L, 4L, 5L, 5L),
+  season = rep(2024L, 10),
+  competition_phase = rep('Regular Season', 10),
+  round_number = c(1L, 1L, 2L, 2L, 3L, 3L, 4L, 4L, 5L, 5L),
+  venue_name = c('Alpha', 'Alpha', 'Alpha', 'Alpha', 'Beta', 'Beta', 'Gamma', 'Gamma', 'Gamma', 'Gamma'),
+  team_id = c(1L, 3L, 1L, 4L, 1L, 5L, 2L, 6L, 2L, 7L),
+  team_name = c('Team 1', 'Team 3', 'Team 1', 'Team 4', 'Team 1', 'Team 5', 'Team 2', 'Team 6', 'Team 2', 'Team 7'),
+  opponent_id = c(3L, 1L, 4L, 1L, 5L, 1L, 6L, 2L, 7L, 2L),
+  opponent_name = c('Team 3', 'Team 1', 'Team 4', 'Team 1', 'Team 5', 'Team 1', 'Team 6', 'Team 2', 'Team 7', 'Team 2'),
+  is_home = c(1L, 0L, 1L, 0L, 1L, 0L, 1L, 0L, 1L, 0L),
+  team_score = c(60L, 50L, 55L, 57L, 62L, 58L, 61L, 54L, 52L, 52L),
+  opponent_score = c(50L, 60L, 57L, 55L, 58L, 62L, 54L, 61L, 52L, 52L),
+  margin = c(10L, -10L, -2L, 2L, 4L, -4L, 7L, -7L, 0L, 0L),
+  won = c(1L, 0L, 0L, 1L, 1L, 0L, 1L, 0L, 0L, 0L),
+  draw = c(0L, 0L, 0L, 0L, 0L, 0L, 0L, 0L, 1L, 1L),
+  penalties_for = c(48L, 55L, 52L, 50L, 47L, 54L, 46L, 53L, 44L, 44L),
+  penalties_against = c(55L, 48L, 50L, 52L, 54L, 47L, 53L, 46L, 44L, 44L),
+  penalty_advantage = c(7L, -7L, -2L, 2L, 7L, -7L, 7L, -7L, 0L, 0L),
+  stringsAsFactors = FALSE
+)
+home_venue_summary <- home_venue_helpers_env$summarise_home_venue_impact_rows(
+  home_venue_fake_rows,
+  min_matches = 2L,
+  limit = 50L
+)
+assert_true(!is.null(home_venue_summary$league_summary), 'Expected summarise_home_venue_impact_rows to return a league summary when matches qualify.')
+assert_true(identical(home_venue_summary$league_summary$matches, 5L), 'Expected league summary to count completed matches.')
+assert_true(identical(home_venue_summary$league_summary$draws, 1L), 'Expected league summary to count draw matches once.')
+assert_true(is.data.frame(home_venue_summary$team_summary), 'Expected team summary to be a data.frame.')
+assert_true(is.data.frame(home_venue_summary$venue_summary), 'Expected venue summary to be a data.frame.')
+assert_true(is.data.frame(home_venue_summary$team_venue_summary), 'Expected team_venue_summary to be a data.frame.')
+assert_true(nrow(home_venue_summary$venue_summary) == 2L, 'Expected min_matches to filter out single-match venues.')
+assert_true(!('Beta' %in% home_venue_summary$venue_summary$venue_name), 'Expected venue_summary to exclude venues below min_matches.')
+team_two_gamma <- home_venue_summary$team_venue_summary[
+  home_venue_summary$team_venue_summary$team_id == 2L & home_venue_summary$team_venue_summary$venue_name == 'Gamma',
+  ,
+  drop = FALSE
+]
+team_one_alpha <- home_venue_summary$team_venue_summary[
+  home_venue_summary$team_venue_summary$team_id == 1L & home_venue_summary$team_venue_summary$venue_name == 'Alpha',
+  ,
+  drop = FALSE
+]
+assert_true(nrow(team_one_alpha) == 1L, 'Expected a team_venue_summary row for Team 1 at Alpha.')
+assert_true(identical(team_one_alpha$comparison_matches_other_home_venues[[1]], 1L), 'Expected other-home comparison counts to include all alternate home venues, even below min_matches.')
+assert_true(!is.na(team_one_alpha$win_rate_lift_vs_team_other_home_venues[[1]]), 'Expected team_venue_summary to compute lifts when any alternate home venue exists.')
+assert_true(nrow(team_two_gamma) == 1L, 'Expected a team_venue_summary row for the mocked Gamma venue.')
+assert_true(is.na(team_two_gamma$comparison_matches_other_home_venues[[1]]), 'Expected no other-home comparison match count when no alternate venues exist.')
+assert_true(is.na(team_two_gamma$other_home_venues_win_rate[[1]]), 'Expected other-home comparison win rate to be NULL when no alternate venues exist.')
+assert_true(is.na(team_two_gamma$win_rate_lift_vs_team_other_home_venues[[1]]), 'Expected other-home comparison lift to be NULL when no alternate venues exist.')
+
+home_venue_high_threshold <- home_venue_helpers_env$summarise_home_venue_impact_rows(
+  home_venue_fake_rows,
+  min_matches = 999L,
+  limit = 50L
+)
+assert_true(!is.null(home_venue_high_threshold$league_summary), 'Expected league_summary to remain available even when min_matches filters out grouped outputs.')
+assert_true(identical(home_venue_high_threshold$league_summary$matches, 5L), 'Expected league_summary to retain the full filtered match count when grouped outputs are empty.')
+assert_true(nrow(home_venue_high_threshold$team_summary) == 0L, 'Expected high min_matches to empty grouped team_summary results.')
+assert_true(nrow(home_venue_high_threshold$venue_summary) == 0L, 'Expected high min_matches to empty grouped venue_summary results.')
+assert_true(nrow(home_venue_high_threshold$team_venue_summary) == 0L, 'Expected high min_matches to empty grouped team_venue_summary results.')
+check_step('home venue impact helpers build the expected query shape and null comparison behavior')
+
+home_venue_payload <- request_json(base_url, '/home-venue-impact', query = list(season = default_season, min_matches = '1', limit = '10'))
+assert_true(!is.null(home_venue_payload$league_summary), 'Expected /home-venue-impact to return a league_summary for a populated season.')
+assert_true(is.list(home_venue_payload$team_summary) && length(home_venue_payload$team_summary) >= 1L, 'Expected /home-venue-impact to return team_summary rows.')
+assert_true(is.list(home_venue_payload$venue_summary) && length(home_venue_payload$venue_summary) >= 1L, 'Expected /home-venue-impact to return venue_summary rows.')
+assert_true(is.list(home_venue_payload$team_venue_summary) && length(home_venue_payload$team_venue_summary) >= 1L, 'Expected /home-venue-impact to return team_venue_summary rows.')
+assert_true(identical(as.integer(scalar_value(home_venue_payload$filters$seasons[[1]])), default_season), 'Expected /home-venue-impact to echo the requested season filter.')
+league_summary_fields <- c('matches', 'home_wins', 'away_wins', 'draws', 'home_win_rate', 'away_win_rate', 'avg_home_margin', 'avg_away_margin', 'avg_home_penalties_for', 'avg_home_penalties_against', 'avg_home_penalty_advantage')
+assert_true(all(league_summary_fields %in% names(home_venue_payload$league_summary)), 'Expected /home-venue-impact league_summary to expose the documented fields.')
+first_team_summary <- first_record(home_venue_payload$team_summary)
+assert_true(all(c('home_matches', 'away_matches', 'home_wins', 'away_wins', 'win_rate_delta_home_vs_away', 'margin_delta_home_vs_away', 'penalty_delta_home_vs_away') %in% names(first_team_summary)), 'Expected /home-venue-impact team_summary rows to expose the documented fields.')
+first_venue_summary <- first_record(home_venue_payload$venue_summary)
+assert_true(all(c('venue_name', 'matches', 'home_wins', 'win_rate_lift_vs_league_home', 'margin_lift_vs_league_home', 'penalty_lift_vs_league_home') %in% names(first_venue_summary)), 'Expected /home-venue-impact venue_summary rows to expose the documented fields.')
+first_team_venue_summary <- first_record(home_venue_payload$team_venue_summary)
+assert_true(all(c('comparison_matches_other_home_venues', 'other_home_venues_win_rate', 'win_rate_lift_vs_team_other_home_venues') %in% names(first_team_venue_summary)), 'Expected /home-venue-impact team_venue_summary rows to expose the documented fields.')
+
+matches_payload <- request_json(base_url, '/matches', query = list(season = default_season, limit = '50'))
+assert_true(is.list(matches_payload$data) && length(matches_payload$data) >= 1L, 'Expected /matches to return rows for the default season.')
+candidate_match <- NULL
+for (match_row in matches_payload$data) {
+  if (!is.null(match_row$home_score) && !is.null(match_row$away_score) && !is.null(match_row$venue_name) && nzchar(as.character(match_row$venue_name))) {
+    candidate_match <- match_row
+    break
+  }
+}
+assert_true(!is.null(candidate_match), 'Expected /matches to return at least one completed match for home venue impact filtering tests.')
+team_names <- vapply(meta$teams, function(team) as.character(scalar_value(team$squad_name %||% '')), character(1L))
+team_ids <- vapply(meta$teams, function(team) as.integer(scalar_value(team$squad_id %||% NA_integer_)), integer(1L))
+team_index <- which(team_names == as.character(candidate_match$home_squad_name))
+assert_true(length(team_index) >= 1L, 'Expected /meta to include the team named by the selected match.')
+candidate_team_id <- team_ids[[team_index[[1]]]]
+candidate_venue_name <- as.character(candidate_match$venue_name)
+requested_seasons <- vapply(meta$seasons[seq_len(min(2L, length(meta$seasons)))], function(value) as.integer(scalar_value(value)), integer(1L))
+requested_seasons_string <- paste(requested_seasons, collapse = ',')
+
+team_filtered_payload <- request_json(base_url, '/api/home-venue-impact', query = list(season = default_season, team_id = candidate_team_id, min_matches = '1', limit = '10'))
+assert_true(identical(as.integer(scalar_value(team_filtered_payload$filters$team_id)), candidate_team_id), 'Expected /home-venue-impact to echo team_id filters.')
+team_summary_team_ids <- vapply(team_filtered_payload$team_summary, function(row) as.integer(scalar_value(row$team_id)), integer(1L))
+assert_true(length(team_summary_team_ids) >= 1L && all(team_summary_team_ids == candidate_team_id), 'Expected team_id-filtered /home-venue-impact responses to stay on the requested team.')
+
+venue_filtered_payload <- request_json(base_url, '/home-venue-impact', query = list(season = default_season, venue_name = candidate_venue_name, min_matches = '1', limit = '10'))
+assert_true(identical(as.character(scalar_value(venue_filtered_payload$filters$venue_name)), candidate_venue_name), 'Expected /home-venue-impact to echo venue_name filters.')
+venue_summary_names <- vapply(venue_filtered_payload$venue_summary, function(row) as.character(scalar_value(row$venue_name)), character(1L))
+assert_true(length(venue_summary_names) >= 1L && all(venue_summary_names == candidate_venue_name), 'Expected venue_name-filtered /home-venue-impact responses to stay on the requested venue.')
+team_venue_names <- vapply(venue_filtered_payload$team_venue_summary, function(row) as.character(scalar_value(row$venue_name)), character(1L))
+assert_true(length(team_venue_names) >= 1L && all(team_venue_names == candidate_venue_name), 'Expected team_venue_summary venue filters to stay on the requested venue.')
+
+season_filters_payload <- request_json(base_url, '/home-venue-impact', query = list(seasons = requested_seasons_string, min_matches = '1', limit = '10'))
+season_filters_result <- vapply(season_filters_payload$filters$seasons, function(value) as.integer(scalar_value(value)), integer(1L))
+assert_true(identical(season_filters_result, requested_seasons), 'Expected /home-venue-impact to parse comma-separated seasons.')
+
+empty_home_venue_payload <- request_json(base_url, '/home-venue-impact', query = list(season = default_season, min_matches = '999', limit = '10'))
+assert_true(is.null(empty_home_venue_payload$league_summary), 'Expected /home-venue-impact to return a null league_summary when no matches qualify.')
+assert_true(length(empty_home_venue_payload$team_summary) == 0L, 'Expected /home-venue-impact to return an empty team_summary when no matches qualify.')
+assert_true(length(empty_home_venue_payload$venue_summary) == 0L, 'Expected /home-venue-impact to return an empty venue_summary when no matches qualify.')
+assert_true(length(empty_home_venue_payload$team_venue_summary) == 0L, 'Expected /home-venue-impact to return an empty team_venue_summary when no matches qualify.')
+check_step('home venue impact endpoint supports documented filters and empty-result behavior')
+
 # Unit tests for fetch_nwar_rows R logic (no live DB required)
 normalize_sql <- if (exists('normalize_sql')) normalize_sql else function(q) gsub('\\s+', ' ', trimws(q))
 helpers_path <- Sys.getenv('NETBALL_STATS_HELPERS_PATH', file.path(getwd(), 'api', 'R', 'helpers.R'))

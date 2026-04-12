@@ -363,6 +363,25 @@ parse_search <- function(value, name = "search", max_length = 80L) {
   trimmed
 }
 
+parse_optional_text <- function(value, name, max_length = 120L) {
+  if (is.null(value) || length(value) == 0L || all(is.na(value))) {
+    return(NULL)
+  }
+
+  trimmed <- trimws(as.character(value[[1]]))
+  if (!nzchar(trimmed)) {
+    return(NULL)
+  }
+  if (nchar(trimmed) > max_length) {
+    stop(name, " must be ", max_length, " characters or fewer.", call. = FALSE)
+  }
+  if (grepl("[[:cntrl:]]", trimmed)) {
+    stop(name, " contains unsupported characters.", call. = FALSE)
+  }
+
+  trimmed
+}
+
 normalize_stat_catalog <- function(values) {
   normalized <- as.character(values %||% character())
   normalized <- normalized[!is.na(normalized)]
@@ -3145,6 +3164,333 @@ fetch_query_result_rows <- function(conn, intent) {
     query_rows(conn, paste0(base_query$query, " LIMIT 2000"), base_query$params),
     intent$intent_type
   )
+}
+
+build_home_venue_impact_base_query <- function(seasons = NULL, team_id = NULL, venue_name = NULL) {
+  query <- paste(
+    "SELECT * FROM (",
+    "SELECT matches.match_id, matches.season, COALESCE(matches.competition_phase, '') AS competition_phase,",
+    "  matches.round_number, matches.venue_name,",
+    "  matches.home_squad_id AS team_id, matches.home_squad_name AS team_name,",
+    "  matches.away_squad_id AS opponent_id, matches.away_squad_name AS opponent_name,",
+    "  1 AS is_home,",
+    "  matches.home_score AS team_score, matches.away_score AS opponent_score,",
+    "  matches.home_score - matches.away_score AS margin,",
+    "  CASE WHEN matches.home_score > matches.away_score THEN 1 ELSE 0 END AS won,",
+    "  CASE WHEN matches.home_score = matches.away_score THEN 1 ELSE 0 END AS draw,",
+    "  COALESCE(home_pen.match_value, 0) AS penalties_for,",
+    "  COALESCE(away_pen.match_value, 0) AS penalties_against,",
+    "  COALESCE(away_pen.match_value, 0) - COALESCE(home_pen.match_value, 0) AS penalty_advantage",
+    "FROM matches",
+    "LEFT JOIN team_match_stats home_pen",
+    "  ON home_pen.match_id = matches.match_id",
+    "  AND home_pen.squad_id = matches.home_squad_id",
+    "  AND home_pen.stat = 'penalties'",
+    "LEFT JOIN team_match_stats away_pen",
+    "  ON away_pen.match_id = matches.match_id",
+    "  AND away_pen.squad_id = matches.away_squad_id",
+    "  AND away_pen.stat = 'penalties'",
+    "WHERE matches.home_score IS NOT NULL",
+    "  AND matches.away_score IS NOT NULL",
+    "UNION ALL",
+    "SELECT matches.match_id, matches.season, COALESCE(matches.competition_phase, '') AS competition_phase,",
+    "  matches.round_number, matches.venue_name,",
+    "  matches.away_squad_id AS team_id, matches.away_squad_name AS team_name,",
+    "  matches.home_squad_id AS opponent_id, matches.home_squad_name AS opponent_name,",
+    "  0 AS is_home,",
+    "  matches.away_score AS team_score, matches.home_score AS opponent_score,",
+    "  matches.away_score - matches.home_score AS margin,",
+    "  CASE WHEN matches.away_score > matches.home_score THEN 1 ELSE 0 END AS won,",
+    "  CASE WHEN matches.home_score = matches.away_score THEN 1 ELSE 0 END AS draw,",
+    "  COALESCE(away_pen.match_value, 0) AS penalties_for,",
+    "  COALESCE(home_pen.match_value, 0) AS penalties_against,",
+    "  COALESCE(home_pen.match_value, 0) - COALESCE(away_pen.match_value, 0) AS penalty_advantage",
+    "FROM matches",
+    "LEFT JOIN team_match_stats home_pen",
+    "  ON home_pen.match_id = matches.match_id",
+    "  AND home_pen.squad_id = matches.home_squad_id",
+    "  AND home_pen.stat = 'penalties'",
+    "LEFT JOIN team_match_stats away_pen",
+    "  ON away_pen.match_id = matches.match_id",
+    "  AND away_pen.squad_id = matches.away_squad_id",
+    "  AND away_pen.stat = 'penalties'",
+    "WHERE matches.home_score IS NOT NULL",
+    "  AND matches.away_score IS NOT NULL",
+    ") AS impact_rows",
+    "WHERE 1 = 1"
+  )
+  params <- list()
+
+  season_filter <- append_integer_in_filter(query, params, "season", seasons, "season")
+  query <- season_filter$query
+  params <- season_filter$params
+
+  if (!is.null(team_id)) {
+    query <- paste0(query, " AND team_id = ?team_id")
+    params$team_id <- as.integer(team_id)
+  }
+  if (!is.null(venue_name)) {
+    query <- paste0(query, " AND venue_name = ?venue_name")
+    params$venue_name <- as.character(venue_name)
+  }
+
+  list(query = query, params = params)
+}
+
+empty_home_venue_impact_summary <- function() {
+  list(
+    league_summary = NULL,
+    team_summary = data.frame(),
+    venue_summary = data.frame(),
+    team_venue_summary = data.frame()
+  )
+}
+
+rate_or_na <- function(numerator, denominator, digits = 3L) {
+  if (is.null(denominator) || is.na(denominator) || denominator <= 0) {
+    return(NA_real_)
+  }
+
+  round(as.numeric(numerator) / as.numeric(denominator), digits)
+}
+
+mean_or_na <- function(values, digits = 2L) {
+  numeric_values <- suppressWarnings(as.numeric(values))
+  if (!length(numeric_values) || all(is.na(numeric_values))) {
+    return(NA_real_)
+  }
+
+  round(mean(numeric_values, na.rm = TRUE), digits)
+}
+
+home_venue_group_metrics <- function(rows) {
+  list(
+    matches = nrow(rows),
+    wins = sum(as.integer(rows$won), na.rm = TRUE),
+    win_rate = rate_or_na(sum(as.integer(rows$won), na.rm = TRUE), nrow(rows)),
+    avg_margin = mean_or_na(rows$margin),
+    avg_penalties_for = mean_or_na(rows$penalties_for),
+    avg_penalties_against = mean_or_na(rows$penalties_against),
+    avg_penalty_advantage = mean_or_na(rows$penalty_advantage)
+  )
+}
+
+summarise_home_venue_impact_rows <- function(rows, min_matches = 5L, limit = 50L) {
+  if (!nrow(rows)) {
+    return(empty_home_venue_impact_summary())
+  }
+
+  rows$is_home <- as.integer(rows$is_home)
+  rows$won <- as.integer(rows$won)
+  rows$draw <- as.integer(rows$draw)
+  numeric_cols <- c(
+    "match_id", "season", "round_number", "team_id", "opponent_id",
+    "team_score", "opponent_score", "margin",
+    "penalties_for", "penalties_against", "penalty_advantage"
+  )
+  for (column_name in numeric_cols) {
+    rows[[column_name]] <- suppressWarnings(as.numeric(rows[[column_name]]))
+  }
+  rows$team_name <- as.character(rows$team_name)
+  rows$venue_name <- as.character(rows$venue_name)
+
+  home_rows <- rows[rows$is_home == 1L, , drop = FALSE]
+  away_rows <- rows[rows$is_home == 0L, , drop = FALSE]
+
+  home_metrics <- home_venue_group_metrics(home_rows)
+  away_metrics <- home_venue_group_metrics(away_rows)
+  league_summary <- list(
+    matches = as.integer(length(unique(rows$match_id))),
+    home_wins = as.integer(home_metrics$wins),
+    away_wins = as.integer(away_metrics$wins),
+    draws = as.integer(length(unique(rows$match_id[rows$draw == 1L]))),
+    home_win_rate = home_metrics$win_rate,
+    away_win_rate = away_metrics$win_rate,
+    avg_home_margin = home_metrics$avg_margin,
+    avg_away_margin = away_metrics$avg_margin,
+    avg_home_penalties_for = home_metrics$avg_penalties_for,
+    avg_home_penalties_against = home_metrics$avg_penalties_against,
+    avg_home_penalty_advantage = home_metrics$avg_penalty_advantage
+  )
+
+  team_ids <- sort(unique(rows$team_id))
+  team_summary_rows <- lapply(team_ids, function(team_id_value) {
+    team_rows <- rows[rows$team_id == team_id_value, , drop = FALSE]
+    team_home_rows <- team_rows[team_rows$is_home == 1L, , drop = FALSE]
+    team_away_rows <- team_rows[team_rows$is_home == 0L, , drop = FALSE]
+    if (nrow(team_home_rows) < min_matches || nrow(team_away_rows) < min_matches) {
+      return(NULL)
+    }
+
+    home_values <- home_venue_group_metrics(team_home_rows)
+    away_values <- home_venue_group_metrics(team_away_rows)
+    data.frame(
+      team_id = as.integer(team_id_value),
+      team_name = team_rows$team_name[[1]],
+      home_matches = as.integer(home_values$matches),
+      away_matches = as.integer(away_values$matches),
+      home_wins = as.integer(home_values$wins),
+      away_wins = as.integer(away_values$wins),
+      home_win_rate = home_values$win_rate,
+      away_win_rate = away_values$win_rate,
+      win_rate_delta_home_vs_away = round(home_values$win_rate - away_values$win_rate, 3),
+      home_avg_margin = home_values$avg_margin,
+      away_avg_margin = away_values$avg_margin,
+      margin_delta_home_vs_away = round(home_values$avg_margin - away_values$avg_margin, 2),
+      home_avg_penalties_for = home_values$avg_penalties_for,
+      home_avg_penalties_against = home_values$avg_penalties_against,
+      home_avg_penalty_advantage = home_values$avg_penalty_advantage,
+      away_avg_penalties_for = away_values$avg_penalties_for,
+      away_avg_penalties_against = away_values$avg_penalties_against,
+      away_avg_penalty_advantage = away_values$avg_penalty_advantage,
+      penalty_delta_home_vs_away = round(home_values$avg_penalty_advantage - away_values$avg_penalty_advantage, 2),
+      stringsAsFactors = FALSE
+    )
+  })
+  team_summary <- do.call(rbind, Filter(Negate(is.null), team_summary_rows))
+  if (is.null(team_summary)) {
+    team_summary <- data.frame()
+  } else {
+    team_summary <- team_summary[order(-team_summary$margin_delta_home_vs_away, team_summary$team_name), , drop = FALSE]
+    team_summary <- utils::head(team_summary, limit)
+    row.names(team_summary) <- NULL
+  }
+
+  venues <- sort(unique(home_rows$venue_name))
+  venue_summary_rows <- lapply(venues, function(venue_name_value) {
+    venue_rows <- home_rows[home_rows$venue_name == venue_name_value, , drop = FALSE]
+    if (nrow(venue_rows) < min_matches) {
+      return(NULL)
+    }
+
+    venue_values <- home_venue_group_metrics(venue_rows)
+    data.frame(
+      venue_name = venue_name_value,
+      matches = as.integer(venue_values$matches),
+      home_wins = as.integer(venue_values$wins),
+      home_win_rate = venue_values$win_rate,
+      avg_home_margin = venue_values$avg_margin,
+      avg_home_penalties_for = venue_values$avg_penalties_for,
+      avg_home_penalties_against = venue_values$avg_penalties_against,
+      avg_home_penalty_advantage = venue_values$avg_penalty_advantage,
+      win_rate_lift_vs_league_home = round(venue_values$win_rate - home_metrics$win_rate, 3),
+      margin_lift_vs_league_home = round(venue_values$avg_margin - home_metrics$avg_margin, 2),
+      penalty_lift_vs_league_home = round(venue_values$avg_penalty_advantage - home_metrics$avg_penalty_advantage, 2),
+      stringsAsFactors = FALSE
+    )
+  })
+  venue_summary <- do.call(rbind, Filter(Negate(is.null), venue_summary_rows))
+  if (is.null(venue_summary)) {
+    venue_summary <- data.frame()
+  } else {
+    venue_summary <- venue_summary[order(-venue_summary$margin_lift_vs_league_home, venue_summary$venue_name), , drop = FALSE]
+    venue_summary <- utils::head(venue_summary, limit)
+    row.names(venue_summary) <- NULL
+  }
+
+  home_keys <- unique(home_rows[, c("team_id", "team_name", "venue_name"), drop = FALSE])
+  team_venue_summary_rows <- lapply(seq_len(nrow(home_keys)), function(index) {
+    key_row <- home_keys[index, , drop = FALSE]
+    team_home_venue_rows <- home_rows[
+      home_rows$team_id == key_row$team_id &
+      home_rows$venue_name == key_row$venue_name,
+      ,
+      drop = FALSE
+    ]
+    if (nrow(team_home_venue_rows) < min_matches) {
+      return(NULL)
+    }
+
+    team_home_other_rows <- home_rows[
+      home_rows$team_id == key_row$team_id &
+      home_rows$venue_name != key_row$venue_name,
+      ,
+      drop = FALSE
+    ]
+    venue_values <- home_venue_group_metrics(team_home_venue_rows)
+    other_matches <- nrow(team_home_other_rows)
+
+    if (other_matches > 0L) {
+      other_values <- home_venue_group_metrics(team_home_other_rows)
+      comparison_matches <- as.integer(other_matches)
+      other_win_rate <- other_values$win_rate
+      other_avg_margin <- other_values$avg_margin
+      other_avg_penalty_advantage <- other_values$avg_penalty_advantage
+      win_rate_lift <- round(venue_values$win_rate - other_values$win_rate, 3)
+      margin_lift <- round(venue_values$avg_margin - other_values$avg_margin, 2)
+      penalty_lift <- round(venue_values$avg_penalty_advantage - other_values$avg_penalty_advantage, 2)
+    } else {
+      comparison_matches <- NA_integer_
+      other_win_rate <- NA_real_
+      other_avg_margin <- NA_real_
+      other_avg_penalty_advantage <- NA_real_
+      win_rate_lift <- NA_real_
+      margin_lift <- NA_real_
+      penalty_lift <- NA_real_
+    }
+
+    data.frame(
+      team_id = as.integer(key_row$team_id),
+      team_name = as.character(key_row$team_name),
+      venue_name = as.character(key_row$venue_name),
+      matches = as.integer(venue_values$matches),
+      home_wins = as.integer(venue_values$wins),
+      home_win_rate = venue_values$win_rate,
+      avg_home_margin = venue_values$avg_margin,
+      avg_home_penalties_for = venue_values$avg_penalties_for,
+      avg_home_penalties_against = venue_values$avg_penalties_against,
+      avg_home_penalty_advantage = venue_values$avg_penalty_advantage,
+      comparison_matches_other_home_venues = comparison_matches,
+      other_home_venues_win_rate = other_win_rate,
+      other_home_venues_avg_margin = other_avg_margin,
+      other_home_venues_avg_penalty_advantage = other_avg_penalty_advantage,
+      win_rate_lift_vs_team_other_home_venues = win_rate_lift,
+      margin_lift_vs_team_other_home_venues = margin_lift,
+      penalty_lift_vs_team_other_home_venues = penalty_lift,
+      stringsAsFactors = FALSE
+    )
+  })
+  team_venue_summary <- do.call(rbind, Filter(Negate(is.null), team_venue_summary_rows))
+  if (is.null(team_venue_summary)) {
+    team_venue_summary <- data.frame()
+  } else {
+    team_venue_summary <- team_venue_summary[
+      order(
+        is.na(team_venue_summary$margin_lift_vs_team_other_home_venues),
+        -team_venue_summary$margin_lift_vs_team_other_home_venues,
+        team_venue_summary$team_name,
+        team_venue_summary$venue_name,
+        na.last = TRUE
+      ),
+      ,
+      drop = FALSE
+    ]
+    team_venue_summary <- utils::head(team_venue_summary, limit)
+    row.names(team_venue_summary) <- NULL
+  }
+
+  list(
+    league_summary = league_summary,
+    team_summary = team_summary,
+    venue_summary = venue_summary,
+    team_venue_summary = team_venue_summary
+  )
+}
+
+fetch_home_venue_impact_summary <- function(conn, seasons = NULL, team_id = NULL, venue_name = NULL, min_matches = 5L, limit = 50L) {
+  if (!has_team_match_stats(conn)) {
+    api_log("WARN", "home_venue_impact_no_team_match_stats",
+            error_message = "home-venue-impact requires team_match_stats; returning empty result.")
+    return(empty_home_venue_impact_summary())
+  }
+
+  base_query <- build_home_venue_impact_base_query(
+    seasons = seasons,
+    team_id = team_id,
+    venue_name = venue_name
+  )
+  rows <- query_rows(conn, base_query$query, base_query$params)
+  summarise_home_venue_impact_rows(rows, min_matches = min_matches, limit = limit)
 }
 
 # Netball Wins Above Replacement (nWAR) constants.
