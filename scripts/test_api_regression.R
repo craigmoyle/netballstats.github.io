@@ -667,11 +667,17 @@ season_filters_payload <- request_json(base_url, '/home-venue-impact', query = l
 season_filters_result <- vapply(season_filters_payload$filters$seasons, function(value) as.integer(scalar_value(value)), integer(1L))
 assert_true(identical(season_filters_result, requested_seasons), 'Expected /home-venue-impact to parse comma-separated seasons.')
 
-empty_home_venue_payload <- request_json(base_url, '/home-venue-impact', query = list(season = default_season, min_matches = '999', limit = '10'))
-assert_true(is.null(empty_home_venue_payload$league_summary), 'Expected /home-venue-impact to return a null league_summary when no matches qualify.')
-assert_true(length(empty_home_venue_payload$team_summary) == 0L, 'Expected /home-venue-impact to return an empty team_summary when no matches qualify.')
-assert_true(length(empty_home_venue_payload$venue_summary) == 0L, 'Expected /home-venue-impact to return an empty venue_summary when no matches qualify.')
-assert_true(length(empty_home_venue_payload$team_venue_summary) == 0L, 'Expected /home-venue-impact to return an empty team_venue_summary when no matches qualify.')
+filtered_home_venue_payload <- request_json(base_url, '/home-venue-impact', query = list(season = default_season, min_matches = '999', limit = '10'))
+assert_true(!is.null(filtered_home_venue_payload$league_summary), 'Expected /home-venue-impact to keep league_summary when min_matches only filters grouped outputs.')
+assert_true(length(filtered_home_venue_payload$team_summary) == 0L, 'Expected /home-venue-impact to return an empty team_summary when min_matches filters grouped outputs.')
+assert_true(length(filtered_home_venue_payload$venue_summary) == 0L, 'Expected /home-venue-impact to return an empty venue_summary when min_matches filters grouped outputs.')
+assert_true(length(filtered_home_venue_payload$team_venue_summary) == 0L, 'Expected /home-venue-impact to return an empty team_venue_summary when min_matches filters grouped outputs.')
+
+empty_home_venue_payload <- request_json(base_url, '/home-venue-impact', query = list(season = default_season, venue_name = '__missing_venue__', min_matches = '1', limit = '10'))
+assert_true(is.null(empty_home_venue_payload$league_summary), 'Expected /home-venue-impact to return a null league_summary when filters produce no rows.')
+assert_true(length(empty_home_venue_payload$team_summary) == 0L, 'Expected /home-venue-impact to return an empty team_summary when filters produce no rows.')
+assert_true(length(empty_home_venue_payload$venue_summary) == 0L, 'Expected /home-venue-impact to return an empty venue_summary when filters produce no rows.')
+assert_true(length(empty_home_venue_payload$team_venue_summary) == 0L, 'Expected /home-venue-impact to return an empty team_venue_summary when filters produce no rows.')
 check_step('home venue impact endpoint supports documented filters and empty-result behavior')
 
 # Unit tests for fetch_nwar_rows R logic (no live DB required)
