@@ -550,10 +550,11 @@ home_venue_sql <- normalize_sql(home_venue_query$query)
 assert_true(length(home_venue_query$query) == 1L, 'Expected home venue impact base query to compile to a single SQL statement.')
 assert_contains(home_venue_sql, 'home_score IS NOT NULL', 'Expected home venue impact base query to exclude incomplete matches.')
 assert_contains(home_venue_sql, 'away_score IS NOT NULL', 'Expected home venue impact base query to exclude incomplete matches.')
+assert_contains(home_venue_sql, 'matches.season IN (?season_1, ?season_2)', 'Expected home venue impact base query to push season filters into the matches scan.')
 assert_contains(home_venue_sql, 'UNION ALL', 'Expected home venue impact base query to expand matches into home and away rows.')
 assert_contains(home_venue_sql, 'team_match_stats', 'Expected home venue impact base query to use team_match_stats for penalties.')
 assert_contains(home_venue_sql, "team_id = ?team_id", 'Expected home venue impact base query to support team filters on the team-perspective rows.')
-assert_contains(home_venue_sql, 'venue_name = ?venue_name', 'Expected home venue impact base query to support exact venue filters.')
+assert_contains(home_venue_sql, 'matches.venue_name = ?venue_name', 'Expected home venue impact base query to push exact venue filters into the matches scan.')
 
 home_venue_query_no_penalties <- home_venue_helpers_env$build_home_venue_impact_base_query(
   seasons = c(2024L),

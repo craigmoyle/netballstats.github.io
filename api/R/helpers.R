@@ -3194,6 +3194,18 @@ build_home_venue_impact_base_query <- function(seasons = NULL, team_id = NULL, v
     penalty_join_sql <- character()
   }
 
+  match_filter_query <- "WHERE matches.home_score IS NOT NULL AND matches.away_score IS NOT NULL"
+  params <- list()
+
+  season_filter <- append_integer_in_filter(match_filter_query, params, "matches.season", seasons, "season")
+  match_filter_query <- season_filter$query
+  params <- season_filter$params
+
+  if (!is.null(venue_name)) {
+    match_filter_query <- paste0(match_filter_query, " AND matches.venue_name = ?venue_name")
+    params$venue_name <- as.character(venue_name)
+  }
+
   query <- paste(c(
     "SELECT * FROM (",
     "SELECT matches.match_id, matches.season, COALESCE(matches.competition_phase, '') AS competition_phase,",
@@ -3210,8 +3222,7 @@ build_home_venue_impact_base_query <- function(seasons = NULL, team_id = NULL, v
     paste0("  ", home_penalty_advantage_sql),
     "FROM matches",
     penalty_join_sql,
-    "WHERE matches.home_score IS NOT NULL",
-    "  AND matches.away_score IS NOT NULL",
+    match_filter_query,
     "UNION ALL",
     "SELECT matches.match_id, matches.season, COALESCE(matches.competition_phase, '') AS competition_phase,",
     "  matches.round_number, matches.venue_name,",
@@ -3227,24 +3238,14 @@ build_home_venue_impact_base_query <- function(seasons = NULL, team_id = NULL, v
     paste0("  ", away_penalty_advantage_sql),
     "FROM matches",
     penalty_join_sql,
-    "WHERE matches.home_score IS NOT NULL",
-    "  AND matches.away_score IS NOT NULL",
+    match_filter_query,
     ") AS impact_rows",
     "WHERE 1 = 1"
   ), collapse = " ")
-  params <- list()
-
-  season_filter <- append_integer_in_filter(query, params, "season", seasons, "season")
-  query <- season_filter$query
-  params <- season_filter$params
 
   if (!is.null(team_id)) {
     query <- paste0(query, " AND team_id = ?team_id")
     params$team_id <- as.integer(team_id)
-  }
-  if (!is.null(venue_name)) {
-    query <- paste0(query, " AND venue_name = ?venue_name")
-    params$venue_name <- as.character(venue_name)
   }
 
   list(query = query, params = params)
