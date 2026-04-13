@@ -709,6 +709,50 @@ assert_true(length(empty_home_venue_payload$venue_summary) == 0L, 'Expected /hom
 assert_true(length(empty_home_venue_payload$team_venue_summary) == 0L, 'Expected /home-venue-impact to return an empty team_venue_summary when filters produce no rows.')
 check_step('home venue impact endpoint supports documented filters and empty-result behavior')
 
+# Home edge breakdown endpoint regression tests
+cat("Checking /home-venue-breakdown multi-year stat payload...\n")
+breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(
+  seasons = '2023,2024',
+  min_matches = '3',
+  stat_groups = 'generalPlayTurnovers,contactPenalties,obstructionPenalties,penalties,heldBalls',
+  limit = '5'
+))
+assert_true(is.list(breakdown), 'Expected /home-venue-breakdown to return a payload.')
+assert_true(is.list(breakdown$filters), 'Expected /home-venue-breakdown to return filters.')
+assert_true(identical(unlist(breakdown$filters$seasons), c(2023L, 2024L)), 'Expected /home-venue-breakdown to echo both requested seasons.')
+assert_true(is.data.frame(breakdown$stat_summary), 'Expected /home-venue-breakdown to return a stat_summary data.frame.')
+assert_true(is.data.frame(breakdown$opposition_summary_overall), 'Expected /home-venue-breakdown to return an opposition_summary_overall data.frame.')
+assert_true(is.data.frame(breakdown$opposition_summary_by_stat), 'Expected /home-venue-breakdown to return an opposition_summary_by_stat data.frame.')
+assert_true(is.data.frame(breakdown$team_venue_stat_summary), 'Expected /home-venue-breakdown to return a team_venue_stat_summary data.frame.')
+
+cat("Checking /home-venue-breakdown team-and-venue slice...\n")
+team_breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(
+  seasons = '2024',
+  team_id = '8118',
+  venue_name = 'Qudos Bank Arena',
+  stat_groups = 'generalPlayTurnovers,penalties',
+  min_matches = '1',
+  limit = '5'
+))
+assert_true(is.list(team_breakdown), 'Expected team-filtered /home-venue-breakdown to return a payload.')
+assert_true(is.data.frame(team_breakdown$stat_summary), 'Expected team-filtered /home-venue-breakdown to return a stat_summary data.frame.')
+assert_true(is.data.frame(team_breakdown$team_venue_stat_summary), 'Expected team-filtered /home-venue-breakdown to return a team_venue_stat_summary data.frame.')
+
+cat("Checking unsupported Home Edge stat reporting...\n")
+unsupported_breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(
+  seasons = '2024',
+  stat_groups = 'heldBalls',
+  min_matches = '1',
+  limit = '5'
+))
+assert_true(is.list(unsupported_breakdown$filters), 'Expected unsupported /home-venue-breakdown responses to include filters.')
+assert_true('heldBalls' %in% unlist(unsupported_breakdown$filters$requested_stat_groups), 'Expected unsupported stat_groups to be echoed in requested_stat_groups.')
+assert_true('heldBalls' %in% unlist(unsupported_breakdown$filters$unavailable_stat_groups), 'Expected unsupported stat_groups to be echoed in unavailable_stat_groups.')
+
+cat("Checking invalid Home Edge stat validation...\n")
+invalid_stat_resp <- request_json(base_url, '/home-venue-breakdown', query = list(stat_groups = 'badStat'), expected_status = 400L)
+assert_true(nzchar(as.character(invalid_stat_resp$error %||% '')), 'Expected invalid /home-venue-breakdown stat_groups to return 400.')
+
 # Unit tests for fetch_nwar_rows R logic (no live DB required)
 normalize_sql <- if (exists('normalize_sql')) normalize_sql else function(q) gsub('\\s+', ' ', trimws(q))
 helpers_path <- Sys.getenv('NETBALL_STATS_HELPERS_PATH', file.path(getwd(), 'api', 'R', 'helpers.R'))
