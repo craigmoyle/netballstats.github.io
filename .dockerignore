@@ -1,5 +1,6 @@
 .git
 .gitignore
+.worktrees/
 .DS_Store
 
 # Frontend build output and sources (not needed in API container)
