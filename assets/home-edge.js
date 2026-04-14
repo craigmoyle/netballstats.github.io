@@ -588,7 +588,7 @@ function renderStatSummary(rows) {
 
     const statCell = document.createElement("td");
     statCell.dataset.stackPrimary = "true";
-    statCell.textContent = formatStatLabel(statGroup) || formatStatLabel(statKey) || scalarText(row.stat_label) || "—";
+    statCell.textContent = formatStatLabel(statKey) || formatStatLabel(statGroup) || scalarText(row.stat_label) || "—";
 
     const venueCell = document.createElement("td");
     venueCell.textContent = formatSigned(row.venue_average);
@@ -658,7 +658,7 @@ function renderOppositionStatSummary(rows) {
     opponentCell.textContent = scalarText(row.opponent_name) || "—";
 
     const statCell = document.createElement("td");
-    statCell.textContent = formatStatLabel(statGroup) || formatStatLabel(statKey) || scalarText(row.stat_label) || "—";
+    statCell.textContent = formatStatLabel(statKey) || formatStatLabel(statGroup) || scalarText(row.stat_label) || "—";
 
     const venueCell = document.createElement("td");
     venueCell.textContent = formatSigned(row.venue_average);
@@ -694,7 +694,7 @@ function renderTeamVenueStatSummary(rows) {
     venueCell.textContent = scalarText(row.venue_name) || "—";
 
     const statCell = document.createElement("td");
-    statCell.textContent = formatStatLabel(statGroup) || formatStatLabel(statKey) || scalarText(row.stat_label) || "—";
+    statCell.textContent = formatStatLabel(statKey) || formatStatLabel(statGroup) || scalarText(row.stat_label) || "—";
 
     const homeAvgCell = document.createElement("td");
     homeAvgCell.textContent = formatSigned(row.venue_average);
