@@ -60,8 +60,6 @@ for (const assetName of fingerprintedAssets) {
   await writeFile(path.join(assetOutputDir, outputName), content);
 }
 
-await writeFile(path.join(assetOutputDir, 'styles.css'), assetContents.get('styles.css'));
-
 for (const htmlEntry of htmlEntries) {
   const htmlPath = path.join(outputDir, htmlEntry);
   let html = await readFile(htmlPath, 'utf8');
