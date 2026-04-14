@@ -708,9 +708,10 @@ assert_true(is.function(home_edge_breakdown_helpers_env$build_home_edge_stat_gro
 assert_true(is.function(home_edge_breakdown_helpers_env$normalize_home_edge_stat_groups), 'Expected normalize_home_edge_stat_groups to be exported from helpers.R.')
 assert_true(is.function(home_edge_breakdown_helpers_env$fetch_home_venue_breakdown), 'Expected fetch_home_venue_breakdown to be exported from helpers.R.')
 home_edge_groups <- home_edge_breakdown_helpers_env$normalize_home_edge_stat_groups(c('generalPlayTurnovers', 'heldBalls'))
-assert_true('heldBalls' %in% home_edge_groups$available_stat_groups, 'Expected heldBalls to resolve as an available Home Edge stat group.')
+assert_true(identical(home_edge_groups$requested_stat_groups, c('generalPlayTurnovers', 'heldBalls')), 'Expected Home Edge stat groups to preserve the requested group names.')
 assert_true('turnoverHeld' %in% home_edge_groups$requested_stat_keys, 'Expected heldBalls to map to turnoverHeld.')
-assert_true(!('heldBalls' %in% home_edge_groups$unavailable_stat_groups), 'Expected heldBalls to stay out of unavailable Home Edge stat groups.')
+assert_true(identical(unname(home_edge_groups$requested_stat_keys), c('generalPlayTurnovers', 'turnoverHeld')), 'Expected heldBalls to be backed directly by turnoverHeld.')
+assert_true(!length(home_edge_groups$unavailable_stat_groups), 'Expected Home Edge stat groups to avoid discovery-based unavailable tracking.')
 
 cat("Checking /home-venue-breakdown multi-year stat payload...\n")
 breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(

@@ -3526,51 +3526,42 @@ fetch_home_venue_impact_summary <- function(conn, seasons = NULL, team_id = NULL
   summarise_home_venue_impact_rows(rows, min_matches = min_matches, limit = limit)
 }
 
-home_edge_normalize_token <- function(value) {
-  gsub("[^a-z0-9]+", "", tolower(as.character(value[[1]])))
-}
-
 build_home_edge_stat_groups <- function() {
   list(
     generalPlayTurnovers = list(
       stat_group = "generalPlayTurnovers",
       stat_key = "generalPlayTurnovers",
       stat_label = "General Play Turnovers",
-      preferred_direction = "lower",
-      aliases = c("generalPlayTurnovers", "general play turnovers", "general play turnover", "turnovers")
+      preferred_direction = "lower"
     ),
     heldBalls = list(
       stat_group = "heldBalls",
       stat_key = "turnoverHeld",
       stat_label = "Held Balls",
-      preferred_direction = "lower",
-      aliases = c("heldBalls", "held balls", "held ball", "turnoverHeld")
+      preferred_direction = "lower"
     ),
     contacts = list(
       stat_group = "contacts",
       stat_key = "contactPenalties",
       stat_label = "Contacts",
-      preferred_direction = "lower",
-      aliases = c("contacts", "contact penalties", "contactPenalties")
+      preferred_direction = "lower"
     ),
     obstructions = list(
       stat_group = "obstructions",
       stat_key = "obstructionPenalties",
       stat_label = "Obstructions",
-      preferred_direction = "lower",
-      aliases = c("obstructions", "obstruction penalties", "obstructionPenalties")
+      preferred_direction = "lower"
     ),
     penalties = list(
       stat_group = "penalties",
       stat_key = "penalties",
       stat_label = "Penalties",
-      preferred_direction = "lower",
-      aliases = c("penalties", "penalty")
+      preferred_direction = "lower"
     )
   )
 }
 
-normalize_home_edge_stat_groups <- function(stat_groups = NULL, available_stat_keys = NULL) {
+normalize_home_edge_stat_groups <- function(stat_groups = NULL) {
   catalog <- build_home_edge_stat_groups()
   requested_groups <- stat_groups
 
@@ -3590,40 +3581,24 @@ normalize_home_edge_stat_groups <- function(stat_groups = NULL, available_stat_k
     requested_groups <- names(catalog)
   }
 
-  alias_map <- character()
-  for (group_name in names(catalog)) {
-    group <- catalog[[group_name]]
-    aliases <- unique(c(group_name, group$stat_group, group$stat_key, group$aliases))
-    alias_map[home_edge_normalize_token(aliases)] <- group_name
-  }
-
   normalized_groups <- unique(vapply(requested_groups, function(group_name) {
-    key <- home_edge_normalize_token(group_name)
-    resolved <- alias_map[[key]]
-    if (is.null(resolved)) {
+    group_name <- as.character(group_name)[[1]]
+    if (!group_name %in% names(catalog)) {
       stop("Unsupported home edge stat group: ", group_name, ".", call. = FALSE)
     }
-    resolved
+    group_name
   }, character(1)))
 
   resolved <- catalog[normalized_groups]
   requested_stat_keys <- vapply(resolved, function(group) group$stat_key, character(1))
   requested_stat_labels <- vapply(resolved, function(group) group$stat_label, character(1))
-  available_groups <- normalized_groups
-  unavailable_groups <- character(0)
-
-  if (!is.null(available_stat_keys)) {
-    available_stat_keys <- unique(as.character(available_stat_keys))
-    available_groups <- normalized_groups[requested_stat_keys %in% available_stat_keys]
-    unavailable_groups <- setdiff(normalized_groups, available_groups)
-  }
 
   list(
     requested_stat_groups = normalized_groups,
     requested_stat_keys = requested_stat_keys,
     requested_stat_labels = requested_stat_labels,
-    available_stat_groups = available_groups,
-    unavailable_stat_groups = unavailable_groups,
+    available_stat_groups = normalized_groups,
+    unavailable_stat_groups = character(0),
     catalog = catalog,
     resolved = resolved
   )
@@ -4039,24 +4014,7 @@ fetch_home_venue_breakdown <- function(conn, seasons = NULL, team_id = NULL, ven
   }
   bounded_limit <- min(bounded_limit, 50L)
   use_match_stats <- has_team_match_stats(conn)
-  available_stat_keys <- tryCatch(
-    available_stats(conn, if (use_match_stats) "team_match_stats" else "team_period_stats"),
-    error = function(e) character()
-  )
-  normalized <- normalize_home_edge_stat_groups(stat_groups, available_stat_keys = available_stat_keys)
-  if (!length(normalized$available_stat_groups)) {
-    return(empty_home_venue_breakdown_summary(list(
-      seasons = if (!is.null(seasons)) as.integer(seasons) else NULL,
-      team_id = if (!is.null(team_id)) as.integer(team_id) else NULL,
-      venue_name = if (!is.null(venue_name)) as.character(venue_name) else NULL,
-      requested_stat_groups = normalized$requested_stat_groups,
-      requested_stat_keys = normalized$requested_stat_keys,
-      available_stat_groups = normalized$available_stat_groups,
-      unavailable_stat_groups = normalized$unavailable_stat_groups,
-      min_matches = as.integer(min_matches),
-      limit = as.integer(bounded_limit)
-    )))
-  }
+  normalized <- normalize_home_edge_stat_groups(stat_groups)
 
   selected_query <- build_home_edge_breakdown_base_query(
     seasons = seasons,
