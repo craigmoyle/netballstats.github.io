@@ -733,8 +733,6 @@ first_opposition_summary_overall <- first_record(breakdown$opposition_summary_ov
 assert_true(all(c('opponent_id', 'opponent_name', 'matches', 'home_win_rate', 'baseline_home_win_rate', 'home_win_rate_lift', 'avg_margin', 'baseline_avg_margin', 'margin_lift', 'avg_penalties', 'baseline_avg_penalties', 'penalties_lift') %in% names(first_opposition_summary_overall)), 'Expected /home-venue-breakdown opposition_summary_overall rows to expose the documented fields.')
 first_opposition_summary_by_stat <- first_record(breakdown$opposition_summary_by_stat)
 assert_true(all(c('opponent_id', 'opponent_name', 'stat_group', 'stat_key', 'stat_label', 'matches', 'venue_average', 'baseline_average', 'lift', 'preferred_direction') %in% names(first_opposition_summary_by_stat)), 'Expected /home-venue-breakdown opposition_summary_by_stat rows to expose the documented fields.')
-first_team_venue_stat_summary <- first_record(breakdown$team_venue_stat_summary)
-assert_true(all(c('team_id', 'team_name', 'venue_name', 'stat_group', 'stat_key', 'stat_label', 'matches', 'venue_average', 'other_home_venues_average', 'lift', 'preferred_direction') %in% names(first_team_venue_stat_summary)), 'Expected /home-venue-breakdown team_venue_stat_summary rows to expose the documented fields.')
 
 cat("Checking /home-venue-breakdown team-and-venue slice...\n")
 team_breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(
@@ -748,6 +746,8 @@ team_breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(
 assert_true(is.list(team_breakdown), 'Expected team-filtered /home-venue-breakdown to return a payload.')
 assert_true(is.list(team_breakdown$stat_summary) && length(team_breakdown$stat_summary) >= 1L, 'Expected team-filtered /home-venue-breakdown to return stat_summary rows.')
 assert_true(is.list(team_breakdown$team_venue_stat_summary) && length(team_breakdown$team_venue_stat_summary) >= 1L, 'Expected team-filtered /home-venue-breakdown to return team_venue_stat_summary rows.')
+first_team_venue_stat_summary <- first_record(team_breakdown$team_venue_stat_summary)
+assert_true(all(c('team_id', 'team_name', 'venue_name', 'stat_group', 'stat_key', 'stat_label', 'matches', 'venue_average', 'other_home_venues_average', 'lift', 'preferred_direction') %in% names(first_team_venue_stat_summary)), 'Expected /home-venue-breakdown team_venue_stat_summary rows to expose the documented fields.')
 
 cat("Checking held balls Home Edge stat reporting...\n")
 held_balls_breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(
