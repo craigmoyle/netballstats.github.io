@@ -726,7 +726,7 @@ assert_true(identical(unlist(breakdown$filters$seasons), c(2023L, 2024L)), 'Expe
 assert_true(is.list(breakdown$stat_summary) && length(breakdown$stat_summary) >= 1L, 'Expected /home-venue-breakdown to return stat_summary rows.')
 assert_true(is.list(breakdown$opposition_summary_overall) && length(breakdown$opposition_summary_overall) >= 1L, 'Expected /home-venue-breakdown to return opposition_summary_overall rows.')
 assert_true(is.list(breakdown$opposition_summary_by_stat) && length(breakdown$opposition_summary_by_stat) >= 1L, 'Expected /home-venue-breakdown to return opposition_summary_by_stat rows.')
-assert_true(is.list(breakdown$team_venue_stat_summary) && length(breakdown$team_venue_stat_summary) >= 1L, 'Expected /home-venue-breakdown to return team_venue_stat_summary rows.')
+assert_true(is.list(breakdown$team_venue_stat_summary) && length(breakdown$team_venue_stat_summary) == 0L, 'Expected /home-venue-breakdown to return an empty team_venue_stat_summary when team_id is omitted.')
 first_stat_summary <- first_record(breakdown$stat_summary)
 assert_true(all(c('stat_group', 'stat_key', 'stat_label', 'matches', 'venue_average', 'baseline_average', 'lift', 'preferred_direction') %in% names(first_stat_summary)), 'Expected /home-venue-breakdown stat_summary rows to expose the documented fields.')
 first_opposition_summary_overall <- first_record(breakdown$opposition_summary_overall)
