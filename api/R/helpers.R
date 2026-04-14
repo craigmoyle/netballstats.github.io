@@ -3540,14 +3540,14 @@ build_home_edge_stat_groups <- function() {
       stat_label = "Held Balls",
       preferred_direction = "lower"
     ),
-    contacts = list(
-      stat_group = "contacts",
+    contactPenalties = list(
+      stat_group = "contactPenalties",
       stat_key = "contactPenalties",
       stat_label = "Contacts",
       preferred_direction = "lower"
     ),
-    obstructions = list(
-      stat_group = "obstructions",
+    obstructionPenalties = list(
+      stat_group = "obstructionPenalties",
       stat_key = "obstructionPenalties",
       stat_label = "Obstructions",
       preferred_direction = "lower"
