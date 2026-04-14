@@ -31,7 +31,7 @@ const state = {
   payload: null,
   breakdown: null,
   selectedVenue: "",
-  selectedStatGroups: [],
+  selectedStatGroups: [...STAT_GROUPS],
   requestToken: 0,
   breakdownToken: 0
 };
@@ -180,14 +180,16 @@ function hydrateFiltersFromUrl() {
   if (elements.team && params.has("team_id")) elements.team.value = params.get("team_id");
   if (elements.minMatches && params.has("min_matches")) elements.minMatches.value = params.get("min_matches");
   state.selectedVenue = params.get("venue_name") || "";
-  // Stat groups
-  const groupsParam = params.get("stat_groups") || "";
-  const groupValues = groupsParam
-    .split(",")
-    .map((v) => v.trim())
-    .filter((v) => STAT_GROUPS.includes(v));
-  if (groupValues.length) {
-    setSelectedStatGroups(groupValues);
+  // Stat groups: default to all groups when no param present
+  const groupsParam = params.get("stat_groups");
+  if (groupsParam !== null) {
+    const groupValues = groupsParam
+      .split(",")
+      .map((v) => v.trim())
+      .filter((v) => STAT_GROUPS.includes(v));
+    setSelectedStatGroups(groupValues.length ? groupValues : STAT_GROUPS);
+  } else {
+    setSelectedStatGroups([...STAT_GROUPS]);
   }
 }
 
@@ -581,11 +583,12 @@ function renderStatSummary(rows) {
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
-    const statKey = scalarText(row.stat_key) || scalarText(row.stat_group);
+    const statGroup = scalarText(row.stat_group);
+    const statKey = scalarText(row.stat_key);
 
     const statCell = document.createElement("td");
     statCell.dataset.stackPrimary = "true";
-    statCell.textContent = formatStatLabel(statKey) || scalarText(row.stat_label) || "—";
+    statCell.textContent = formatStatLabel(statGroup) || formatStatLabel(statKey) || scalarText(row.stat_label) || "—";
 
     const venueCell = document.createElement("td");
     venueCell.textContent = formatSigned(row.venue_average);
@@ -647,14 +650,15 @@ function renderOppositionStatSummary(rows) {
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
-    const statKey = scalarText(row.stat_key) || scalarText(row.stat_group);
+    const statGroup = scalarText(row.stat_group);
+    const statKey = scalarText(row.stat_key);
 
     const opponentCell = document.createElement("td");
     opponentCell.dataset.stackPrimary = "true";
     opponentCell.textContent = scalarText(row.opponent_name) || "—";
 
     const statCell = document.createElement("td");
-    statCell.textContent = formatStatLabel(statKey) || scalarText(row.stat_label) || "—";
+    statCell.textContent = formatStatLabel(statGroup) || formatStatLabel(statKey) || scalarText(row.stat_label) || "—";
 
     const venueCell = document.createElement("td");
     venueCell.textContent = formatSigned(row.venue_average);
@@ -682,14 +686,15 @@ function renderTeamVenueStatSummary(rows) {
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
-    const statKey = scalarText(row.stat_key) || scalarText(row.stat_group);
+    const statGroup = scalarText(row.stat_group);
+    const statKey = scalarText(row.stat_key);
 
     const venueCell = document.createElement("td");
     venueCell.dataset.stackPrimary = "true";
     venueCell.textContent = scalarText(row.venue_name) || "—";
 
     const statCell = document.createElement("td");
-    statCell.textContent = formatStatLabel(statKey) || scalarText(row.stat_label) || "—";
+    statCell.textContent = formatStatLabel(statGroup) || formatStatLabel(statKey) || scalarText(row.stat_label) || "—";
 
     const homeAvgCell = document.createElement("td");
     homeAvgCell.textContent = formatSigned(row.venue_average);
