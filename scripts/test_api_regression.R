@@ -476,10 +476,9 @@ nwar_limit_payload <- request_json(base_url, '/nwar', query = list(min_games = '
 assert_true(length(nwar_limit_payload$data) <= 3L, 'Expected /nwar to respect the limit parameter.')
 check_step('nWAR endpoint respects the limit cap')
 
-nwar_high_min_payload <- request_json(base_url, '/nwar', query = list(min_games = '999'))
-assert_true(is.list(nwar_high_min_payload$data), 'Expected /nwar with very high min_games to return an empty data list gracefully.')
-assert_true(length(nwar_high_min_payload$data) == 0L, 'Expected /nwar with min_games=999 to return zero rows.')
-check_step('nWAR endpoint returns empty data when min_games eliminates all players')
+nwar_high_min_payload <- request_json(base_url, '/nwar', query = list(min_games = '999'), expected_status = 400L)
+assert_true(nzchar(as.character(nwar_high_min_payload$error %||% '')), 'Expected /nwar with very high min_games to reject invalid requests.')
+check_step('nWAR endpoint rejects out-of-range min_games values')
 
 invalid_nwar <- request_json(base_url, '/nwar', query = list(min_games = '0'), expected_status = 400L)
 assert_true(nzchar(as.character(invalid_nwar$error %||% '')), 'Expected /nwar to reject min_games below 1.')
@@ -680,7 +679,7 @@ candidate_venue_name <- as.character(candidate_match$venue_name)
 requested_seasons <- vapply(meta$seasons[seq_len(min(2L, length(meta$seasons)))], function(value) as.integer(scalar_value(value)), integer(1L))
 requested_seasons_string <- paste(requested_seasons, collapse = ',')
 
-team_filtered_payload <- request_json(base_url, '/api/home-venue-impact', query = list(season = default_season, team_id = candidate_team_id, min_matches = '1', limit = '10'))
+team_filtered_payload <- request_json(base_url, '/home-venue-impact', query = list(season = default_season, team_id = candidate_team_id, min_matches = '1', limit = '10'))
 assert_true(identical(as.integer(scalar_value(team_filtered_payload$filters$team_id)), candidate_team_id), 'Expected /home-venue-impact to echo team_id filters.')
 team_summary_team_ids <- vapply(team_filtered_payload$team_summary, function(row) as.integer(scalar_value(row$team_id)), integer(1L))
 assert_true(length(team_summary_team_ids) >= 1L && all(team_summary_team_ids == candidate_team_id), 'Expected team_id-filtered /home-venue-impact responses to stay on the requested team.')
@@ -696,11 +695,78 @@ season_filters_payload <- request_json(base_url, '/home-venue-impact', query = l
 season_filters_result <- vapply(season_filters_payload$filters$seasons, function(value) as.integer(scalar_value(value)), integer(1L))
 assert_true(identical(season_filters_result, requested_seasons), 'Expected /home-venue-impact to parse comma-separated seasons.')
 
-filtered_home_venue_payload <- request_json(base_url, '/home-venue-impact', query = list(season = default_season, min_matches = '999', limit = '10'))
-assert_true(!is.null(filtered_home_venue_payload$league_summary), 'Expected /home-venue-impact to keep league_summary when min_matches only filters grouped outputs.')
-assert_true(length(filtered_home_venue_payload$team_summary) == 0L, 'Expected /home-venue-impact to return an empty team_summary when min_matches filters grouped outputs.')
-assert_true(length(filtered_home_venue_payload$venue_summary) == 0L, 'Expected /home-venue-impact to return an empty venue_summary when min_matches filters grouped outputs.')
-assert_true(length(filtered_home_venue_payload$team_venue_summary) == 0L, 'Expected /home-venue-impact to return an empty team_venue_summary when min_matches filters grouped outputs.')
+filtered_home_venue_payload <- request_json(base_url, '/home-venue-impact', query = list(season = default_season, min_matches = '999', limit = '10'), expected_status = 400L)
+assert_true(nzchar(as.character(filtered_home_venue_payload$error %||% '')), 'Expected /home-venue-impact to reject out-of-range min_matches values.')
+
+check_step('home venue impact endpoint supports documented filters')
+
+# Home edge breakdown endpoint regression tests
+home_edge_breakdown_helpers_env <- new.env(parent = globalenv())
+sys.source(file.path(getwd(), 'api', 'R', 'helpers.R'), envir = home_edge_breakdown_helpers_env)
+home_edge_breakdown_helpers_env$api_log <- function(...) NULL
+assert_true(is.function(home_edge_breakdown_helpers_env$build_home_edge_stat_groups), 'Expected build_home_edge_stat_groups to be exported from helpers.R.')
+assert_true(is.function(home_edge_breakdown_helpers_env$normalize_home_edge_stat_groups), 'Expected normalize_home_edge_stat_groups to be exported from helpers.R.')
+assert_true(is.function(home_edge_breakdown_helpers_env$fetch_home_venue_breakdown), 'Expected fetch_home_venue_breakdown to be exported from helpers.R.')
+home_edge_groups <- home_edge_breakdown_helpers_env$normalize_home_edge_stat_groups(c('generalPlayTurnovers', 'contactPenalties', 'obstructionPenalties', 'penalties', 'heldBalls'))
+assert_true(identical(home_edge_groups$requested_stat_groups, c('generalPlayTurnovers', 'contactPenalties', 'obstructionPenalties', 'penalties', 'heldBalls')), 'Expected Home Edge stat groups to preserve the requested group names.')
+assert_true(identical(unname(home_edge_groups$requested_stat_keys), c('generalPlayTurnovers', 'contactPenalties', 'obstructionPenalties', 'penalties', 'turnoverHeld')), 'Expected Home Edge stat groups to map to canonical stat keys.')
+assert_true('turnoverHeld' %in% home_edge_groups$requested_stat_keys, 'Expected heldBalls to map to turnoverHeld.')
+assert_true(!length(home_edge_groups$unavailable_stat_groups), 'Expected Home Edge stat groups to avoid discovery-based unavailable tracking.')
+
+cat("Checking /home-venue-breakdown multi-year stat payload...\n")
+breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(
+  seasons = '2023,2024',
+  min_matches = '3',
+  stat_groups = 'generalPlayTurnovers,contactPenalties,obstructionPenalties,penalties,heldBalls',
+  limit = '5'
+))
+assert_true(is.list(breakdown), 'Expected /home-venue-breakdown to return a payload.')
+assert_true(is.list(breakdown$filters), 'Expected /home-venue-breakdown to return filters.')
+assert_true(identical(unlist(breakdown$filters$seasons), c(2023L, 2024L)), 'Expected /home-venue-breakdown to echo both requested seasons.')
+assert_true(is.list(breakdown$stat_summary) && length(breakdown$stat_summary) >= 1L, 'Expected /home-venue-breakdown to return stat_summary rows.')
+assert_true(is.list(breakdown$opposition_summary_overall) && length(breakdown$opposition_summary_overall) >= 1L, 'Expected /home-venue-breakdown to return opposition_summary_overall rows.')
+assert_true(is.list(breakdown$opposition_summary_by_stat) && length(breakdown$opposition_summary_by_stat) >= 1L, 'Expected /home-venue-breakdown to return opposition_summary_by_stat rows.')
+assert_true(is.list(breakdown$team_venue_stat_summary) && length(breakdown$team_venue_stat_summary) == 0L, 'Expected /home-venue-breakdown to return an empty team_venue_stat_summary when team_id is omitted.')
+first_stat_summary <- first_record(breakdown$stat_summary)
+assert_true(all(c('stat_group', 'stat_key', 'stat_label', 'matches', 'venue_average', 'baseline_average', 'lift', 'preferred_direction') %in% names(first_stat_summary)), 'Expected /home-venue-breakdown stat_summary rows to expose the documented fields.')
+first_opposition_summary_overall <- first_record(breakdown$opposition_summary_overall)
+assert_true(all(c('opponent_id', 'opponent_name', 'matches', 'home_win_rate', 'baseline_home_win_rate', 'home_win_rate_lift', 'avg_margin', 'baseline_avg_margin', 'margin_lift', 'avg_penalties', 'baseline_avg_penalties', 'penalties_lift') %in% names(first_opposition_summary_overall)), 'Expected /home-venue-breakdown opposition_summary_overall rows to expose the documented fields.')
+first_opposition_summary_by_stat <- first_record(breakdown$opposition_summary_by_stat)
+assert_true(all(c('opponent_id', 'opponent_name', 'stat_group', 'stat_key', 'stat_label', 'matches', 'venue_average', 'baseline_average', 'lift', 'preferred_direction') %in% names(first_opposition_summary_by_stat)), 'Expected /home-venue-breakdown opposition_summary_by_stat rows to expose the documented fields.')
+
+cat("Checking /home-venue-breakdown team-and-venue slice...\n")
+team_breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(
+  seasons = '2024',
+  team_id = '8118',
+  venue_name = 'Qudos Bank Arena',
+  stat_groups = 'generalPlayTurnovers,penalties',
+  min_matches = '1',
+  limit = '5'
+))
+assert_true(is.list(team_breakdown), 'Expected team-filtered /home-venue-breakdown to return a payload.')
+assert_true(is.list(team_breakdown$stat_summary) && length(team_breakdown$stat_summary) >= 1L, 'Expected team-filtered /home-venue-breakdown to return stat_summary rows.')
+assert_true(is.list(team_breakdown$team_venue_stat_summary) && length(team_breakdown$team_venue_stat_summary) >= 1L, 'Expected team-filtered /home-venue-breakdown to return team_venue_stat_summary rows.')
+first_team_venue_stat_summary <- first_record(team_breakdown$team_venue_stat_summary)
+assert_true(all(c('team_id', 'team_name', 'venue_name', 'stat_group', 'stat_key', 'stat_label', 'matches', 'venue_average', 'other_home_venues_average', 'lift', 'preferred_direction') %in% names(first_team_venue_stat_summary)), 'Expected /home-venue-breakdown team_venue_stat_summary rows to expose the documented fields.')
+
+cat("Checking held balls Home Edge stat reporting...\n")
+held_balls_breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(
+  seasons = '2024',
+  stat_groups = 'heldBalls',
+  min_matches = '1',
+  limit = '5'
+))
+assert_true(is.list(held_balls_breakdown$filters), 'Expected /home-venue-breakdown responses to include filters.')
+assert_true('heldBalls' %in% unlist(held_balls_breakdown$filters$requested_stat_groups), 'Expected heldBalls stat_groups to be echoed in requested_stat_groups.')
+assert_true(!('heldBalls' %in% unlist(held_balls_breakdown$filters$unavailable_stat_groups)), 'Expected heldBalls to be treated as an available Home Edge stat group.')
+
+cat("Checking invalid Home Edge stat validation...\n")
+invalid_stat_resp <- request_json(base_url, '/home-venue-breakdown', query = list(stat_groups = 'badStat'), expected_status = 400L)
+assert_true(nzchar(as.character(invalid_stat_resp$error %||% '')), 'Expected invalid /home-venue-breakdown stat_groups to return 400.')
+
+cat("Checking Home Edge breakdown limit validation...\n")
+invalid_breakdown_limit <- request_json(base_url, '/home-venue-breakdown', query = list(limit = '100'), expected_status = 400L)
+assert_true(nzchar(as.character(invalid_breakdown_limit$error %||% '')), 'Expected /home-venue-breakdown to reject limit values above 50.')
 
 empty_home_venue_payload <- request_json(base_url, '/home-venue-impact', query = list(season = default_season, venue_name = '__missing_venue__', min_matches = '1', limit = '10'))
 assert_true(is.null(empty_home_venue_payload$league_summary), 'Expected /home-venue-impact to return a null league_summary when filters produce no rows.')

@@ -1450,7 +1450,7 @@ function(question = "", limit = "12", res) {
 #* @param team_id Optional integer squad/team ID to filter team-perspective rows.
 #* @param venue_name Optional exact venue name filter.
 #* @param min_matches Minimum grouped matches required for inclusion (default 5, max 100).
-#* @param limit Maximum grouped rows to return per table section (default 50, max 100).
+#* @param limit Maximum grouped rows to return per table section (default 50, max 50).
 function(season = "", seasons = "", team_id = "", venue_name = "", min_matches = "5", limit = "50", res) {
   conn <- tryCatch(get_db_conn(), error = function(error) error)
   if (inherits(conn, "error")) {
@@ -1462,7 +1462,7 @@ function(season = "", seasons = "", team_id = "", venue_name = "", min_matches =
     team_id <- parse_optional_int(team_id, "team_id", minimum = 1L)
     venue_name <- parse_optional_text(venue_name, "venue_name", max_length = 120L)
     min_matches <- parse_optional_int(min_matches, "min_matches", minimum = 1L, maximum = 100L) %||% 5L
-    limit <- parse_limit(limit, default = 50L, maximum = 100L)
+    limit <- parse_limit(limit, default = 50L, maximum = 50L)
 
     summary <- with_statement_timeout(
       conn,
@@ -1489,6 +1489,53 @@ function(season = "", seasons = "", team_id = "", venue_name = "", min_matches =
       team_summary = rows_to_records(summary$team_summary),
       venue_summary = rows_to_records(summary$venue_summary),
       team_venue_summary = rows_to_records(summary$team_venue_summary)
+    )
+  }, error = function(error) {
+    handle_request_error(error, res)
+  })
+}
+
+#* @get /home-venue-breakdown
+#* @get /api/home-venue-breakdown
+#* @serializer unboxedJSON
+#* @summary Home venue stat breakdown
+#* @param season Optional single season year (e.g. 2023). Overridden by seasons.
+#* @param seasons Optional comma-separated season years (e.g. 2022,2023).
+#* @param team_id Optional integer squad/team ID to filter team-perspective rows.
+#* @param venue_name Optional exact venue name filter.
+#* @param stat_groups Optional comma-separated stat groups. Supported groups: generalPlayTurnovers, contactPenalties, obstructionPenalties, penalties, heldBalls.
+#* @param min_matches Minimum grouped matches required for inclusion (default 5, max 100).
+#* @param limit Maximum grouped rows to return per table section (default 50, max 50).
+function(season = "", seasons = "", team_id = "", venue_name = "", stat_groups = "", min_matches = "5", limit = "50", res) {
+  conn <- tryCatch(get_db_conn(), error = function(error) error)
+  if (inherits(conn, "error")) {
+    return(database_unavailable(res, conn))
+  }
+
+  tryCatch({
+    effective_seasons <- parse_season_filter(season, seasons)
+    team_id <- parse_optional_int(team_id, "team_id", minimum = 1L)
+    venue_name <- parse_optional_text(venue_name, "venue_name", max_length = 120L)
+    stat_groups <- parse_optional_text(stat_groups, "stat_groups", max_length = 180L)
+    min_matches <- parse_optional_int(min_matches, "min_matches", minimum = 1L, maximum = 100L) %||% 5L
+    limit <- parse_limit(limit, default = 50L, maximum = 50L)
+
+    summary <- fetch_home_venue_breakdown(
+      conn,
+      seasons = effective_seasons,
+      team_id = team_id,
+      venue_name = venue_name,
+      stat_groups = stat_groups,
+      min_matches = min_matches,
+      limit = limit
+    )
+
+    list(
+      filters = summary$filters,
+      stat_summary = rows_to_records(summary$stat_summary),
+      opposition_summary_overall = rows_to_records(summary$opposition_summary_overall),
+      opposition_summary_by_stat = rows_to_records(summary$opposition_summary_by_stat),
+      team_venue_stat_summary = rows_to_records(summary$team_venue_stat_summary)
     )
   }, error = function(error) {
     handle_request_error(error, res)

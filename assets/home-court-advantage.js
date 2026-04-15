@@ -2,7 +2,10 @@ const {
   buildUrl,
   cycleStatusBanner = () => {},
   fetchJson,
-  formatNumber
+  formatNumber,
+  formatStatLabel = (stat) => stat,
+  statPrefersLowerValue = () => false,
+  syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
 const {
   trackEvent = () => {}
@@ -14,17 +17,30 @@ const LOADING_MESSAGES = [
   "Checking margin and whistle swings…"
 ];
 
+const STAT_GROUPS = [
+  "generalPlayTurnovers",
+  "heldBalls",
+  "contactPenalties",
+  "obstructionPenalties",
+  "penalties"
+];
+
 const state = {
   meta: null,
   payload: null,
+  breakdown: null,
   selectedVenue: "",
-  requestToken: 0
+  selectedStatGroups: [...STAT_GROUPS],
+  requestToken: 0,
+  breakdownToken: 0
 };
 
 const elements = {
   status: document.getElementById("home-edge-status"),
   filters: document.getElementById("home-edge-filters"),
   season: document.getElementById("home-edge-season"),
+  seasonChoices: document.getElementById("home-edge-season-choices"),
+  seasonSummary: document.getElementById("home-edge-season-summary"),
   team: document.getElementById("home-edge-team"),
   minMatches: document.getElementById("home-edge-min-matches"),
   meta: document.getElementById("home-edge-meta"),
@@ -48,7 +64,12 @@ const elements = {
   teamVenueLead: document.getElementById("home-edge-team-venue-lead"),
   venueTable: document.getElementById("home-edge-venue-table"),
   teamTable: document.getElementById("home-edge-team-table"),
-  teamVenueTable: document.getElementById("home-edge-team-venue-table")
+  teamVenueTable: document.getElementById("home-edge-team-venue-table"),
+  statGroupsContainer: document.getElementById("home-edge-stat-groups"),
+  statBody: document.getElementById("home-edge-stat-body"),
+  oppositionBody: document.getElementById("home-edge-opposition-body"),
+  oppositionStatBody: document.getElementById("home-edge-opposition-stat-body"),
+  teamVenueStatBody: document.getElementById("home-edge-team-venue-stat-body")
 };
 
 function unwrapValue(value) {
@@ -137,10 +158,13 @@ function selectedTeamName() {
 
 function syncUrlState() {
   const params = new URLSearchParams();
-  if (elements.season?.value) params.set("season", elements.season.value);
+  const seasons = getSelectedSeasons();
+  if (seasons.length) params.set("seasons", seasons.join(","));
   if (elements.team?.value) params.set("team_id", elements.team.value);
   if (elements.minMatches?.value) params.set("min_matches", elements.minMatches.value);
   if (state.selectedVenue) params.set("venue_name", state.selectedVenue);
+  const groups = state.selectedStatGroups;
+  if (groups.length) params.set("stat_groups", groups.join(","));
   const nextUrl = params.toString()
     ? `${window.location.pathname}?${params.toString()}`
     : window.location.pathname;
@@ -149,30 +173,85 @@ function syncUrlState() {
 
 function hydrateFiltersFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  if (elements.season && params.has("season")) elements.season.value = params.get("season");
+  // Multi-season: prefer seasons=, fall back to season= for compat
+  const seasonsParam = params.get("seasons") || params.get("season") || "";
+  const seasonValues = seasonsParam
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  if (seasonValues.length) {
+    setSelectedSeasons(seasonValues);
+  }
   if (elements.team && params.has("team_id")) elements.team.value = params.get("team_id");
   if (elements.minMatches && params.has("min_matches")) elements.minMatches.value = params.get("min_matches");
   state.selectedVenue = params.get("venue_name") || "";
+  // Stat groups: default to all groups when no param present
+  const groupsParam = params.get("stat_groups");
+  if (groupsParam !== null) {
+    const groupValues = groupsParam
+      .split(",")
+      .map((v) => v.trim())
+      .filter((v) => STAT_GROUPS.includes(v));
+    setSelectedStatGroups(groupValues.length ? groupValues : STAT_GROUPS);
+  } else {
+    setSelectedStatGroups([...STAT_GROUPS]);
+  }
+}
+
+function getSelectedSeasons() {
+  if (!elements.seasonChoices) return [];
+  return [...elements.seasonChoices.querySelectorAll("input[type='checkbox']:checked")]
+    .map((input) => input.value)
+    .sort((a, b) => Number(b) - Number(a));
+}
+
+function setSelectedSeasons(values) {
+  if (!elements.seasonChoices) return;
+  const selected = new Set(values.map((v) => `${v}`));
+  elements.seasonChoices.querySelectorAll("input[type='checkbox']").forEach((input) => {
+    input.checked = selected.has(input.value);
+  });
+}
+
+function describeSeasons(seasons) {
+  if (!seasons.length) return "all seasons";
+  if (seasons.length === 1) return `season ${seasons[0]}`;
+  return `${seasons.length} selected seasons`;
+}
+
+function updateSeasonSummary() {
+  if (!elements.seasonSummary) return;
+  const seasons = getSelectedSeasons();
+  elements.seasonSummary.textContent = seasons.length
+    ? `Showing ${describeSeasons(seasons)}.`
+    : "Showing all seasons.";
 }
 
 function renderSeasonChoices(seasons = []) {
-  const select = elements.season;
-  if (!select) return;
-  const currentValue = select.value;
-  while (select.options.length > 1) {
-    select.remove(1);
-  }
+  if (!elements.seasonChoices) return;
+  elements.seasonChoices.replaceChildren();
   seasons.forEach((season) => {
-    const option = document.createElement("option");
-    option.value = String(season);
-    option.textContent = String(season);
-    select.appendChild(option);
+    const label = document.createElement("label");
+    label.className = "season-choice";
+
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.name = "home-edge-season-choice";
+    input.value = `${season}`;
+
+    const text = document.createElement("span");
+    text.textContent = `${season}`;
+
+    label.append(input, text);
+    elements.seasonChoices.appendChild(label);
+
+    input.addEventListener("change", () => {
+      updateSeasonSummary();
+      syncUrlState();
+    });
   });
-  if (currentValue) {
-    select.value = currentValue;
-  } else if (state.meta?.default_season) {
-    select.value = String(state.meta.default_season);
-  }
+  // Hide the legacy select when checkboxes are active
+  if (elements.season) elements.season.hidden = true;
 }
 
 function renderTeamChoices(teams = []) {
@@ -193,12 +272,41 @@ function renderTeamChoices(teams = []) {
   }
 }
 
+function getSelectedStatGroups() {
+  if (!elements.statGroupsContainer) return [];
+  return [...elements.statGroupsContainer.querySelectorAll("[data-home-edge-stat][aria-pressed='true']")]
+    .map((btn) => btn.dataset.homeEdgeStat)
+    .filter(Boolean);
+}
+
+function setSelectedStatGroups(groups) {
+  if (!elements.statGroupsContainer) return;
+  const selected = new Set(groups);
+  elements.statGroupsContainer.querySelectorAll("[data-home-edge-stat]").forEach((btn) => {
+    btn.setAttribute("aria-pressed", selected.has(btn.dataset.homeEdgeStat) ? "true" : "false");
+  });
+  state.selectedStatGroups = getSelectedStatGroups();
+}
+
+function wireStatGroupChips() {
+  if (!elements.statGroupsContainer) return;
+  elements.statGroupsContainer.querySelectorAll("[data-home-edge-stat]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const isPressed = btn.getAttribute("aria-pressed") === "true";
+      btn.setAttribute("aria-pressed", isPressed ? "false" : "true");
+      state.selectedStatGroups = getSelectedStatGroups();
+      syncUrlState();
+    });
+  });
+}
+
 function currentParams(includeSelectedVenue = false) {
   const params = {
     limit: "12",
     min_matches: elements.minMatches?.value || "3"
   };
-  if (elements.season?.value) params.season = elements.season.value;
+  const seasons = getSelectedSeasons();
+  if (seasons.length) params.seasons = seasons.join(",");
   if (elements.team?.value) params.team_id = elements.team.value;
   if (includeSelectedVenue && state.selectedVenue) params.venue_name = state.selectedVenue;
   return params;
@@ -285,7 +393,7 @@ function renderLeagueSummary() {
     return;
   }
 
-  const seasonLabel = elements.season?.value ? `${elements.season.value} season` : "all seasons";
+  const seasonLabel = describeSeasons(getSelectedSeasons());
   const teamLabel = selectedTeamId() ? selectedTeamName() : "league-wide";
   if (elements.meta) {
     elements.meta.textContent = `${formatNumber(scalarNumber(summary.matches))} matches — ${teamLabel} — ${seasonLabel}.`;
@@ -345,6 +453,7 @@ function renderVenueTable() {
       updateApiLink();
       renderSpotlight();
       renderVenueTable();
+      loadBreakdown();
     });
     venueCell.appendChild(button);
 
@@ -460,6 +569,199 @@ function renderTeamVenueTable() {
   window.NetballStatsUI?.syncResponsiveTable?.(elements.teamVenueTable);
 }
 
+function liftCue(lift, preferredDirection) {
+  const numeric = scalarNumber(lift);
+  if (numeric == null) return "—";
+  const magnitude = Math.abs(numeric);
+  if (magnitude < 0.05) return "Flat";
+  const goodLift = preferredDirection === "lower" ? numeric < 0 : numeric > 0;
+  return goodLift ? "↓ Good" : "↑ Watch";
+}
+
+function formatBreakdownStatLabel(statGroup, statKey, fallbackLabel = "") {
+  if (statGroup === "heldBalls" || statKey === "turnoverHeld") {
+    return "Turnover Held";
+  }
+  return formatStatLabel(statKey) || formatStatLabel(statGroup) || fallbackLabel || "—";
+}
+
+function renderStatSummary(rows) {
+  if (!elements.statBody) return;
+  if (!Array.isArray(rows) || !rows.length) {
+    renderMessageRow(elements.statBody, 5, "No stat influence data for the current filter set. Choose at least one stat lens.", "No data");
+    syncResponsiveTable(elements.statBody.closest("table"));
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    const statGroup = scalarText(row.stat_group);
+    const statKey = scalarText(row.stat_key);
+
+    const statCell = document.createElement("td");
+    statCell.dataset.stackPrimary = "true";
+    statCell.textContent = formatBreakdownStatLabel(statGroup, statKey, scalarText(row.stat_label));
+
+    const venueCell = document.createElement("td");
+    venueCell.textContent = formatSigned(row.venue_average);
+
+    const baselineCell = document.createElement("td");
+    baselineCell.textContent = formatSigned(row.baseline_average);
+
+    const liftCell = document.createElement("td");
+    liftCell.textContent = formatSigned(row.lift);
+
+    const cueCell = document.createElement("td");
+    cueCell.textContent = liftCue(row.lift, scalarText(row.preferred_direction));
+
+    tr.append(statCell, venueCell, baselineCell, liftCell, cueCell);
+    fragment.appendChild(tr);
+  });
+  elements.statBody.replaceChildren(fragment);
+  syncResponsiveTable(elements.statBody.closest("table"));
+}
+
+function renderOppositionSummary(rows) {
+  if (!elements.oppositionBody) return;
+  if (!Array.isArray(rows) || !rows.length) {
+    renderMessageRow(elements.oppositionBody, 4, "No qualifying opposition splits for the current filter set.", "No data");
+    syncResponsiveTable(elements.oppositionBody.closest("table"));
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  rows.forEach((row) => {
+    const tr = document.createElement("tr");
+
+    const opponentCell = document.createElement("td");
+    opponentCell.dataset.stackPrimary = "true";
+    opponentCell.textContent = scalarText(row.opponent_name) || "—";
+
+    const matchesCell = document.createElement("td");
+    matchesCell.textContent = formatNumber(scalarNumber(row.matches));
+
+    const marginCell = document.createElement("td");
+    marginCell.textContent = formatSigned(row.margin_lift);
+
+    const penaltyCell = document.createElement("td");
+    penaltyCell.textContent = formatSigned(row.penalties_lift);
+
+    tr.append(opponentCell, matchesCell, marginCell, penaltyCell);
+    fragment.appendChild(tr);
+  });
+  elements.oppositionBody.replaceChildren(fragment);
+  syncResponsiveTable(elements.oppositionBody.closest("table"));
+}
+
+function renderOppositionStatSummary(rows) {
+  if (!elements.oppositionStatBody) return;
+  if (!Array.isArray(rows) || !rows.length) {
+    renderMessageRow(elements.oppositionStatBody, 5, "No qualifying opposition stat splits. Select a stat lens and venue to populate this table.", "No data");
+    syncResponsiveTable(elements.oppositionStatBody.closest("table"));
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    const statGroup = scalarText(row.stat_group);
+    const statKey = scalarText(row.stat_key);
+
+    const opponentCell = document.createElement("td");
+    opponentCell.dataset.stackPrimary = "true";
+    opponentCell.textContent = scalarText(row.opponent_name) || "—";
+
+    const statCell = document.createElement("td");
+    statCell.textContent = formatBreakdownStatLabel(statGroup, statKey, scalarText(row.stat_label));
+
+    const venueCell = document.createElement("td");
+    venueCell.textContent = formatSigned(row.venue_average);
+
+    const baselineCell = document.createElement("td");
+    baselineCell.textContent = formatSigned(row.baseline_average);
+
+    const liftCell = document.createElement("td");
+    liftCell.textContent = formatSigned(row.lift);
+
+    tr.append(opponentCell, statCell, venueCell, baselineCell, liftCell);
+    fragment.appendChild(tr);
+  });
+  elements.oppositionStatBody.replaceChildren(fragment);
+  syncResponsiveTable(elements.oppositionStatBody.closest("table"));
+}
+
+function renderTeamVenueStatSummary(rows) {
+  if (!elements.teamVenueStatBody) return;
+  if (!Array.isArray(rows) || !rows.length) {
+    renderMessageRow(elements.teamVenueStatBody, 5, "Select a team above to see the venue-by-venue stat ledger.", "Choose a team");
+    syncResponsiveTable(elements.teamVenueStatBody.closest("table"));
+    return;
+  }
+  const fragment = document.createDocumentFragment();
+  rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    const statGroup = scalarText(row.stat_group);
+    const statKey = scalarText(row.stat_key);
+
+    const venueCell = document.createElement("td");
+    venueCell.dataset.stackPrimary = "true";
+    venueCell.textContent = scalarText(row.venue_name) || "—";
+
+    const statCell = document.createElement("td");
+    statCell.textContent = formatBreakdownStatLabel(statGroup, statKey, scalarText(row.stat_label));
+
+    const homeAvgCell = document.createElement("td");
+    homeAvgCell.textContent = formatSigned(row.venue_average);
+
+    const otherAvgCell = document.createElement("td");
+    otherAvgCell.textContent = formatSigned(row.other_home_venues_average);
+
+    const liftCell = document.createElement("td");
+    liftCell.textContent = formatSigned(row.lift);
+
+    tr.append(venueCell, statCell, homeAvgCell, otherAvgCell, liftCell);
+    fragment.appendChild(tr);
+  });
+  elements.teamVenueStatBody.replaceChildren(fragment);
+  syncResponsiveTable(elements.teamVenueStatBody.closest("table"));
+}
+
+function renderBreakdownSections() {
+  const b = state.breakdown;
+  renderStatSummary(b?.stat_summary || []);
+  renderOppositionSummary(b?.opposition_summary_overall || []);
+  renderOppositionStatSummary(b?.opposition_summary_by_stat || []);
+  renderTeamVenueStatSummary(b?.team_venue_stat_summary || []);
+}
+
+function breakdownParams() {
+  const params = {
+    min_matches: elements.minMatches?.value || "3"
+  };
+  const seasons = getSelectedSeasons();
+  if (seasons.length) params.seasons = seasons.join(",");
+  if (elements.team?.value) params.team_id = elements.team.value;
+  if (state.selectedVenue) params.venue_name = state.selectedVenue;
+  const groups = state.selectedStatGroups;
+  if (groups.length) params.stat_groups = groups.join(",");
+  return params;
+}
+
+async function loadBreakdown() {
+  const breakdownToken = ++state.breakdownToken;
+  try {
+    const data = await fetchJson("/home-venue-breakdown", breakdownParams());
+    if (breakdownToken !== state.breakdownToken) return;
+    state.breakdown = data;
+    renderBreakdownSections();
+  } catch (error) {
+    if (breakdownToken !== state.breakdownToken) return;
+    state.breakdown = null;
+    renderMessageRow(elements.statBody, 5, "Stat breakdown unavailable. Try again shortly.", "Archive note");
+    renderMessageRow(elements.oppositionBody, 4, "Opposition breakdown unavailable. Try again shortly.", "Archive note");
+    renderMessageRow(elements.oppositionStatBody, 5, "Stat opposition breakdown unavailable. Try again shortly.", "Archive note");
+    renderMessageRow(elements.teamVenueStatBody, 5, "Venue stat ledger unavailable. Try again shortly.", "Archive note");
+  }
+}
+
 function renderAll() {
   renderLeagueSummary();
   renderSpotlight();
@@ -504,8 +806,9 @@ async function loadHomeEdge() {
     }
     state.payload = payload;
     renderAll();
+    await loadBreakdown();
     trackEvent("home_edge_loaded", {
-      season: elements.season?.value || "all",
+      seasons: getSelectedSeasons().join(",") || "all",
       team_id: elements.team?.value || "all",
       venue_name: state.selectedVenue || "top"
     });
@@ -547,9 +850,12 @@ async function initialise() {
     }
   }
   hydrateFiltersFromUrl();
-  if (!elements.season?.value && state.meta?.default_season) {
-    elements.season.value = String(state.meta.default_season);
+  // Default to the most recent season if nothing was restored from URL
+  if (!getSelectedSeasons().length && state.meta?.default_season) {
+    setSelectedSeasons([String(state.meta.default_season)]);
   }
+  updateSeasonSummary();
+  wireStatGroupChips();
   await loadHomeEdge();
 }
 

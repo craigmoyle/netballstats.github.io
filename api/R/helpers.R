@@ -3555,6 +3555,533 @@ fetch_home_venue_impact_summary <- function(conn, seasons = NULL, team_id = NULL
   summarise_home_venue_impact_rows(rows, min_matches = min_matches, limit = limit)
 }
 
+build_home_edge_stat_groups <- function() {
+  list(
+    generalPlayTurnovers = list(
+      stat_group = "generalPlayTurnovers",
+      stat_key = "generalPlayTurnovers",
+      stat_label = "General Play Turnovers",
+      preferred_direction = "lower"
+    ),
+    heldBalls = list(
+      stat_group = "heldBalls",
+      stat_key = "turnoverHeld",
+      stat_label = "Held Balls",
+      preferred_direction = "lower"
+    ),
+    contactPenalties = list(
+      stat_group = "contactPenalties",
+      stat_key = "contactPenalties",
+      stat_label = "Contacts",
+      preferred_direction = "lower"
+    ),
+    obstructionPenalties = list(
+      stat_group = "obstructionPenalties",
+      stat_key = "obstructionPenalties",
+      stat_label = "Obstructions",
+      preferred_direction = "lower"
+    ),
+    penalties = list(
+      stat_group = "penalties",
+      stat_key = "penalties",
+      stat_label = "Penalties",
+      preferred_direction = "lower"
+    )
+  )
+}
+
+normalize_home_edge_stat_groups <- function(stat_groups = NULL) {
+  catalog <- build_home_edge_stat_groups()
+  requested_groups <- stat_groups
+
+  if (is.list(requested_groups) && !is.null(requested_groups$requested_stat_groups)) {
+    requested_groups <- requested_groups$requested_stat_groups
+  }
+
+  if (is.null(requested_groups) || !length(requested_groups)) {
+    requested_groups <- names(catalog)
+  } else if (length(requested_groups) == 1L && is.character(requested_groups) && grepl(",", requested_groups[[1]], fixed = TRUE)) {
+    requested_groups <- strsplit(requested_groups[[1]], ",", fixed = TRUE)[[1]]
+  }
+
+  requested_groups <- trimws(as.character(unlist(requested_groups, use.names = FALSE)))
+  requested_groups <- requested_groups[nzchar(requested_groups)]
+  if (!length(requested_groups)) {
+    requested_groups <- names(catalog)
+  }
+
+  normalized_groups <- unique(vapply(requested_groups, function(group_name) {
+    group_name <- as.character(group_name)[[1]]
+    if (!group_name %in% names(catalog)) {
+      stop("Unsupported home edge stat group: ", group_name, ".", call. = FALSE)
+    }
+    group_name
+  }, character(1)))
+
+  resolved <- catalog[normalized_groups]
+  requested_stat_keys <- vapply(resolved, function(group) group$stat_key, character(1))
+  requested_stat_labels <- vapply(resolved, function(group) group$stat_label, character(1))
+
+  list(
+    requested_stat_groups = normalized_groups,
+    requested_stat_keys = requested_stat_keys,
+    requested_stat_labels = requested_stat_labels,
+    available_stat_groups = normalized_groups,
+    unavailable_stat_groups = character(0),
+    catalog = catalog,
+    resolved = resolved
+  )
+}
+
+home_edge_stat_rows_empty <- function() {
+  data.frame(
+    stat_group = character(),
+    stat_key = character(),
+    stat_label = character(),
+    matches = integer(),
+    venue_average = numeric(),
+    baseline_average = numeric(),
+    lift = numeric(),
+    preferred_direction = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+home_edge_opposition_overall_empty <- function() {
+  data.frame(
+    opponent_id = integer(),
+    opponent_name = character(),
+    matches = integer(),
+    home_win_rate = numeric(),
+    baseline_home_win_rate = numeric(),
+    home_win_rate_lift = numeric(),
+    avg_margin = numeric(),
+    baseline_avg_margin = numeric(),
+    margin_lift = numeric(),
+    avg_penalties = numeric(),
+    baseline_avg_penalties = numeric(),
+    penalties_lift = numeric(),
+    stringsAsFactors = FALSE
+  )
+}
+
+home_edge_opposition_by_stat_empty <- function() {
+  data.frame(
+    opponent_id = integer(),
+    opponent_name = character(),
+    stat_group = character(),
+    stat_key = character(),
+    stat_label = character(),
+    matches = integer(),
+    venue_average = numeric(),
+    baseline_average = numeric(),
+    lift = numeric(),
+    preferred_direction = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+home_edge_team_venue_stat_empty <- function() {
+  data.frame(
+    team_id = integer(),
+    team_name = character(),
+    venue_name = character(),
+    stat_group = character(),
+    stat_key = character(),
+    stat_label = character(),
+    matches = integer(),
+    venue_average = numeric(),
+    other_home_venues_average = numeric(),
+    lift = numeric(),
+    preferred_direction = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
+home_edge_prepare_rows <- function(rows, stat_keys = character()) {
+  if (!nrow(rows)) {
+    return(rows)
+  }
+
+  integer_columns <- c("match_id", "season", "round_number", "team_id", "opponent_id", "team_score", "opponent_score", "margin", "won", "draw")
+  numeric_columns <- unique(c(stat_keys, "penalties"))
+
+  for (column_name in intersect(integer_columns, names(rows))) {
+    rows[[column_name]] <- suppressWarnings(as.integer(rows[[column_name]]))
+  }
+  for (column_name in intersect(numeric_columns, names(rows))) {
+    rows[[column_name]] <- suppressWarnings(as.numeric(rows[[column_name]]))
+  }
+
+  for (column_name in intersect(c("venue_name", "team_name", "opponent_name", "competition_phase"), names(rows))) {
+    rows[[column_name]] <- as.character(rows[[column_name]])
+  }
+
+  rows
+}
+
+home_edge_stat_metric <- function(rows, column_name) {
+  if (!nrow(rows) || !(column_name %in% names(rows))) {
+    return(list(matches = 0L, average = NA_real_))
+  }
+
+  values <- suppressWarnings(as.numeric(rows[[column_name]]))
+  list(matches = as.integer(nrow(rows)), average = mean_or_na(values))
+}
+
+build_home_edge_breakdown_base_query <- function(seasons = NULL, team_id = NULL, venue_name = NULL, stat_groups = NULL, use_match_stats = TRUE) {
+  normalized <- normalize_home_edge_stat_groups(stat_groups)
+  stat_keys <- unique(c(normalized$requested_stat_keys, "penalties"))
+  stat_sql <- safe_stat_in_sql(stat_keys)
+  stat_aliases <- vapply(stat_keys, function(stat_key) sprintf("MAX(CASE WHEN stats.stat = '%s' THEN stats.stat_value END) AS \"%s\"", stat_key, stat_key), character(1))
+
+  if (isTRUE(use_match_stats)) {
+    stats_source <- paste(
+      "SELECT tms.match_id, tms.squad_id, tms.stat, tms.match_value AS stat_value",
+      "FROM team_match_stats AS tms",
+      "WHERE tms.stat IN (", stat_sql, ")"
+    )
+  } else {
+    stats_source <- paste(
+      "SELECT tps.match_id, tps.squad_id, tps.stat, ROUND(CAST(SUM(tps.value_number) AS numeric), 2) AS stat_value",
+      "FROM team_period_stats AS tps",
+      "WHERE tps.stat IN (", stat_sql, ")",
+      "GROUP BY tps.match_id, tps.squad_id, tps.stat"
+    )
+  }
+
+  query <- paste(c(
+    "SELECT",
+    "  matches.match_id, matches.season, COALESCE(matches.competition_phase, '') AS competition_phase,",
+    "  matches.round_number, matches.venue_name,",
+    "  matches.home_squad_id AS team_id, matches.home_squad_name AS team_name,",
+    "  matches.away_squad_id AS opponent_id, matches.away_squad_name AS opponent_name,",
+    "  matches.home_score AS team_score, matches.away_score AS opponent_score,",
+    "  matches.home_score - matches.away_score AS margin,",
+    "  CASE WHEN matches.home_score > matches.away_score THEN 1 ELSE 0 END AS won,",
+    "  CASE WHEN matches.home_score = matches.away_score THEN 1 ELSE 0 END AS draw,",
+    paste0("  ", paste(stat_aliases, collapse = ",\n  ")),
+    "FROM matches",
+    "LEFT JOIN (",
+    stats_source,
+    ") AS stats",
+    "  ON stats.match_id = matches.match_id",
+    "  AND stats.squad_id = matches.home_squad_id",
+    "WHERE matches.home_score IS NOT NULL AND matches.away_score IS NOT NULL"
+  ), collapse = " ")
+
+  params <- list()
+  season_filter <- append_integer_in_filter(query, params, "matches.season", seasons, "season")
+  query <- season_filter$query
+  params <- season_filter$params
+
+  if (!is.null(team_id)) {
+    query <- paste0(query, " AND matches.home_squad_id = ?team_id")
+    params$team_id <- as.integer(team_id)
+  }
+  if (!is.null(venue_name)) {
+    query <- paste0(query, " AND matches.venue_name = ?venue_name")
+    params$venue_name <- as.character(venue_name)
+  }
+
+  query <- paste0(
+    query,
+    " GROUP BY matches.match_id, matches.season, matches.competition_phase, matches.round_number, matches.venue_name,",
+    " matches.home_squad_id, matches.home_squad_name, matches.away_squad_id, matches.away_squad_name,",
+    " matches.home_score, matches.away_score, matches.home_score - matches.away_score"
+  )
+
+  list(query = query, params = params)
+}
+
+summarise_home_edge_stat_rows <- function(rows, baseline_rows = rows, stat_groups = NULL, min_matches = 5L, limit = 50L) {
+  normalized <- normalize_home_edge_stat_groups(stat_groups)
+  if (!nrow(rows)) {
+    return(home_edge_stat_rows_empty())
+  }
+
+  rows <- home_edge_prepare_rows(rows, normalized$requested_stat_keys)
+  baseline_rows <- home_edge_prepare_rows(baseline_rows, normalized$requested_stat_keys)
+  if (nrow(rows) < min_matches) {
+    return(home_edge_stat_rows_empty())
+  }
+
+  summary_rows <- lapply(seq_along(normalized$requested_stat_groups), function(index) {
+    group_name <- normalized$requested_stat_groups[[index]]
+    group <- normalized$resolved[[group_name]]
+    selected <- home_edge_stat_metric(rows, group$stat_key)
+    baseline <- home_edge_stat_metric(baseline_rows, group$stat_key)
+    data.frame(
+      stat_group = group$stat_group,
+      stat_key = group$stat_key,
+      stat_label = group$stat_label,
+      matches = as.integer(selected$matches),
+      venue_average = selected$average,
+      baseline_average = baseline$average,
+      lift = if (is.na(selected$average) || is.na(baseline$average)) NA_real_ else round(selected$average - baseline$average, 3),
+      preferred_direction = group$preferred_direction,
+      stringsAsFactors = FALSE
+    )
+  })
+
+  result <- do.call(rbind, summary_rows)
+  if (is.null(result)) {
+    return(home_edge_stat_rows_empty())
+  }
+  result <- result[order(result$stat_group), , drop = FALSE]
+  result <- utils::head(result, limit)
+  row.names(result) <- NULL
+  result
+}
+
+summarise_home_edge_opposition_overall <- function(rows, baseline_rows = rows, min_matches = 5L, limit = 50L) {
+  if (!nrow(rows)) {
+    return(home_edge_opposition_overall_empty())
+  }
+
+  rows <- home_edge_prepare_rows(rows, c("penalties"))
+  baseline_rows <- home_edge_prepare_rows(baseline_rows, c("penalties"))
+  if (nrow(rows) < min_matches) {
+    return(home_edge_opposition_overall_empty())
+  }
+
+  baseline_win_rate <- rate_or_na(sum(baseline_rows$won, na.rm = TRUE), nrow(baseline_rows))
+  baseline_margin <- mean_or_na(baseline_rows$margin)
+  baseline_penalties <- mean_or_na(baseline_rows$penalties)
+
+  opponent_ids <- sort(unique(rows$opponent_id))
+  summary_rows <- lapply(opponent_ids, function(opponent_id_value) {
+    opponent_rows <- rows[rows$opponent_id == opponent_id_value, , drop = FALSE]
+    if (nrow(opponent_rows) < min_matches) {
+      return(NULL)
+    }
+
+    data.frame(
+      opponent_id = as.integer(opponent_id_value),
+      opponent_name = opponent_rows$opponent_name[[1]],
+      matches = as.integer(nrow(opponent_rows)),
+      home_win_rate = rate_or_na(sum(opponent_rows$won, na.rm = TRUE), nrow(opponent_rows)),
+      baseline_home_win_rate = baseline_win_rate,
+      home_win_rate_lift = if (is.na(baseline_win_rate)) NA_real_ else round(rate_or_na(sum(opponent_rows$won, na.rm = TRUE), nrow(opponent_rows)) - baseline_win_rate, 3),
+      avg_margin = mean_or_na(opponent_rows$margin),
+      baseline_avg_margin = baseline_margin,
+      margin_lift = if (is.na(baseline_margin)) NA_real_ else round(mean_or_na(opponent_rows$margin) - baseline_margin, 3),
+      avg_penalties = mean_or_na(opponent_rows$penalties),
+      baseline_avg_penalties = baseline_penalties,
+      penalties_lift = if (is.na(baseline_penalties)) NA_real_ else round(mean_or_na(opponent_rows$penalties) - baseline_penalties, 3),
+      stringsAsFactors = FALSE
+    )
+  })
+
+  result <- do.call(rbind, Filter(Negate(is.null), summary_rows))
+  if (is.null(result)) {
+    return(home_edge_opposition_overall_empty())
+  }
+  result <- result[order(is.na(result$margin_lift), -abs(result$margin_lift), result$opponent_name, na.last = TRUE), , drop = FALSE]
+  result <- utils::head(result, limit)
+  row.names(result) <- NULL
+  result
+}
+
+summarise_home_edge_opposition_by_stat <- function(rows, baseline_rows = rows, stat_groups = NULL, min_matches = 5L, limit = 50L) {
+  normalized <- normalize_home_edge_stat_groups(stat_groups)
+  if (!nrow(rows)) {
+    return(home_edge_opposition_by_stat_empty())
+  }
+
+  rows <- home_edge_prepare_rows(rows, normalized$requested_stat_keys)
+  baseline_rows <- home_edge_prepare_rows(baseline_rows, normalized$requested_stat_keys)
+  if (nrow(rows) < min_matches) {
+    return(home_edge_opposition_by_stat_empty())
+  }
+
+  summary_rows <- lapply(seq_along(normalized$requested_stat_groups), function(index) {
+    group_name <- normalized$requested_stat_groups[[index]]
+    group <- normalized$resolved[[group_name]]
+    baseline_metric <- home_edge_stat_metric(baseline_rows, group$stat_key)
+    opponent_ids <- sort(unique(rows$opponent_id))
+    lapply(opponent_ids, function(opponent_id_value) {
+      opponent_rows <- rows[rows$opponent_id == opponent_id_value, , drop = FALSE]
+      selected_metric <- home_edge_stat_metric(opponent_rows, group$stat_key)
+      if (selected_metric$matches < min_matches) {
+        return(NULL)
+      }
+
+      data.frame(
+        opponent_id = as.integer(opponent_id_value),
+        opponent_name = opponent_rows$opponent_name[[1]],
+        stat_group = group$stat_group,
+        stat_key = group$stat_key,
+        stat_label = group$stat_label,
+        matches = as.integer(selected_metric$matches),
+        venue_average = selected_metric$average,
+        baseline_average = baseline_metric$average,
+        lift = if (is.na(selected_metric$average) || is.na(baseline_metric$average)) NA_real_ else round(selected_metric$average - baseline_metric$average, 3),
+        preferred_direction = group$preferred_direction,
+        stringsAsFactors = FALSE
+      )
+    })
+  })
+
+  result_rows <- list()
+  for (group_result in summary_rows) {
+    result_rows <- c(result_rows, Filter(Negate(is.null), group_result))
+  }
+  result <- if (length(result_rows)) do.call(rbind, result_rows) else NULL
+  if (is.null(result)) {
+    return(home_edge_opposition_by_stat_empty())
+  }
+  result <- result[order(result$stat_group, result$opponent_name), , drop = FALSE]
+  result <- utils::head(result, limit)
+  row.names(result) <- NULL
+  result
+}
+
+summarise_home_edge_team_venue_stats <- function(rows, baseline_rows = rows, stat_groups = NULL, team_id = NULL, min_matches = 5L, limit = 50L) {
+  normalized <- normalize_home_edge_stat_groups(stat_groups)
+  if (is.null(team_id) || !nrow(rows)) {
+    return(home_edge_team_venue_stat_empty())
+  }
+
+  rows <- home_edge_prepare_rows(rows, normalized$requested_stat_keys)
+  baseline_rows <- home_edge_prepare_rows(baseline_rows, normalized$requested_stat_keys)
+  rows <- rows[rows$team_id == as.integer(team_id), , drop = FALSE]
+  baseline_rows <- baseline_rows[baseline_rows$team_id == as.integer(team_id), , drop = FALSE]
+  if (!nrow(rows) || !nrow(baseline_rows)) {
+    return(home_edge_team_venue_stat_empty())
+  }
+
+  venue_names <- sort(unique(rows$venue_name))
+  summary_rows <- lapply(venue_names, function(venue_name_value) {
+    venue_rows <- rows[rows$venue_name == venue_name_value, , drop = FALSE]
+    other_rows <- baseline_rows[baseline_rows$venue_name != venue_name_value, , drop = FALSE]
+    if (nrow(venue_rows) < min_matches || !nrow(other_rows)) {
+      return(NULL)
+    }
+
+    venue_team_name <- venue_rows$team_name[[1]]
+    lapply(seq_along(normalized$requested_stat_groups), function(index) {
+      group_name <- normalized$requested_stat_groups[[index]]
+      group <- normalized$resolved[[group_name]]
+      venue_metric <- home_edge_stat_metric(venue_rows, group$stat_key)
+      other_metric <- home_edge_stat_metric(other_rows, group$stat_key)
+      data.frame(
+        team_id = as.integer(team_id),
+        team_name = venue_team_name,
+        venue_name = venue_name_value,
+        stat_group = group$stat_group,
+        stat_key = group$stat_key,
+        stat_label = group$stat_label,
+        matches = as.integer(venue_metric$matches),
+        venue_average = venue_metric$average,
+        other_home_venues_average = other_metric$average,
+        lift = if (is.na(venue_metric$average) || is.na(other_metric$average)) NA_real_ else round(venue_metric$average - other_metric$average, 3),
+        preferred_direction = group$preferred_direction,
+        stringsAsFactors = FALSE
+      )
+    })
+  })
+
+  result_rows <- list()
+  for (venue_result in summary_rows) {
+    result_rows <- c(result_rows, Filter(Negate(is.null), venue_result))
+  }
+  result <- if (length(result_rows)) do.call(rbind, result_rows) else NULL
+  if (is.null(result)) {
+    return(home_edge_team_venue_stat_empty())
+  }
+  result <- result[order(result$venue_name, result$stat_group), , drop = FALSE]
+  result <- utils::head(result, limit)
+  row.names(result) <- NULL
+  result
+}
+
+empty_home_venue_breakdown_summary <- function(filters = list()) {
+  list(
+    filters = filters,
+    stat_summary = home_edge_stat_rows_empty(),
+    opposition_summary_overall = home_edge_opposition_overall_empty(),
+    opposition_summary_by_stat = home_edge_opposition_by_stat_empty(),
+    team_venue_stat_summary = home_edge_team_venue_stat_empty()
+  )
+}
+
+fetch_home_venue_breakdown <- function(conn, seasons = NULL, team_id = NULL, venue_name = NULL, stat_groups = NULL, min_matches = 5L, limit = 50L) {
+  bounded_limit <- suppressWarnings(as.integer(limit %||% 50L))
+  if (is.na(bounded_limit) || bounded_limit < 1L) {
+    bounded_limit <- 1L
+  }
+  bounded_limit <- min(bounded_limit, 50L)
+  use_match_stats <- has_team_match_stats(conn)
+  normalized <- normalize_home_edge_stat_groups(stat_groups)
+
+  selected_query <- build_home_edge_breakdown_base_query(
+    seasons = seasons,
+    team_id = team_id,
+    venue_name = venue_name,
+    stat_groups = normalized,
+    use_match_stats = use_match_stats
+  )
+  selected_rows <- query_rows(conn, selected_query$query, selected_query$params)
+  selected_rows <- home_edge_prepare_rows(selected_rows, normalized$requested_stat_keys)
+
+  baseline_rows <- if (!is.null(venue_name) || !is.null(team_id)) {
+    baseline_query <- build_home_edge_breakdown_base_query(
+      seasons = seasons,
+      team_id = team_id,
+      venue_name = NULL,
+      stat_groups = normalized,
+      use_match_stats = use_match_stats
+    )
+    query_rows(conn, baseline_query$query, baseline_query$params)
+  } else {
+    selected_rows
+  }
+  baseline_rows <- home_edge_prepare_rows(baseline_rows, normalized$requested_stat_keys)
+
+  list(
+    filters = list(
+      seasons = if (!is.null(seasons)) as.integer(seasons) else NULL,
+      team_id = if (!is.null(team_id)) as.integer(team_id) else NULL,
+      venue_name = if (!is.null(venue_name)) as.character(venue_name) else NULL,
+      requested_stat_groups = normalized$requested_stat_groups,
+      requested_stat_keys = normalized$requested_stat_keys,
+      available_stat_groups = normalized$available_stat_groups,
+      unavailable_stat_groups = normalized$unavailable_stat_groups,
+      min_matches = as.integer(min_matches),
+      limit = as.integer(bounded_limit)
+    ),
+    stat_summary = summarise_home_edge_stat_rows(
+      selected_rows,
+      baseline_rows = baseline_rows,
+      stat_groups = normalized,
+      min_matches = min_matches,
+      limit = bounded_limit
+    ),
+    opposition_summary_overall = summarise_home_edge_opposition_overall(
+      selected_rows,
+      baseline_rows = baseline_rows,
+      min_matches = min_matches,
+      limit = bounded_limit
+    ),
+    opposition_summary_by_stat = summarise_home_edge_opposition_by_stat(
+      selected_rows,
+      baseline_rows = baseline_rows,
+      stat_groups = normalized,
+      min_matches = min_matches,
+      limit = bounded_limit
+    ),
+    team_venue_stat_summary = summarise_home_edge_team_venue_stats(
+      selected_rows,
+      baseline_rows = baseline_rows,
+      stat_groups = normalized,
+      team_id = team_id,
+      min_matches = min_matches,
+      limit = bounded_limit
+    )
+  )
+}
+
 # Netball Wins Above Replacement (nWAR) constants.
 #
 # Scoring is based on the 2025 Fantasy Netball Blog scoring system:
