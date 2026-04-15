@@ -706,12 +706,27 @@ sys.source(file.path(getwd(), 'api', 'R', 'helpers.R'), envir = home_edge_breakd
 home_edge_breakdown_helpers_env$api_log <- function(...) NULL
 assert_true(is.function(home_edge_breakdown_helpers_env$build_home_edge_stat_groups), 'Expected build_home_edge_stat_groups to be exported from helpers.R.')
 assert_true(is.function(home_edge_breakdown_helpers_env$normalize_home_edge_stat_groups), 'Expected normalize_home_edge_stat_groups to be exported from helpers.R.')
+assert_true(is.function(home_edge_breakdown_helpers_env$build_home_venue_breakdown_rows_query), 'Expected build_home_venue_breakdown_rows_query to be exported from helpers.R.')
 assert_true(is.function(home_edge_breakdown_helpers_env$fetch_home_venue_breakdown), 'Expected fetch_home_venue_breakdown to be exported from helpers.R.')
 home_edge_groups <- home_edge_breakdown_helpers_env$normalize_home_edge_stat_groups(c('generalPlayTurnovers', 'contactPenalties', 'obstructionPenalties', 'penalties', 'heldBalls'))
 assert_true(identical(home_edge_groups$requested_stat_groups, c('generalPlayTurnovers', 'contactPenalties', 'obstructionPenalties', 'penalties', 'heldBalls')), 'Expected Home Edge stat groups to preserve the requested group names.')
 assert_true(identical(unname(home_edge_groups$requested_stat_keys), c('generalPlayTurnovers', 'contactPenalties', 'obstructionPenalties', 'penalties', 'turnoverHeld')), 'Expected Home Edge stat groups to map to canonical stat keys.')
 assert_true('turnoverHeld' %in% home_edge_groups$requested_stat_keys, 'Expected heldBalls to map to turnoverHeld.')
 assert_true(!length(home_edge_groups$unavailable_stat_groups), 'Expected Home Edge stat groups to avoid discovery-based unavailable tracking.')
+
+home_breakdown_rows_query <- home_edge_breakdown_helpers_env$build_home_venue_breakdown_rows_query(
+  seasons = c(2023L, 2024L),
+  team_id = 8118L,
+  venue_name = 'Qudos Bank Arena'
+)
+home_breakdown_rows_sql <- normalize_sql(home_breakdown_rows_query$query)
+assert_contains(home_breakdown_rows_sql, 'generalplayturnovers AS "generalPlayTurnovers"', 'Expected Home Edge breakdown rows query to alias lower-case generalPlayTurnovers columns back to camelCase.')
+assert_contains(home_breakdown_rows_sql, 'turnoverheld AS "turnoverHeld"', 'Expected Home Edge breakdown rows query to alias lower-case turnoverHeld columns back to camelCase.')
+assert_contains(home_breakdown_rows_sql, 'contactpenalties AS "contactPenalties"', 'Expected Home Edge breakdown rows query to alias lower-case contactPenalties columns back to camelCase.')
+assert_contains(home_breakdown_rows_sql, 'obstructionpenalties AS "obstructionPenalties"', 'Expected Home Edge breakdown rows query to alias lower-case obstructionPenalties columns back to camelCase.')
+assert_contains(home_breakdown_rows_sql, 'season IN (?season_1, ?season_2)', 'Expected Home Edge breakdown rows query to filter requested seasons.')
+assert_contains(home_breakdown_rows_sql, 'team_id = ?team_id', 'Expected Home Edge breakdown rows query to filter requested teams.')
+assert_contains(home_breakdown_rows_sql, 'venue_name = ?venue_name', 'Expected Home Edge breakdown rows query to filter requested venues.')
 
 cat("Checking /home-venue-breakdown multi-year stat payload...\n")
 breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(
@@ -735,11 +750,13 @@ first_opposition_summary_by_stat <- first_record(breakdown$opposition_summary_by
 assert_true(all(c('opponent_id', 'opponent_name', 'stat_group', 'stat_key', 'stat_label', 'matches', 'venue_average', 'baseline_average', 'lift', 'preferred_direction') %in% names(first_opposition_summary_by_stat)), 'Expected /home-venue-breakdown opposition_summary_by_stat rows to expose the documented fields.')
 
 cat("Checking /home-venue-breakdown team-and-venue slice...\n")
+candidate_breakdown_team_id <- as.character(scalar_value(first_team_venue_summary$team_id))
+candidate_breakdown_venue_name <- as.character(scalar_value(first_team_venue_summary$venue_name))
 team_breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(
-  seasons = '2024',
-  team_id = '8118',
-  venue_name = 'Qudos Bank Arena',
-  stat_groups = 'generalPlayTurnovers,penalties',
+  season = as.character(default_season),
+  team_id = candidate_breakdown_team_id,
+  venue_name = candidate_breakdown_venue_name,
+  stat_groups = 'generalPlayTurnovers,contactPenalties,obstructionPenalties,penalties,heldBalls',
   min_matches = '1',
   limit = '5'
 ))
@@ -748,6 +765,13 @@ assert_true(is.list(team_breakdown$stat_summary) && length(team_breakdown$stat_s
 assert_true(is.list(team_breakdown$team_venue_stat_summary) && length(team_breakdown$team_venue_stat_summary) >= 1L, 'Expected team-filtered /home-venue-breakdown to return team_venue_stat_summary rows.')
 first_team_venue_stat_summary <- first_record(team_breakdown$team_venue_stat_summary)
 assert_true(all(c('team_id', 'team_name', 'venue_name', 'stat_group', 'stat_key', 'stat_label', 'matches', 'venue_average', 'other_home_venues_average', 'lift', 'preferred_direction') %in% names(first_team_venue_stat_summary)), 'Expected /home-venue-breakdown team_venue_stat_summary rows to expose the documented fields.')
+non_penalty_team_rows <- Filter(function(row) {
+  stat_key <- as.character(scalar_value(row$stat_key %||% ''))
+  venue_average <- suppressWarnings(as.numeric(as.character(scalar_value(row$venue_average %||% NA))))
+  matches <- suppressWarnings(as.integer(as.character(scalar_value(row$matches %||% 0L))))
+  stat_key != 'penalties' && !is.na(venue_average) && !is.na(matches) && matches >= 1L
+}, team_breakdown$team_venue_stat_summary)
+assert_true(length(non_penalty_team_rows) >= 1L, 'Expected team-filtered /home-venue-breakdown to return at least one non-penalty stat row with a numeric venue average.')
 
 cat("Checking held balls Home Edge stat reporting...\n")
 held_balls_breakdown <- request_json(base_url, '/home-venue-breakdown', query = list(

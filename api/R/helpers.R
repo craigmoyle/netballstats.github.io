@@ -3306,7 +3306,11 @@ build_home_venue_breakdown_rows_query <- function(seasons = NULL, team_id = NULL
     "SELECT match_id, season, competition_phase, round_number, venue_name,",
     "team_id, team_name, opponent_id, opponent_name,",
     "team_score, opponent_score, margin, won, draw,",
-    "generalPlayTurnovers, turnoverHeld, contactPenalties, obstructionPenalties, penalties",
+    "generalplayturnovers AS \"generalPlayTurnovers\",",
+    "turnoverheld AS \"turnoverHeld\",",
+    "contactpenalties AS \"contactPenalties\",",
+    "obstructionpenalties AS \"obstructionPenalties\",",
+    "penalties",
     "FROM home_venue_breakdown_rows",
     "WHERE 1 = 1"
   )
