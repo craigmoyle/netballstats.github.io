@@ -33,7 +33,7 @@
         <div class="hero-copy">
           <p class="eyebrow">Arena splits and home-court context</p>
           <h1>Home Court Advantage</h1>
-          <p class="intro-copy">See how much the whistle, the margin, and the win rate tilt at home — then narrow to one club to compare its arenas against each other.</p>
+          <p class="intro-copy">Measure the home lift, then narrow to one club to see which floor sharpens it most.</p>
         </div>
 
         <aside class="hero-aside" aria-label="Home court advantage spotlight">
@@ -53,7 +53,7 @@
           <div>
             <p class="panel__eyebrow">Comparison desk</p>
             <h2>Choose the slice</h2>
-            <p class="panel__lead">Start with a season and minimum sample. Add a team when you want to see which arena gives that club the biggest home lift.</p>
+            <p class="panel__lead">Set the archive frame, then add a club if you want venue-by-venue splits.</p>
           </div>
           <p class="muted" id="home-edge-meta">Loading the archive frame…</p>
         </div>
@@ -110,38 +110,46 @@
           <p id="home-edge-focus-copy" class="panel__lead">Pulling the strongest home-court advantage from the current filter set.</p>
         </div>
 
-        <section class="summary-band" aria-label="League home-court advantage summary">
-          <article class="summary-card summary-card--accent">
-            <span class="summary-card__label">Matches</span>
-            <span id="home-edge-matches" class="summary-card__value">-</span>
-          </article>
-          <article class="summary-card">
-            <span class="summary-card__label">Home win rate</span>
-            <span id="home-edge-home-win-rate" class="summary-card__value">-</span>
-          </article>
-          <article class="summary-card">
-            <span class="summary-card__label">Avg home margin</span>
-            <span id="home-edge-home-margin" class="summary-card__value">-</span>
-          </article>
-          <article class="summary-card">
-            <span class="summary-card__label">Penalty edge</span>
-            <span id="home-edge-home-penalty" class="summary-card__value">-</span>
-          </article>
-        </section>
+        <div class="home-edge-scoreboard">
+          <section class="summary-band home-edge-summary-band" aria-label="League home-court advantage summary">
+            <article class="summary-card summary-card--accent">
+              <span class="summary-card__label">Matches</span>
+              <span id="home-edge-matches" class="summary-card__value">-</span>
+            </article>
+            <article class="summary-card">
+              <span class="summary-card__label">Home win rate</span>
+              <span id="home-edge-home-win-rate" class="summary-card__value">-</span>
+            </article>
+            <article class="summary-card">
+              <span class="summary-card__label">Avg home margin</span>
+              <span id="home-edge-home-margin" class="summary-card__value">-</span>
+            </article>
+            <article class="summary-card">
+              <span class="summary-card__label">Penalty edge</span>
+              <span id="home-edge-home-penalty" class="summary-card__value">-</span>
+            </article>
+          </section>
 
-        <div class="home-edge-focus__facts" aria-label="Selected home-court advantage spotlight">
-          <article class="summary-card">
-            <span class="summary-card__label">Spotlight sample</span>
-            <span id="home-edge-spotlight-sample" class="summary-card__value summary-card__value--small">-</span>
-          </article>
-          <article class="summary-card">
-            <span class="summary-card__label">Margin lift</span>
-            <span id="home-edge-spotlight-margin" class="summary-card__value summary-card__value--small">-</span>
-          </article>
-          <article class="summary-card">
-            <span class="summary-card__label">Penalty lift</span>
-            <span id="home-edge-spotlight-penalty" class="summary-card__value summary-card__value--small">-</span>
-          </article>
+          <section class="home-edge-focus-panel" aria-label="Selected home-court advantage spotlight">
+            <div class="home-edge-focus-panel__header">
+              <p class="panel__eyebrow">Venue spotlight</p>
+              <p class="home-edge-focus-panel__copy">Keep the active venue in view while you scan the ladder and stat shifts.</p>
+            </div>
+            <div class="home-edge-focus__facts">
+              <article class="summary-card">
+                <span class="summary-card__label">Spotlight sample</span>
+                <span id="home-edge-spotlight-sample" class="summary-card__value summary-card__value--small">-</span>
+              </article>
+              <article class="summary-card">
+                <span class="summary-card__label">Margin lift</span>
+                <span id="home-edge-spotlight-margin" class="summary-card__value summary-card__value--small">-</span>
+              </article>
+              <article class="summary-card">
+                <span class="summary-card__label">Penalty lift</span>
+                <span id="home-edge-spotlight-penalty" class="summary-card__value summary-card__value--small">-</span>
+              </article>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -199,14 +207,14 @@
         </article>
       </section>
 
-      <section class="home-edge-stat-grid reveal" aria-label="Detailed home edge breakdown">
+      <section class="home-edge-primary-detail reveal" aria-label="Detailed home edge breakdown">
         <article class="panel home-edge-panel">
           <div class="panel__heading">
             <p class="panel__eyebrow">Stat influence</p>
             <h2>Which detailed stats move at this venue?</h2>
-            <p class="panel__lead">Compare each stat against the relevant home baseline to see what actually tilts at the selected venue.</p>
+            <p class="panel__lead">Hold the active venue against the home baseline to see what actually shifts.</p>
           </div>
-          <div class="table-wrapper">
+          <div class="table-wrapper home-edge-stat-table-shell">
             <table class="stack-table" aria-label="Stat influence comparison">
               <thead>
                 <tr>
@@ -214,62 +222,74 @@
                   <th scope="col">Venue avg</th>
                   <th scope="col">Baseline avg</th>
                   <th scope="col">Swing</th>
-                  <th scope="col">Cue</th>
                 </tr>
               </thead>
               <tbody id="home-edge-stat-body">
-                <tr><td colspan="5" class="empty-state" data-kicker="Loading">Loading stat influence…</td></tr>
+                <tr><td colspan="4" class="empty-state" data-kicker="Loading">Loading stat influence…</td></tr>
               </tbody>
             </table>
           </div>
         </article>
+      </section>
 
-        <article class="panel home-edge-panel">
-          <div class="panel__heading">
-            <p class="panel__eyebrow">Opposition impact</p>
-            <h2>Which opponents feel the venue most?</h2>
-            <p class="panel__lead">See the overall matchup shift before drilling into the active stat lens.</p>
-          </div>
-          <div class="table-wrapper">
-            <table class="stack-table" aria-label="Opposition impact comparison">
-              <thead>
-                <tr>
-                  <th scope="col">Opposition</th>
-                  <th scope="col">Matches</th>
-                  <th scope="col">Overall swing</th>
-                  <th scope="col">Control swing</th>
-                </tr>
-              </thead>
-              <tbody id="home-edge-opposition-body">
-                <tr><td colspan="4" class="empty-state" data-kicker="Loading">Loading opposition impact…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </article>
+      <section class="home-edge-secondary reveal" aria-label="Additional matchup context">
+        <details class="panel home-edge-disclosure">
+          <summary class="home-edge-disclosure__summary">
+            <div class="home-edge-disclosure__heading">
+              <p class="panel__eyebrow">Matchup context</p>
+              <h2>Open opponent-level splits</h2>
+              <p class="panel__lead">Use this only when you need the venue story broken down by opponent and active stat lens.</p>
+            </div>
+            <span class="home-edge-disclosure__hint" aria-hidden="true">More detail</span>
+          </summary>
 
-        <article class="panel home-edge-panel">
-          <div class="panel__heading">
-            <p class="panel__eyebrow">Opposition by stat</p>
-            <h2>Which opponents shift on the selected stat?</h2>
-            <p class="panel__lead">Use the stat lens to compare matchup averages against the baseline average for the current venue.</p>
+          <div class="home-edge-disclosure__body home-edge-secondary-grid">
+            <section class="home-edge-inline-section">
+              <div class="panel__heading">
+                <p class="panel__eyebrow">Opposition impact</p>
+                <h3>Which opponents feel the venue most?</h3>
+              </div>
+              <div class="table-wrapper">
+                <table class="stack-table" aria-label="Opposition impact comparison">
+                  <thead>
+                    <tr>
+                      <th scope="col">Opposition</th>
+                      <th scope="col">Matches</th>
+                      <th scope="col">Overall swing</th>
+                      <th scope="col">Control swing</th>
+                    </tr>
+                  </thead>
+                  <tbody id="home-edge-opposition-body">
+                    <tr><td colspan="4" class="empty-state" data-kicker="Loading">Loading opposition impact…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="home-edge-inline-section">
+              <div class="panel__heading">
+                <p class="panel__eyebrow">Opposition by stat</p>
+                <h3>Which opponents shift on the selected stat?</h3>
+              </div>
+              <div class="table-wrapper">
+                <table class="stack-table" aria-label="Opposition stat impact comparison">
+                  <thead>
+                    <tr>
+                      <th scope="col">Opposition</th>
+                      <th scope="col">Stat</th>
+                      <th scope="col">Venue avg</th>
+                      <th scope="col">Baseline avg</th>
+                      <th scope="col">Swing</th>
+                    </tr>
+                  </thead>
+                  <tbody id="home-edge-opposition-stat-body">
+                    <tr><td colspan="5" class="empty-state" data-kicker="Loading">Loading stat-specific opposition impact…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
-          <div class="table-wrapper">
-            <table class="stack-table" aria-label="Opposition stat impact comparison">
-              <thead>
-                <tr>
-                  <th scope="col">Opposition</th>
-                  <th scope="col">Stat</th>
-                  <th scope="col">Venue avg</th>
-                  <th scope="col">Baseline avg</th>
-                  <th scope="col">Swing</th>
-                </tr>
-              </thead>
-              <tbody id="home-edge-opposition-stat-body">
-                <tr><td colspan="5" class="empty-state" data-kicker="Loading">Loading stat-specific opposition impact…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </article>
+        </details>
       </section>
 
       <section class="panel reveal home-edge-panel">
@@ -277,7 +297,7 @@
           <div>
             <p class="panel__eyebrow">Arena-by-arena</p>
             <h2 id="home-edge-team-venue-heading">Which home floor gives the biggest lift?</h2>
-            <p id="home-edge-team-venue-lead" class="panel__lead">Choose one club above to isolate its home venues, or stay on all teams to see the strongest combinations in the archive slice.</p>
+            <p id="home-edge-team-venue-lead" class="panel__lead">Choose one club to isolate its home floors, or stay broad to rank the strongest combinations in the slice.</p>
           </div>
         </div>
         <div class="table-wrapper">
@@ -299,29 +319,35 @@
           </table>
         </div>
 
-        <section class="home-edge-team-venue-ledger" aria-labelledby="home-edge-team-venue-stat-heading">
-          <div class="panel__heading">
-            <p class="panel__eyebrow">Venue stat ledger</p>
-            <h3 id="home-edge-team-venue-stat-heading">Which stat splits explain the club&apos;s venue edge?</h3>
-            <p class="panel__lead">Compare the selected club&apos;s home venues side by side to see which detailed stats drive the lift.</p>
+        <details id="home-edge-team-venue-ledger-disclosure" class="home-edge-team-venue-ledger">
+          <summary class="home-edge-disclosure__summary">
+            <div class="home-edge-disclosure__heading">
+              <p class="panel__eyebrow">Venue stat ledger</p>
+              <h3 id="home-edge-team-venue-stat-heading">Open the club venue stat ledger</h3>
+              <p class="panel__lead">Use this when you want the club&apos;s home floors compared stat by stat.</p>
+            </div>
+            <span class="home-edge-disclosure__hint" aria-hidden="true">More detail</span>
+          </summary>
+
+          <div class="home-edge-disclosure__body">
+            <div class="table-wrapper">
+              <table class="stack-table" aria-label="Venue stat ledger">
+                <thead>
+                  <tr>
+                    <th scope="col">Venue</th>
+                    <th scope="col">Stat</th>
+                    <th scope="col">Home avg</th>
+                    <th scope="col">Other home avg</th>
+                    <th scope="col">Swing</th>
+                  </tr>
+                </thead>
+                <tbody id="home-edge-team-venue-stat-body">
+                  <tr><td colspan="5" class="empty-state" data-kicker="Loading">Loading venue stat ledger…</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div class="table-wrapper">
-            <table class="stack-table" aria-label="Venue stat ledger">
-              <thead>
-                <tr>
-                  <th scope="col">Venue</th>
-                  <th scope="col">Stat</th>
-                  <th scope="col">Home avg</th>
-                  <th scope="col">Other home avg</th>
-                  <th scope="col">Swing</th>
-                </tr>
-              </thead>
-              <tbody id="home-edge-team-venue-stat-body">
-                <tr><td colspan="5" class="empty-state" data-kicker="Loading">Loading venue stat ledger…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+        </details>
       </section>
     </main>
   </body>

@@ -65,6 +65,7 @@ const elements = {
   venueTable: document.getElementById("home-edge-venue-table"),
   teamTable: document.getElementById("home-edge-team-table"),
   teamVenueTable: document.getElementById("home-edge-team-venue-table"),
+  teamVenueLedgerDisclosure: document.getElementById("home-edge-team-venue-ledger-disclosure"),
   statGroupsContainer: document.getElementById("home-edge-stat-groups"),
   statBody: document.getElementById("home-edge-stat-body"),
   oppositionBody: document.getElementById("home-edge-opposition-body"),
@@ -131,6 +132,10 @@ function wait(ms) {
 
 function renderMessageRow(tbody, colspan, message, kicker = "") {
   if (!tbody) return;
+  const table = tbody.closest("table");
+  const wrapper = tbody.closest(".table-wrapper");
+  table?.classList.add("is-empty");
+  wrapper?.classList.add("is-empty");
   const row = document.createElement("tr");
   const cell = document.createElement("td");
   cell.colSpan = colspan;
@@ -141,6 +146,14 @@ function renderMessageRow(tbody, colspan, message, kicker = "") {
   cell.textContent = message;
   row.appendChild(cell);
   tbody.replaceChildren(row);
+}
+
+function clearMessageRowState(tbody) {
+  if (!tbody) return;
+  const table = tbody.closest("table");
+  const wrapper = tbody.closest(".table-wrapper");
+  table?.classList.remove("is-empty");
+  wrapper?.classList.remove("is-empty");
 }
 
 function selectedTeamId() {
@@ -400,8 +413,8 @@ function renderLeagueSummary() {
   }
   if (elements.contextNote) {
     elements.contextNote.textContent = selectedTeamId()
-      ? `${selectedTeamName()} is being compared at home versus away, with venue rows showing how each home floor stacks up against the club's other home venues.`
-      : "Venue rows compare each arena to the league-wide home baseline, while team rows compare each club at home versus away in the same archive slice.";
+      ? `${selectedTeamName()} is being compared home versus away, with each home floor checked against the club's other venues.`
+      : "Venue rows compare each arena to the league home baseline, while team rows show each club at home versus away.";
   }
   if (elements.matches) elements.matches.textContent = formatNumber(scalarNumber(summary.matches));
   if (elements.homeWinRate) elements.homeWinRate.textContent = formatPercent(summary.home_win_rate);
@@ -526,8 +539,11 @@ function renderTeamVenueTable() {
   }
   if (elements.teamVenueLead) {
     elements.teamVenueLead.textContent = selectedTeamId()
-      ? `Each row compares ${teamName} at one home venue against the same club's other home venues in the current archive slice.`
-      : "These rows show the strongest team-and-venue combinations after comparing each club's home courts against its own alternatives.";
+      ? `${teamName} is being compared one home floor at a time against the club's other venues in this slice.`
+      : "These are the strongest team-and-venue combinations after each club is checked against its own alternatives.";
+  }
+  if (elements.teamVenueLedgerDisclosure) {
+    elements.teamVenueLedgerDisclosure.open = Boolean(selectedTeamId());
   }
 
   if (!rows.length) {
@@ -588,10 +604,11 @@ function formatBreakdownStatLabel(statGroup, statKey, fallbackLabel = "") {
 function renderStatSummary(rows) {
   if (!elements.statBody) return;
   if (!Array.isArray(rows) || !rows.length) {
-    renderMessageRow(elements.statBody, 5, "No stat influence data for the current filter set. Choose at least one stat lens.", "No data");
+    renderMessageRow(elements.statBody, 4, "No stat influence data for the current filter set. Choose at least one stat lens.", "No data");
     syncResponsiveTable(elements.statBody.closest("table"));
     return;
   }
+  clearMessageRowState(elements.statBody);
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -609,12 +626,15 @@ function renderStatSummary(rows) {
     baselineCell.textContent = formatSigned(row.baseline_average);
 
     const liftCell = document.createElement("td");
-    liftCell.textContent = formatSigned(row.lift);
+    const swingValue = document.createElement("span");
+    swingValue.className = "home-edge-swing-value";
+    swingValue.textContent = formatSigned(row.lift);
+    const swingCue = document.createElement("span");
+    swingCue.className = "home-edge-swing-cue";
+    swingCue.textContent = liftCue(row.lift, scalarText(row.preferred_direction));
+    liftCell.append(swingValue, swingCue);
 
-    const cueCell = document.createElement("td");
-    cueCell.textContent = liftCue(row.lift, scalarText(row.preferred_direction));
-
-    tr.append(statCell, venueCell, baselineCell, liftCell, cueCell);
+    tr.append(statCell, venueCell, baselineCell, liftCell);
     fragment.appendChild(tr);
   });
   elements.statBody.replaceChildren(fragment);
@@ -628,6 +648,7 @@ function renderOppositionSummary(rows) {
     syncResponsiveTable(elements.oppositionBody.closest("table"));
     return;
   }
+  clearMessageRowState(elements.oppositionBody);
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -659,6 +680,7 @@ function renderOppositionStatSummary(rows) {
     syncResponsiveTable(elements.oppositionStatBody.closest("table"));
     return;
   }
+  clearMessageRowState(elements.oppositionStatBody);
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -695,6 +717,7 @@ function renderTeamVenueStatSummary(rows) {
     syncResponsiveTable(elements.teamVenueStatBody.closest("table"));
     return;
   }
+  clearMessageRowState(elements.teamVenueStatBody);
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -755,7 +778,7 @@ async function loadBreakdown() {
   } catch (error) {
     if (breakdownToken !== state.breakdownToken) return;
     state.breakdown = null;
-    renderMessageRow(elements.statBody, 5, "Stat breakdown unavailable. Try again shortly.", "Archive note");
+    renderMessageRow(elements.statBody, 4, "Stat breakdown unavailable. Try again shortly.", "Archive note");
     renderMessageRow(elements.oppositionBody, 4, "Opposition breakdown unavailable. Try again shortly.", "Archive note");
     renderMessageRow(elements.oppositionStatBody, 5, "Stat opposition breakdown unavailable. Try again shortly.", "Archive note");
     renderMessageRow(elements.teamVenueStatBody, 5, "Venue stat ledger unavailable. Try again shortly.", "Archive note");
