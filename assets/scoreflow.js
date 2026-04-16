@@ -414,8 +414,8 @@ async function loadScoreflowData() {
     fetchJson("/scoreflow-team-summary", teamParams)
   ]);
 
-  state.gameRecords = Array.isArray(records) ? records : [];
-  state.teamSummary = Array.isArray(teams) ? teams : [];
+  state.gameRecords = Array.isArray(records?.data) ? records.data : [];
+  state.teamSummary = Array.isArray(teams?.data) ? teams.data : [];
 }
 
 async function loadMetadata(retries = 1) {
