@@ -278,7 +278,7 @@ function renderRows(rows, subjectType = "player") {
         entry.season != null ? String(entry.season) : "--",
         formatNumber(entry.round_number),
         formatNumber(entry.total_value),
-        formatDate(entry.local_start_time)
+        formatDate(entry.local_start_time, { includeTime: true })
       ];
     } else {
       const playerCell = document.createElement("td");
@@ -299,7 +299,7 @@ function renderRows(rows, subjectType = "player") {
         entry.season != null ? String(entry.season) : "--",
         formatNumber(entry.round_number),
         formatNumber(entry.total_value),
-        formatDate(entry.local_start_time)
+        formatDate(entry.local_start_time, { includeTime: true })
       ];
     }
 

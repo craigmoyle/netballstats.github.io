@@ -677,12 +677,12 @@ function applyMeta(meta) {
 
 function renderSummary(summary) {
   if (elements.heroTotalGoals) elements.heroTotalGoals.textContent = formatNumber(summary.total_goals);
-  if (elements.heroRefreshNote) elements.heroRefreshNote.textContent = "Updated " + formatDate(summary.refreshed_at);
+  if (elements.heroRefreshNote) elements.heroRefreshNote.textContent = "Updated " + formatDate(summary.refreshed_at, { includeTime: true });
   elements.summaryMatches.textContent = formatNumber(summary.total_matches);
   if (elements.summaryTeams) elements.summaryTeams.textContent = formatNumber(summary.total_teams);
   elements.summaryPlayers.textContent = formatNumber(summary.total_players);
   if (elements.summaryGoals) elements.summaryGoals.textContent = formatNumber(summary.total_goals);
-  elements.summaryRefreshed.textContent = formatDate(summary.refreshed_at);
+  elements.summaryRefreshed.textContent = formatDate(summary.refreshed_at, { includeTime: true });
 }
 
 function renderMatches(matches) {
@@ -700,7 +700,7 @@ function renderMatches(matches) {
       createCell(`R${match.round_number} G${match.game_number}`),
       createMatchResultCell(match),
       createCell(match.venue_name || "-"),
-      createCell(formatDate(match.local_start_time))
+      createCell(formatDate(match.local_start_time, { includeTime: true }))
     );
     fragment.appendChild(row);
   });
@@ -729,7 +729,7 @@ function renderTeamLeaders(rows) {
         createCell(`${rowData.season}`),
         createCell(`R${rowData.round_number}`),
         createCell(formatNumber(rowData.total_value)),
-        createCell(formatDate(rowData.local_start_time))
+        createCell(formatDate(rowData.local_start_time, { includeTime: true }))
       );
     } else {
       row.append(
@@ -769,7 +769,7 @@ function renderPlayerLeaders(rows) {
         createCell(`${rowData.season}`),
         createCell(`R${rowData.round_number}`),
         createCell(formatNumber(rowData.total_value)),
-        createCell(formatDate(rowData.local_start_time))
+        createCell(formatDate(rowData.local_start_time, { includeTime: true }))
       );
     } else {
       row.append(
