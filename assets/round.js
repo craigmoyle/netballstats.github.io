@@ -1,12 +1,16 @@
 (function () {
-  const {
-    showStatusBanner = () => {},
-    cycleStatusBanner = () => {},
-    fetchJson,
-    formatNumber,
-    formatStatLabel = (stat) => stat,
-    syncResponsiveTable = () => {}
-  } = window.NetballStatsUI || {};
+const {
+  showStatusBanner = () => {},
+  cycleStatusBanner = () => {},
+  clearEmptyTableState = () => {},
+  fetchJson,
+  formatDate,
+  formatNumber,
+  formatStatLabel = (stat) => stat,
+  playerProfileUrl = (playerId) => `/player/${encodeURIComponent(playerId)}/`,
+  renderEmptyTableRow = () => {},
+  syncResponsiveTable = () => {}
+} = window.NetballStatsUI || {};
 
   const elements = {
     status: document.querySelector("#round-status"),
@@ -36,17 +40,6 @@
   const numberFormatter = new Intl.NumberFormat("en-AU", {
     maximumFractionDigits: 1
   });
-  const dateFormatter = new Intl.DateTimeFormat("en-AU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric"
-  });
-  const dateTimeFormatter = new Intl.DateTimeFormat("en-AU", {
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit"
-  });
   const loadingMessages = [
     "Loading the latest round…",
     "Loading standout lines…",
@@ -66,26 +59,6 @@
     }
 
     return value;
-  }
-
-  function formatDate(value, { includeTime = false } = {}) {
-    value = unwrapValue(value);
-
-    if (!value) {
-      return "--";
-    }
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-      return `${value}`;
-    }
-
-    return includeTime ? dateTimeFormatter.format(date) : dateFormatter.format(date);
-  }
-
-  function playerProfileUrl(playerId) {
-    playerId = unwrapValue(playerId);
-    return `/player/${encodeURIComponent(playerId)}/`;
   }
 
   function buildQuery() {
@@ -116,14 +89,7 @@
   }
 
   function clearTable(tableBody, message) {
-    tableBody.replaceChildren();
-    const row = document.createElement("tr");
-    const cell = document.createElement("td");
-    cell.colSpan = tableBody.parentElement.querySelectorAll("thead th").length;
-    cell.textContent = message;
-    row.appendChild(cell);
-    tableBody.appendChild(row);
-    syncResponsiveTable(tableBody.closest("table"));
+    renderEmptyTableRow(tableBody, message);
   }
 
   function createCell(content, className, { primary = false } = {}) {
@@ -232,7 +198,7 @@
 
       const time = document.createElement("span");
       time.className = "round-match-card__time";
-      time.textContent = formatDate(match.local_start_time, { includeTime: true });
+      time.textContent = formatDate(match.local_start_time, { includeTime: true, includeYear: false });
 
       top.append(kicker, time);
 
@@ -360,6 +326,7 @@
       return;
     }
 
+    clearEmptyTableState(tableBody);
     const fragment = document.createDocumentFragment();
 
     rows.forEach((entry) => {
@@ -399,7 +366,7 @@
     elements.heroLabel.textContent = seasonLabel;
     elements.heading.textContent = seasonLabel;
     elements.meta.textContent = unwrapValue(payload.round_end_time)
-      ? `Completed ${formatDate(payload.round_end_time, { includeTime: true })}.`
+      ? `Completed ${formatDate(payload.round_end_time, { includeTime: true, includeYear: false })}.`
       : "Latest completed fixtures.";
     elements.heroSummary.textContent = `${formatNumber(summary.total_matches)} matches · ${formatNumber(summary.total_goals)} goals · biggest margin ${formatNumber(summary.biggest_margin)}`;
     elements.intro.textContent = "Every scoreline, standout line, and low-turnover result from the round.";

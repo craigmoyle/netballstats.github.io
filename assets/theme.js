@@ -1,7 +1,10 @@
 /* Theme: FOUC prevention (runs sync in <head> before stylesheet) */
 (() => {
-  const t = localStorage.getItem('ns-theme');
-  if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  try {
+    if (window.localStorage?.getItem('ns-theme') === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  } catch (_) {}
 })();
 
 /* Theme: toggle initialisation (waits for DOM) */
@@ -30,10 +33,16 @@ document.addEventListener('DOMContentLoaded', () => {
         setButtonContent('dark', 'light');
       }
     };
-    applyTheme(localStorage.getItem('ns-theme') || 'dark');
+    let savedTheme = 'dark';
+    try {
+      savedTheme = window.localStorage?.getItem('ns-theme') || 'dark';
+    } catch (_) {}
+    applyTheme(savedTheme);
     btn.addEventListener('click', () => {
       const next = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-      localStorage.setItem('ns-theme', next);
+      try {
+        window.localStorage?.setItem('ns-theme', next);
+      } catch (_) {}
       applyTheme(next);
     });
   }

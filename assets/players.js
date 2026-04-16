@@ -1,8 +1,11 @@
 const {
   buildUrl,
-  cycleStatusBanner = () => {},
+  debounce = (fn) => fn,
   fetchJson,
-  formatNumber
+  formatNumber,
+  playerProfileUrl = (playerId) => `/player/${encodeURIComponent(playerId)}/`,
+  showElementLoadingStatus = () => {},
+  showElementStatus = () => {}
 } = window.NetballStatsUI || {};
 const DIRECTORY_LOADING_MESSAGES = [
   "Loading player directory…",
@@ -27,30 +30,11 @@ const elements = {
 };
 
 function showStatus(message, tone = "neutral", options = {}) {
-  if (!message) {
-    window.NetballStatsUI?.showStatusBanner?.(elements.directoryStatus, "");
-    return;
-  }
-  window.NetballStatsUI?.showStatusBanner?.(elements.directoryStatus, message, tone, options);
+  showElementStatus(elements.directoryStatus, message, tone, options);
 }
 
 function showLoadingStatus(messages, kicker) {
-  cycleStatusBanner(elements.directoryStatus, messages, {
-    tone: "loading",
-    kicker
-  });
-}
-
-function playerProfileUrl(playerId) {
-  return `/player/${encodeURIComponent(playerId)}/`;
-}
-
-function debounce(fn, ms) {
-  let timer;
-  return function (...args) {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn.apply(this, args), ms);
-  };
+  showElementLoadingStatus(elements.directoryStatus, messages, kicker);
 }
 
 function renderPlayers(players) {

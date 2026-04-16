@@ -23,11 +23,18 @@ const {
 } = window.NetballCharts;
 const {
   buildUrl,
-  cycleStatusBanner = () => {},
+  clearEmptyTableState = () => {},
+  debounce = (fn) => fn,
+  getCheckedValues = () => [],
   fetchJson,
   formatStatLabel = (stat) => stat,
   getThemePalette = () => [...DEFAULT_CHART_PALETTE],
+  renderEmptyTableRow = () => {},
+  renderSeasonCheckboxes = () => {},
+  showElementLoadingStatus = () => {},
+  showElementStatus = () => {},
   statPrefersLowerValue = () => false,
+  setCheckedValues = () => {},
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
 const {
@@ -92,26 +99,11 @@ const elements = {
 };
 
 function showStatus(message, tone = "neutral", options = {}) {
-  if (!message) {
-    window.NetballStatsUI?.showStatusBanner?.(elements.statusBanner, "");
-    return;
-  }
-  window.NetballStatsUI?.showStatusBanner?.(elements.statusBanner, message, tone, options);
+  showElementStatus(elements.statusBanner, message, tone, options);
 }
 
 function showLoadingStatus(messages, kicker) {
-  cycleStatusBanner(elements.statusBanner, messages, {
-    tone: "loading",
-    kicker
-  });
-}
-
-function debounce(fn, delay = 200) {
-  let timeoutId = null;
-  return (...args) => {
-    window.clearTimeout(timeoutId);
-    timeoutId = window.setTimeout(() => fn(...args), delay);
-  };
+  showElementLoadingStatus(elements.statusBanner, messages, kicker);
 }
 
 function normaliseColour(value) {
@@ -199,17 +191,10 @@ function promptMessage() {
 function renderEmptyTable(message) {
   elements.compareTableHead.replaceChildren();
   elements.compareTableFoot.replaceChildren();
-  elements.compareTableBody.replaceChildren();
-
-  const row = document.createElement("tr");
-  row.className = "compare-table__placeholder";
-
-  const cell = document.createElement("td");
-  cell.colSpan = 2;
-  cell.textContent = message;
-  row.appendChild(cell);
-  elements.compareTableBody.appendChild(row);
-  syncResponsiveTable(elements.compareTableBody.closest("table"));
+  renderEmptyTableRow(elements.compareTableBody, message, {
+    colSpan: 2,
+    rowClassName: "compare-table__placeholder"
+  });
 }
 
 function clearComparison(message) {
@@ -226,35 +211,16 @@ function clearComparison(message) {
 }
 
 function setSelectedSeasons(values) {
-  const selected = new Set(values.map((value) => `${value}`));
-  elements.seasonChoices.querySelectorAll("input[type='checkbox']").forEach((input) => {
-    input.checked = selected.has(input.value);
-  });
+  setCheckedValues(elements.seasonChoices, values);
 }
 
 function getSelectedSeasons() {
-  return [...elements.seasonChoices.querySelectorAll("input[type='checkbox']:checked")]
-    .map((input) => input.value)
+  return getCheckedValues(elements.seasonChoices)
     .sort((left, right) => Number(right) - Number(left));
 }
 
 function renderSeasonChoices(seasons) {
-  elements.seasonChoices.replaceChildren();
-  seasons.forEach((season) => {
-    const label = document.createElement("label");
-    label.className = "season-choice";
-
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.name = "compare-season-choice";
-    input.value = `${season}`;
-
-    const text = document.createElement("span");
-    text.textContent = `${season}`;
-
-    label.append(input, text);
-    elements.seasonChoices.appendChild(label);
-  });
+  renderSeasonCheckboxes(elements.seasonChoices, seasons, { inputName: "compare-season-choice" });
 }
 
 function renderTeamChoices(teams) {
@@ -943,6 +909,7 @@ function createEntityHeaderContent(entity) {
 }
 
 function renderComparisonTable(rows, entities) {
+  clearEmptyTableState(elements.compareTableBody);
   const selectedSeasons = getSelectedSeasons();
   const seasons = (selectedSeasons.length
     ? selectedSeasons.map((season) => Number(season))

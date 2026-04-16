@@ -1,11 +1,12 @@
 const SUPER_SHOT_START_SEASON = 2020;
 const {
   buildUrl,
-  cycleStatusBanner = () => {},
   fetchJson,
   formatNumber,
   formatStatAbbrev = (stat) => stat,
   formatStatLabel = (stat) => stat,
+  showElementLoadingStatus = () => {},
+  showElementStatus = () => {},
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
 const {
@@ -72,18 +73,11 @@ const elements = {
 };
 
 function showStatus(message, tone = "neutral", options = {}) {
-  if (!message) {
-    window.NetballStatsUI?.showStatusBanner?.(elements.playerStatus, "");
-    return;
-  }
-  window.NetballStatsUI?.showStatusBanner?.(elements.playerStatus, message, tone, options);
+  showElementStatus(elements.playerStatus, message, tone, options);
 }
 
 function showLoadingStatus(messages, kicker) {
-  cycleStatusBanner(elements.playerStatus, messages, {
-    tone: "loading",
-    kicker
-  });
+  showElementLoadingStatus(elements.playerStatus, messages, kicker);
 }
 
 function createCell(text, label) {

@@ -1,9 +1,15 @@
 const {
   buildUrl,
-  cycleStatusBanner = () => {},
+  clearEmptyTableState = () => {},
   fetchJson,
   formatNumber,
   formatStatLabel = (stat) => stat,
+  getCheckedValues = () => [],
+  renderEmptyTableRow = () => {},
+  renderSeasonCheckboxes = () => {},
+  setCheckedValues = () => {},
+  showElementLoadingStatus = () => {},
+  showElementStatus = () => {},
   statPrefersLowerValue = () => false,
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
@@ -113,15 +119,11 @@ function formatSigned(value, digits = 2) {
 }
 
 function showStatus(message, tone = "neutral", options = {}) {
-  if (!message) {
-    window.NetballStatsUI?.showStatusBanner?.(elements.status, "");
-    return;
-  }
-  window.NetballStatsUI?.showStatusBanner?.(elements.status, message, tone, options);
+  showElementStatus(elements.status, message, tone, options);
 }
 
 function showLoadingStatus() {
-  cycleStatusBanner(elements.status, LOADING_MESSAGES, { tone: "loading", kicker: "Loading home-court advantage" });
+  showElementLoadingStatus(elements.status, LOADING_MESSAGES, "Loading home-court advantage");
 }
 
 function wait(ms) {
@@ -131,29 +133,7 @@ function wait(ms) {
 }
 
 function renderMessageRow(tbody, colspan, message, kicker = "") {
-  if (!tbody) return;
-  const table = tbody.closest("table");
-  const wrapper = tbody.closest(".table-wrapper");
-  table?.classList.add("is-empty");
-  wrapper?.classList.add("is-empty");
-  const row = document.createElement("tr");
-  const cell = document.createElement("td");
-  cell.colSpan = colspan;
-  cell.className = "empty-state";
-  if (kicker) {
-    cell.dataset.kicker = kicker;
-  }
-  cell.textContent = message;
-  row.appendChild(cell);
-  tbody.replaceChildren(row);
-}
-
-function clearMessageRowState(tbody) {
-  if (!tbody) return;
-  const table = tbody.closest("table");
-  const wrapper = tbody.closest(".table-wrapper");
-  table?.classList.remove("is-empty");
-  wrapper?.classList.remove("is-empty");
+  renderEmptyTableRow(tbody, message, { colSpan: colspan, kicker });
 }
 
 function selectedTeamId() {
@@ -212,18 +192,12 @@ function hydrateFiltersFromUrl() {
 }
 
 function getSelectedSeasons() {
-  if (!elements.seasonChoices) return [];
-  return [...elements.seasonChoices.querySelectorAll("input[type='checkbox']:checked")]
-    .map((input) => input.value)
+  return getCheckedValues(elements.seasonChoices)
     .sort((a, b) => Number(b) - Number(a));
 }
 
 function setSelectedSeasons(values) {
-  if (!elements.seasonChoices) return;
-  const selected = new Set(values.map((v) => `${v}`));
-  elements.seasonChoices.querySelectorAll("input[type='checkbox']").forEach((input) => {
-    input.checked = selected.has(input.value);
-  });
+  setCheckedValues(elements.seasonChoices, values);
 }
 
 function describeSeasons(seasons) {
@@ -241,27 +215,12 @@ function updateSeasonSummary() {
 }
 
 function renderSeasonChoices(seasons = []) {
-  if (!elements.seasonChoices) return;
-  elements.seasonChoices.replaceChildren();
-  seasons.forEach((season) => {
-    const label = document.createElement("label");
-    label.className = "season-choice";
-
-    const input = document.createElement("input");
-    input.type = "checkbox";
-    input.name = "home-edge-season-choice";
-    input.value = `${season}`;
-
-    const text = document.createElement("span");
-    text.textContent = `${season}`;
-
-    label.append(input, text);
-    elements.seasonChoices.appendChild(label);
-
-    input.addEventListener("change", () => {
+  renderSeasonCheckboxes(elements.seasonChoices, seasons, {
+    inputName: "home-edge-season-choice",
+    onChange: () => {
       updateSeasonSummary();
       syncUrlState();
-    });
+    }
   });
   // Hide the legacy select when checkboxes are active
   if (elements.season) elements.season.hidden = true;
@@ -608,7 +567,7 @@ function renderStatSummary(rows) {
     syncResponsiveTable(elements.statBody.closest("table"));
     return;
   }
-  clearMessageRowState(elements.statBody);
+  clearEmptyTableState(elements.statBody);
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -648,7 +607,7 @@ function renderOppositionSummary(rows) {
     syncResponsiveTable(elements.oppositionBody.closest("table"));
     return;
   }
-  clearMessageRowState(elements.oppositionBody);
+  clearEmptyTableState(elements.oppositionBody);
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -680,7 +639,7 @@ function renderOppositionStatSummary(rows) {
     syncResponsiveTable(elements.oppositionStatBody.closest("table"));
     return;
   }
-  clearMessageRowState(elements.oppositionStatBody);
+  clearEmptyTableState(elements.oppositionStatBody);
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -717,7 +676,7 @@ function renderTeamVenueStatSummary(rows) {
     syncResponsiveTable(elements.teamVenueStatBody.closest("table"));
     return;
   }
-  clearMessageRowState(elements.teamVenueStatBody);
+  clearEmptyTableState(elements.teamVenueStatBody);
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");

@@ -1,8 +1,13 @@
 const {
   buildUrl,
-  cycleStatusBanner = () => {},
+  clearEmptyTableState = () => {},
   fetchJson,
-  formatNumber
+  formatNumber,
+  playerProfileUrl = (playerId) => `/player/${encodeURIComponent(playerId)}/`,
+  renderEmptyTableRow = () => {},
+  showElementLoadingStatus = () => {},
+  showElementStatus = () => {},
+  syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
 const {
   trackEvent = () => {},
@@ -46,19 +51,11 @@ const elements = {
 };
 
 function showStatus(message, tone = "neutral", options = {}) {
-  if (!message) {
-    window.NetballStatsUI?.showStatusBanner?.(elements.nwarStatus, "");
-    return;
-  }
-  window.NetballStatsUI?.showStatusBanner?.(elements.nwarStatus, message, tone, options);
+  showElementStatus(elements.nwarStatus, message, tone, options);
 }
 
 function showLoadingStatus(messages, kicker) {
-  cycleStatusBanner(elements.nwarStatus, messages, { tone: "loading", kicker });
-}
-
-function playerProfileUrl(playerId) {
-  return `/player/${encodeURIComponent(playerId)}/`;
+  showElementLoadingStatus(elements.nwarStatus, messages, kicker);
 }
 
 function formatNwar(value) {
@@ -127,18 +124,7 @@ function buildContextLabel({ season, era, positionGroup, allSeasonsView }) {
 function renderMessageRow(message, kicker = "") {
   const tbody = elements.nwarTbody;
   if (!tbody) return;
-
-  const row = document.createElement("tr");
-  const cell = document.createElement("td");
-  cell.colSpan = 9;
-  cell.className = "empty-state";
-  if (kicker) {
-    cell.dataset.kicker = kicker;
-  }
-  cell.textContent = message;
-  row.appendChild(cell);
-  tbody.replaceChildren(row);
-  window.NetballStatsUI?.syncResponsiveTable?.(document.getElementById("nwar-table"));
+  renderEmptyTableRow(tbody, message, { colSpan: 9, kicker });
 }
 
 function renderTable(rows, usePerSeason = false) {
@@ -150,6 +136,7 @@ function renderTable(rows, usePerSeason = false) {
     return;
   }
 
+  clearEmptyTableState(tbody);
   const fragment = document.createDocumentFragment();
   rows.forEach((row, index) => {
     const rank = index + 1;
@@ -197,7 +184,7 @@ function renderTable(rows, usePerSeason = false) {
   });
 
   tbody.replaceChildren(fragment);
-  window.NetballStatsUI?.syncResponsiveTable?.(document.getElementById("nwar-table"));
+  syncResponsiveTable(document.getElementById("nwar-table"));
 }
 
 async function loadMetadata() {

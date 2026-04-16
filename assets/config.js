@@ -1,16 +1,8 @@
 (function () {
   const localHosts = new Set(["localhost", "127.0.0.1"]);
-  const pagesHosts = new Set(["netballstats.pages.dev"]);
-  const azureHosts = new Set(["ashy-hill-04f165c00.1.azurestaticapps.net", "statsball.net", "www.statsball.net"]);
   const configuredApiBaseUrl = localHosts.has(window.location.hostname)
     ? "http://127.0.0.1:8000"
-    : (pagesHosts.has(window.location.hostname)
-      || window.location.hostname.endsWith(".pages.dev"))
-      ? "https://netballstats-api.onrender.com"
-      : (azureHosts.has(window.location.hostname)
-        || window.location.hostname.endsWith(".azurestaticapps.net"))
-        ? "/api"
-      : "/api";
+    : "/api";
 
   window.NETBALL_STATS_CONFIG = Object.assign(
     {
@@ -154,6 +146,21 @@
     return LOW_IS_BETTER_STATS.has(cleanLabel(stat));
   }
 
+  function unwrapValue(value) {
+    if (Array.isArray(value)) {
+      if (!value.length) {
+        return null;
+      }
+      return value.length === 1 ? unwrapValue(value[0]) : value;
+    }
+
+    if (value && typeof value === "object" && !Array.isArray(value) && !Object.keys(value).length) {
+      return null;
+    }
+
+    return value;
+  }
+
   const statusState = new WeakMap();
 
   function clearStatusTimers(element) {
@@ -235,6 +242,18 @@
     statusState.set(element, { intervalId });
   }
 
+  function showElementStatus(element, message, tone = "neutral", options = {}) {
+    showStatusBanner(element, message || "", tone, options);
+  }
+
+  function showElementLoadingStatus(element, messages, kicker, options = {}) {
+    cycleStatusBanner(element, messages, {
+      ...options,
+      tone: "loading",
+      kicker
+    });
+  }
+
   function syncResponsiveTable(table) {
     if (!table) {
       return;
@@ -284,6 +303,24 @@
   const defaultTimeoutMs = 30000;
   const fmtInt = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
   const fmtDecimal = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 2 });
+  const dateFormatter = new Intl.DateTimeFormat("en-AU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+  });
+  const dateTimeFormatter = new Intl.DateTimeFormat("en-AU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+  const dateTimeFormatterNoYear = new Intl.DateTimeFormat("en-AU", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit"
+  });
 
   function buildUrl(path, params = {}) {
     const url = new URL(`${apiBaseUrl}${path}`, window.location.href);
@@ -344,6 +381,194 @@
     return (Number.isInteger(numeric) ? fmtInt : fmtDecimal).format(numeric);
   }
 
+  function formatDate(value, { includeTime = false, includeYear = true } = {}) {
+    value = unwrapValue(value);
+
+    if (!value) {
+      return "--";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return `${value}`;
+    }
+
+    if (includeTime) {
+      return (includeYear ? dateTimeFormatter : dateTimeFormatterNoYear).format(date);
+    }
+
+    return dateFormatter.format(date);
+  }
+
+  function playerProfileUrl(playerId) {
+    playerId = unwrapValue(playerId);
+    return `/player/${encodeURIComponent(playerId)}/`;
+  }
+
+  function debounce(fn, delay = 200) {
+    let timeoutId = null;
+    return function (...args) {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => fn.apply(this, args), delay);
+    };
+  }
+
+  function getCheckedValues(container) {
+    if (!container) {
+      return [];
+    }
+
+    return [...container.querySelectorAll("input[type='checkbox']:checked")]
+      .map((input) => input.value);
+  }
+
+  function setCheckedValues(container, values) {
+    if (!container) {
+      return;
+    }
+
+    const selected = new Set((values || []).map((value) => `${value}`));
+    container.querySelectorAll("input[type='checkbox']").forEach((input) => {
+      input.checked = selected.has(input.value);
+    });
+  }
+
+  function renderCheckboxChoices(container, values = [], {
+    className = "season-choice",
+    inputName = "",
+    selectedValues = [],
+    onChange = null,
+    renderLabel = (value) => `${value}`
+  } = {}) {
+    if (!container) {
+      return;
+    }
+
+    const selected = new Set((selectedValues || []).map((value) => `${value}`));
+    container.replaceChildren();
+    const fragment = document.createDocumentFragment();
+
+    values.forEach((value, index) => {
+      const label = document.createElement("label");
+      label.className = className;
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      if (inputName) {
+        input.name = inputName;
+      }
+      input.value = `${value}`;
+      input.checked = selected.has(input.value);
+
+      const text = document.createElement("span");
+      text.textContent = renderLabel(value, index);
+
+      label.append(input, text);
+      fragment.appendChild(label);
+
+      if (onChange) {
+        input.addEventListener("change", onChange);
+      }
+    });
+
+    container.appendChild(fragment);
+  }
+
+  function renderSeasonCheckboxes(container, seasons = [], options = {}) {
+    renderCheckboxChoices(container, seasons, {
+      className: "season-choice",
+      ...options
+    });
+  }
+
+  function normalisePathname(pathname = "/") {
+    const raw = `${pathname || "/"}`.trim() || "/";
+    if (raw === "/") {
+      return raw;
+    }
+    const withLeadingSlash = raw.startsWith("/") ? raw : `/${raw}`;
+    return withLeadingSlash.endsWith("/") ? withLeadingSlash : `${withLeadingSlash}/`;
+  }
+
+  function navRouteForPath(pathname = "/") {
+    const normalized = normalisePathname(pathname);
+    if (normalized.startsWith("/player/")) {
+      return "/players/";
+    }
+    return normalized;
+  }
+
+  function markCurrentNavLinks(root = document) {
+    if (!root?.querySelectorAll || !window.location) {
+      return;
+    }
+
+    const currentRoute = navRouteForPath(window.location.pathname);
+    root.querySelectorAll(".page-nav__link").forEach((link) => {
+      const href = link.getAttribute("href");
+      if (!href) {
+        link.removeAttribute("aria-current");
+        return;
+      }
+
+      let targetRoute = "";
+      try {
+        targetRoute = navRouteForPath(new URL(href, window.location.origin).pathname);
+      } catch {
+        link.removeAttribute("aria-current");
+        return;
+      }
+
+      if (targetRoute === currentRoute && currentRoute !== "/") {
+        link.setAttribute("aria-current", "page");
+      } else {
+        link.removeAttribute("aria-current");
+      }
+    });
+  }
+
+  function clearEmptyTableState(tableBody) {
+    if (!tableBody) {
+      return;
+    }
+
+    const table = tableBody.closest("table");
+    const wrapper = tableBody.closest(".table-wrapper");
+    table?.classList.remove("is-empty");
+    wrapper?.classList.remove("is-empty");
+  }
+
+  function renderEmptyTableRow(tableBody, message, {
+    colSpan,
+    kicker = "",
+    rowClassName = ""
+  } = {}) {
+    if (!tableBody) {
+      return;
+    }
+
+    const table = tableBody.closest("table");
+    const wrapper = tableBody.closest(".table-wrapper");
+    table?.classList.add("is-empty");
+    wrapper?.classList.add("is-empty");
+
+    const row = document.createElement("tr");
+    if (rowClassName) {
+      row.className = rowClassName;
+    }
+
+    const cell = document.createElement("td");
+    cell.colSpan = colSpan || tableBody.parentElement?.querySelectorAll("thead th").length || 1;
+    cell.className = "empty-state";
+    if (kicker) {
+      cell.dataset.kicker = kicker;
+    }
+    cell.textContent = message;
+    row.appendChild(cell);
+    tableBody.replaceChildren(row);
+    syncResponsiveTable(table || tableBody.closest("table"));
+  }
+
   function getThemePalette(fallback = []) {
     if (!window.getComputedStyle || !document?.documentElement) {
       return Array.isArray(fallback) ? [...fallback] : [];
@@ -366,6 +591,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    markCurrentNavLinks();
     document.querySelectorAll(".stack-table").forEach((table) => {
       syncResponsiveTable(table);
     });
@@ -376,14 +602,26 @@
     window.NetballStatsUI || {},
     {
       buildUrl,
+      clearEmptyTableState,
       clearStatusTimers,
       cycleStatusBanner,
+      debounce,
       fetchJson,
+      formatDate,
       formatNumber,
       formatStatAbbrev,
       formatStatLabel,
       getThemePalette,
+      getCheckedValues,
+      markCurrentNavLinks,
       showStatusBanner,
+      showElementLoadingStatus,
+      showElementStatus,
+      playerProfileUrl,
+      renderCheckboxChoices,
+      renderEmptyTableRow,
+      renderSeasonCheckboxes,
+      setCheckedValues,
       statPrefersLowerValue,
       syncResponsiveTable
     }

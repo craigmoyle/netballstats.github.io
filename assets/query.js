@@ -2,10 +2,15 @@ const config = window.NETBALL_STATS_CONFIG || {};
 const API_BASE_URL = (config.apiBaseUrl || "/api").replace(/\/$/, "");
 const {
   buildUrl,
-  cycleStatusBanner = () => {},
+  clearEmptyTableState = () => {},
   fetchJson,
+  formatDate,
   formatNumber,
   formatStatLabel = (stat) => stat,
+  playerProfileUrl = (playerId) => `/player/${encodeURIComponent(playerId)}/`,
+  renderEmptyTableRow = () => {},
+  showElementLoadingStatus = () => {},
+  showElementStatus = () => {},
   syncResponsiveTable = () => {}
 } = window.NetballStatsUI || {};
 const {
@@ -87,18 +92,11 @@ if (elements.apiBase) {
 }
 
 function showStatus(message, tone = "neutral", options = {}) {
-  if (!message) {
-    window.NetballStatsUI?.showStatusBanner?.(elements.queryStatus, "");
-    return;
-  }
-  window.NetballStatsUI?.showStatusBanner?.(elements.queryStatus, message, tone, options);
+  showElementStatus(elements.queryStatus, message, tone, options);
 }
 
 function showLoadingStatus(messages, kicker) {
-  cycleStatusBanner(elements.queryStatus, messages, {
-    tone: "loading",
-    kicker
-  });
+  showElementLoadingStatus(elements.queryStatus, messages, kicker);
 }
 
 function normalizeQuerySubjectType(subjectType = "player") {
@@ -123,34 +121,8 @@ function setTableSchema(subjectType = "player") {
   syncResponsiveTable(elements.queryTable);
 }
 
-function formatDate(value) {
-  if (!value) {
-    return "--";
-  }
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat("en-AU", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit"
-  }).format(date);
-}
-
 function clearTable(message) {
-  elements.queryRowsBody.replaceChildren();
-  const row = document.createElement("tr");
-  const cell = document.createElement("td");
-  cell.colSpan = elements.queryTableHead?.querySelectorAll("th").length || 1;
-  cell.textContent = message;
-  row.appendChild(cell);
-  elements.queryRowsBody.appendChild(row);
-  syncResponsiveTable(elements.queryRowsBody.closest("table"));
+  renderEmptyTableRow(elements.queryRowsBody, message);
 }
 
 function createInterpretationCard(label, value) {
@@ -167,10 +139,6 @@ function createInterpretationCard(label, value) {
 
   article.append(labelElement, valueElement);
   return article;
-}
-
-function playerProfileUrl(playerId) {
-  return `/player/${encodeURIComponent(playerId)}/`;
 }
 
 function setSummaryCards(questionType = "--", matchCount = "--", stat = "--", status = "Ready") {
@@ -297,6 +265,7 @@ function renderRows(rows, subjectType = "player") {
   }
 
   const normalizedSubjectType = normalizeQuerySubjectType(subjectType);
+  clearEmptyTableState(elements.queryRowsBody);
   const fragment = document.createDocumentFragment();
   rows.forEach((entry) => {
     const row = document.createElement("tr");
