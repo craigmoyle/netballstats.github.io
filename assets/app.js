@@ -1482,6 +1482,7 @@ async function loadScoreflowHomeCards() {
 }
 
 async function initialise() {
+  clearAllTables("Loading…");
   clearAllCharts("Loading…");
   renderEditorialLead(null);
 
