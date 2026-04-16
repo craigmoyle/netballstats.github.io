@@ -1731,7 +1731,11 @@ function(season = "", seasons = "", team_id = "", res) {
         seasons = if (is.null(effective_seasons)) list() else as.list(as.integer(effective_seasons)),
         team_id = team_id
       ),
-      data = fetch_scoreflow_featured_records(conn, seasons = effective_seasons, team_id = team_id)
+      data = with_statement_timeout(
+        conn,
+        scoreflow_statement_timeout_ms(),
+        fetch_scoreflow_featured_records(conn, seasons = effective_seasons, team_id = team_id)
+      )
     )
   }, error = function(error) {
     handle_request_error(error, res)
