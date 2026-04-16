@@ -144,6 +144,7 @@ prepare_match_tables <- function(entries, competitions) {
   team_stat_rows <- vector("list", length(entries))
   player_stat_rows <- vector("list", length(entries))
   score_flow_event_rows <- vector("list", length(entries))
+  match_period_duration_rows <- vector("list", length(entries))
 
   for (index in seq_along(entries)) {
     entry <- entries[[index]]
@@ -359,6 +360,43 @@ prepare_match_tables <- function(entries, competitions) {
       ))
     }
     # else: pre-2017 feed with no scoreFlow key — silently skip (known absent case)
+
+    # Period durations ---------------------------------------------------------
+    # Extract actual period clock from periodInfo$qtr so match_lead_state has
+    # exact period-end boundaries rather than truncating at the last scoring
+    # event.  periodInfo is co-present with scoreFlow in 2017+ feeds.
+    if (!is.null(payload$periodInfo) && !is.null(payload$periodInfo$qtr) &&
+          length(payload$periodInfo$qtr) > 0) {
+      match_period_duration_rows[[index]] <- tryCatch(
+        {
+          dplyr::bind_rows(payload$periodInfo$qtr) %>%
+            dplyr::transmute(
+              match_id   = match_info$matchId,
+              period     = as.integer(period),
+              # periodSeconds in periodInfo = actual clock duration of that period
+              period_seconds = as.integer(periodSeconds)
+            )
+        },
+        error = function(e) {
+          warning(sprintf(
+            "periodInfo extraction failed for season=%s competition_id=%s round=%s game=%s: %s",
+            entry$season, entry$competition_id,
+            match_info$roundNumber, match_info$matchNumber,
+            conditionMessage(e)
+          ))
+          NULL
+        }
+      )
+    } else if (scoreflow_expected) {
+      # periodInfo absent or empty where it is expected — warn so lead-state
+      # computations for this match will fall back to the last-score approximation.
+      warning(sprintf(
+        "periodInfo missing or empty for season=%s competition_id=%s round=%s game=%s",
+        entry$season, entry$competition_id,
+        match_info$roundNumber, match_info$matchNumber
+      ))
+    }
+    # else: pre-2017 feed — periodInfo not expected, silently skip
   }
 
   player_period_stats <- dplyr::bind_rows(player_stat_rows)
@@ -403,7 +441,8 @@ prepare_match_tables <- function(entries, competitions) {
     player_aliases = player_aliases,
     team_period_stats = dplyr::bind_rows(team_stat_rows),
     player_period_stats = player_period_stats,
-    score_flow_events = dplyr::bind_rows(score_flow_event_rows)
+    score_flow_events = dplyr::bind_rows(score_flow_event_rows),
+    match_period_durations = dplyr::bind_rows(match_period_duration_rows)
   )
 }
 
@@ -452,7 +491,7 @@ configure_postgres_api_user <- function(conn) {
   DBI::dbExecute(conn, paste0("GRANT CONNECT ON DATABASE ", quoted_database, " TO ", quoted_username))
   DBI::dbExecute(conn, paste0("GRANT USAGE ON SCHEMA public TO ", quoted_username))
 
-  for (table_name in c("competitions", "matches", "teams", "players", "player_aliases", "team_period_stats", "player_period_stats", "player_match_stats", "player_match_positions", "team_match_stats", "home_venue_impact_rows", "home_venue_breakdown_rows", "score_flow_events", "match_lead_state", "metadata")) {
+  for (table_name in c("competitions", "matches", "teams", "players", "player_aliases", "team_period_stats", "player_period_stats", "player_match_stats", "player_match_positions", "team_match_stats", "home_venue_impact_rows", "home_venue_breakdown_rows", "score_flow_events", "match_period_durations", "match_lead_state", "metadata")) {
     quoted_table <- DBI::dbQuoteIdentifier(conn, DBI::Id(schema = "public", table = table_name))
     DBI::dbExecute(conn, paste0("GRANT SELECT ON TABLE ", quoted_table, " TO ", quoted_username))
   }
@@ -476,22 +515,25 @@ write_database <- function(tables, build_mode) {
     DBI::dbWriteTable(conn, "team_period_stats", tables$team_period_stats, overwrite = TRUE)
     DBI::dbWriteTable(conn, "player_period_stats", tables$player_period_stats, overwrite = TRUE)
     DBI::dbWriteTable(conn, "score_flow_events", tables$score_flow_events, overwrite = TRUE)
+    # Actual period clock durations from periodInfo — used by match_lead_state to
+    # determine exact period-end boundaries so lead/tied seconds are not truncated
+    # at the timestamp of the last scoring event in each period.
+    DBI::dbWriteTable(conn, "match_period_durations", tables$match_period_durations, overwrite = TRUE)
 
     # Index score_flow_events for time-ordered event lookups per match.
     DBI::dbExecute(conn, "CREATE INDEX idx_sfe_match_period ON score_flow_events(match_id, period, period_seconds)")
 
     # Derive match_lead_state: per-match running-score lead summary.
     #
-    # Period durations are derived from MAX(period_seconds) observed within each
-    # period in score_flow_events so extra-time periods are handled correctly
-    # (no hardcoded 900-second assumption).
-    #
-    # Absolute match time for event e in period p:
-    #   offset(p) + period_seconds(e)
-    # where offset(p) = SUM of max_period_seconds for all periods < p.
+    # Period boundaries come from match_period_durations (actual clock from
+    # periodInfo), so the full period duration is counted rather than truncating
+    # at the last scoring event.  For matches where periodInfo was absent (e.g.
+    # pre-2017 seasons), the query falls back to MAX(period_seconds) from
+    # score_flow_events — imprecise but visible via warnings emitted at extract
+    # time.  Both paths are explicit in the period_maxes CTE.
     #
     # Includes one row for EVERY match (LEFT JOIN from matches), with 0 for all
-    # metrics where no score_flow_events data exists (e.g. pre-2017 seasons).
+    # metrics where no score_flow_events data exists.
     #
     # Lead changes: counts transitions between home-leading and away-leading
     # states; tied intervals are skipped when identifying the previous leader
@@ -500,9 +542,19 @@ write_database <- function(tables, build_mode) {
     DBI::dbExecute(conn, paste(
       "CREATE TABLE match_lead_state AS",
       "WITH period_maxes AS (",
-      "  SELECT match_id, period, MAX(period_seconds) AS period_max_sec",
-      "  FROM score_flow_events",
-      "  GROUP BY match_id, period",
+      "  -- Primary: actual period clock from periodInfo (exact period-end boundary).",
+      "  SELECT match_id, period, period_seconds AS period_max_sec",
+      "  FROM match_period_durations",
+      "  UNION ALL",
+      "  -- Fallback: MAX observed scoring timestamp when periodInfo was absent.",
+      "  -- Undercounts by the dead time after the last goal in each period.",
+      "  -- Triggered only for matches missing from match_period_durations (e.g. pre-2017).",
+      "  SELECT sfe.match_id, sfe.period, MAX(sfe.period_seconds) AS period_max_sec",
+      "  FROM score_flow_events sfe",
+      "  WHERE NOT EXISTS (",
+      "    SELECT 1 FROM match_period_durations mpd WHERE mpd.match_id = sfe.match_id",
+      "  )",
+      "  GROUP BY sfe.match_id, sfe.period",
       "),",
       "period_offsets AS (",
       "  SELECT match_id, period,",
@@ -979,7 +1031,7 @@ write_database <- function(tables, build_mode) {
     for (tbl in c("competitions", "matches", "teams", "players", "player_aliases",
                   "team_period_stats", "player_period_stats", "player_match_stats", "player_match_positions",
                   "team_match_stats", "home_venue_impact_rows", "home_venue_breakdown_rows",
-                  "score_flow_events", "match_lead_state",
+                  "score_flow_events", "match_period_durations", "match_lead_state",
                   "player_match_participation", "metadata")) {
       DBI::dbExecute(conn, paste0("ANALYZE ", DBI::dbQuoteIdentifier(conn, tbl)))
     }
