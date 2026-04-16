@@ -4562,13 +4562,15 @@ SCOREFLOW_TEAM_SORT_KEYS <- c(
 
 # Returns TRUE when match_scoreflow_summary is available.
 has_match_scoreflow_summary <- function(conn) {
-  cached <- getOption("netballstats.mss_available")
-  if (!is.null(cached)) return(isTRUE(cached))
+  # Cache only TRUE: once the table is confirmed present it stays present for
+  # the process lifetime. FALSE is never cached so a transient miss at startup
+  # (e.g. during a rolling deploy) does not permanently disable the endpoints.
+  if (isTRUE(getOption("netballstats.mss_available"))) return(TRUE)
   result <- isTRUE(tryCatch(
     DBI::dbExistsTable(conn, "match_scoreflow_summary"),
     error = function(e) FALSE
   ))
-  options(netballstats.mss_available = result)
+  if (result) options(netballstats.mss_available = TRUE)
   result
 }
 

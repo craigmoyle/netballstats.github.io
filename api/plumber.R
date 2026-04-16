@@ -643,6 +643,12 @@ database_unavailable <- function(res, error) {
   json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.")
 }
 
+scoreflow_table_unavailable <- function(res) {
+  api_log("WARN", "scoreflow_table_missing",
+          error_message = "match_scoreflow_summary not found; database may need rebuilding.")
+  json_error(res, 503, "Scoreflow analytics are not yet available. The database requires a current build.")
+}
+
 build_meta_payload <- function(conn) {
   metadata <- query_rows(conn, "SELECT key, value FROM metadata")
   metadata_map <- setNames(metadata$value, metadata$key)
@@ -1605,6 +1611,9 @@ function(season = "", seasons = "", team_id = "", opponent_id = "", metric = "",
   if (inherits(conn, "error")) {
     return(database_unavailable(res, conn))
   }
+  if (!has_match_scoreflow_summary(conn)) {
+    return(scoreflow_table_unavailable(res))
+  }
 
   tryCatch({
     effective_seasons <- parse_season_filter(season, seasons)
@@ -1613,20 +1622,6 @@ function(season = "", seasons = "", team_id = "", opponent_id = "", metric = "",
     metric            <- parse_scoreflow_metric(metric)
     scenario          <- parse_scoreflow_scenario(scenario)
     limit             <- parse_limit(limit, default = 25L, maximum = 100L)
-
-    if (!has_match_scoreflow_summary(conn)) {
-      return(list(
-        filters = list(
-          seasons    = if (is.null(effective_seasons)) list() else as.list(as.integer(effective_seasons)),
-          team_id    = team_id,
-          opponent_id = opponent_id,
-          metric     = jsonlite::unbox(metric),
-          scenario   = jsonlite::unbox(scenario),
-          limit      = limit
-        ),
-        data = list()
-      ))
-    }
 
     rows <- with_statement_timeout(
       conn,
@@ -1673,6 +1668,9 @@ function(season = "", seasons = "", team_id = "", min_matches = "1", sort_by = "
   if (inherits(conn, "error")) {
     return(database_unavailable(res, conn))
   }
+  if (!has_match_scoreflow_summary(conn)) {
+    return(scoreflow_table_unavailable(res))
+  }
 
   tryCatch({
     effective_seasons <- parse_season_filter(season, seasons)
@@ -1680,19 +1678,6 @@ function(season = "", seasons = "", team_id = "", min_matches = "1", sort_by = "
     min_matches <- parse_optional_int(min_matches, "min_matches", minimum = 1L, maximum = 200L) %||% 1L
     sort_by     <- parse_scoreflow_team_sort(sort_by)
     limit       <- parse_limit(limit, default = 20L, maximum = 50L)
-
-    if (!has_match_scoreflow_summary(conn)) {
-      return(list(
-        filters = list(
-          seasons     = if (is.null(effective_seasons)) list() else as.list(as.integer(effective_seasons)),
-          team_id     = team_id,
-          min_matches = min_matches,
-          sort_by     = jsonlite::unbox(sort_by),
-          limit       = limit
-        ),
-        data = list()
-      ))
-    }
 
     rows <- with_statement_timeout(
       conn,

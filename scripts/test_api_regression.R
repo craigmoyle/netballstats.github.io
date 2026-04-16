@@ -1273,6 +1273,27 @@ if (file.exists(helpers_path)) {
   assert_true(is.function(scoreflow_helpers_env$fetch_scoreflow_team_summary),
     'Expected fetch_scoreflow_team_summary to be exported from helpers.R.')
 
+  # has_match_scoreflow_summary: only caches TRUE, never FALSE.
+  # NULL conn causes DBI::dbExistsTable to throw, caught by tryCatch -> returns FALSE.
+  # This avoids needing to mock the DBI package namespace.
+  {
+    options(netballstats.mss_available = NULL)
+    # NULL conn -> DBI error -> FALSE, nothing cached
+    result_absent <- scoreflow_helpers_env$has_match_scoreflow_summary(conn = NULL)
+    assert_true(!isTRUE(result_absent),
+      'Expected has_match_scoreflow_summary to return FALSE when DB is unreachable.')
+    assert_true(is.null(getOption('netballstats.mss_available')),
+      'Expected has_match_scoreflow_summary to NOT cache a FALSE/error result.')
+
+    # Pre-set cache to TRUE; function must return TRUE even with an unreachable conn
+    options(netballstats.mss_available = TRUE)
+    result_cached <- scoreflow_helpers_env$has_match_scoreflow_summary(conn = NULL)
+    assert_true(isTRUE(result_cached),
+      'Expected has_match_scoreflow_summary to return cached TRUE without querying DB.')
+
+    options(netballstats.mss_available = NULL)  # restore for subsequent tests
+  }
+
   # parse_scoreflow_metric: defaults and validation
   assert_true(
     identical(scoreflow_helpers_env$parse_scoreflow_metric(''), 'comeback_deficit_points'),
@@ -1426,7 +1447,7 @@ if (file.exists(helpers_path)) {
       'Expected fetch_scoreflow_team_summary to parameterise season filter.')
   }
 
-  check_step('scoreflow helper unit tests pass (validators, game-records query shape, team-summary query shape)')
+  check_step('scoreflow helper unit tests pass (validators, cache-only-true, game-records query shape, team-summary query shape)')
 }
 
 # ---------------------------------------------------------------------------
