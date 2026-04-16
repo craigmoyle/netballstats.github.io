@@ -1089,58 +1089,79 @@ if (file.exists(helpers_path)) {
 
 # --- DB-backed match_scoreflow_summary verification ---
 # Queries the actual built table to validate structure and cross-row invariants
-# against real data. Skips gracefully if no DB connection can be opened.
+# against real data.
+#
+# Skip condition: no database connection is configured (expected in CI runs that
+# only test the HTTP surface).  Any other failure — sourcing R/database.R,
+# connecting, or a query error — propagates as a real test failure so that
+# environment or SQL regressions are not silently swallowed.
 {
-  db_env <- new.env(parent = globalenv())
-  db_conn <- tryCatch({
-    if (!requireNamespace("DBI", quietly = TRUE)) {
-      stop("DBI not available", call. = FALSE)
-    }
-    sys.source(file.path(getwd(), "R", "database.R"), envir = db_env)
-    db_env$open_database_connection()
-  }, error = function(e) {
-    message(sprintf("match_scoreflow_summary DB check skipped: %s", conditionMessage(e)))
-    NULL
-  })
+  db_configured <- nzchar(Sys.getenv("NETBALL_STATS_DATABASE_URL", "")) ||
+                   nzchar(Sys.getenv("DATABASE_URL", "")) ||
+                   nzchar(Sys.getenv("NETBALL_STATS_DB_HOST", ""))
 
-  if (!is.null(db_conn)) {
+  if (!db_configured) {
+    message("match_scoreflow_summary DB check skipped: no database connection configured")
+  } else {
+    db_env <- new.env(parent = globalenv())
+    sys.source(file.path(getwd(), "R", "database.R"), envir = db_env)
+    db_conn <- db_env$open_database_connection()
     tryCatch({
-      # 1. Table exists and has the expected columns.
+      # 1. Table exists and has exactly the expected columns.
+      #    Columns listed here must match the SELECT list in the CREATE TABLE AS
+      #    query in build_database.R — no more, no less.
       mss_cols <- DBI::dbGetQuery(db_conn, paste(
         "SELECT column_name FROM information_schema.columns",
         "WHERE table_name = 'match_scoreflow_summary'",
         "ORDER BY ordinal_position"
       ))$column_name
       required_cols <- c(
-        "match_id", "squad_id", "squad_name", "won",
-        "match_has_scoreflow", "match_total_seconds",
+        "match_id", "season", "competition_id", "competition_phase",
+        "round_number", "game_number",
+        "squad_id", "opponent_id", "is_home", "won",
         "seconds_leading", "seconds_trailing", "seconds_tied",
-        "leading_share", "trailing_share", "tied_share",
-        "largest_lead_points", "deepest_deficit_points",
+        "match_total_seconds",
+        "largest_lead_points", "deepest_deficit_points", "lead_changes",
+        "match_has_scoreflow", "trailing_share",
         "trailed_most_of_match", "comeback_win",
         "won_trailing_most", "comeback_deficit_points"
       )
       missing_cols <- setdiff(required_cols, mss_cols)
+      extra_cols   <- setdiff(mss_cols, required_cols)
       assert_true(
         length(missing_cols) == 0L,
-        sprintf("match_scoreflow_summary missing columns: %s", paste(missing_cols, collapse = ", "))
+        sprintf("match_scoreflow_summary missing expected columns: %s", paste(missing_cols, collapse = ", "))
+      )
+      assert_true(
+        length(extra_cols) == 0L,
+        sprintf("match_scoreflow_summary has unexpected columns: %s", paste(extra_cols, collapse = ", "))
       )
 
-      # 2. Exactly two rows per completed match (home team + away team).
-      pair_check <- DBI::dbGetQuery(db_conn, paste(
-        "SELECT",
-        "  COUNT(*) AS total_rows,",
-        "  SUM(CASE WHEN match_has_scoreflow = 1 THEN 1 ELSE 0 END) AS scoreflow_rows,",
-        "  COUNT(*) - 2 * COUNT(DISTINCT match_id) AS unpaired_rows",
-        "FROM match_scoreflow_summary"
+      # 2. Every match_id has exactly two rows — one per team.
+      #    The aggregate formula COUNT(*) - 2*COUNT(DISTINCT match_id) can mask
+      #    compensating over/under counts across different matches; this query
+      #    catches each offending match_id individually.
+      bad_pairs <- DBI::dbGetQuery(db_conn, paste(
+        "SELECT match_id, COUNT(*) AS row_count",
+        "FROM match_scoreflow_summary",
+        "GROUP BY match_id",
+        "HAVING COUNT(*) != 2"
       ))
       assert_true(
-        pair_check$unpaired_rows == 0L,
+        nrow(bad_pairs) == 0L,
         sprintf(
-          "match_scoreflow_summary: %d unpaired team rows (expected exactly 2 per match_id)",
-          abs(pair_check$unpaired_rows)
+          "match_scoreflow_summary: %d match_id(s) do not have exactly 2 rows: %s",
+          nrow(bad_pairs),
+          paste(head(bad_pairs$match_id, 5L), collapse = ", ")
         )
       )
+
+      # Report coverage before running invariants.
+      coverage <- DBI::dbGetQuery(db_conn, paste(
+        "SELECT COUNT(*) AS total_rows,",
+        "  SUM(CASE WHEN match_has_scoreflow = 1 THEN 1 ELSE 0 END) AS scoreflow_rows",
+        "FROM match_scoreflow_summary"
+      ))
 
       # 3. Invariants against actual data — the source of truth for whether the
       #    build SQL produced correct results, not just whether the logic is right.
@@ -1180,7 +1201,7 @@ if (file.exists(helpers_path)) {
 
       check_step(sprintf(
         "match_scoreflow_summary DB validation pass (%d rows, %d with scoreflow coverage)",
-        pair_check$total_rows, pair_check$scoreflow_rows
+        coverage$total_rows, coverage$scoreflow_rows
       ))
     }, finally = {
       DBI::dbDisconnect(db_conn)
