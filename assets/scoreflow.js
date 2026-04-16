@@ -19,6 +19,8 @@ const state = {
   }
 };
 
+async function initScoreflowPage() {}
+
 document.addEventListener("DOMContentLoaded", () => {
   void initScoreflowPage();
 });
