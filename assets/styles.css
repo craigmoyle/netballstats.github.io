@@ -4311,6 +4311,97 @@ caption.table-caption {
   margin-top: var(--space-2xs);
 }
 
+/* ----- Scoreflow page ----- */
+
+.scoreflow-page .hero-panel {
+  padding: 1.35rem 1.45rem;
+  background: linear-gradient(180deg, rgba(17, 27, 36, 0.92), rgba(10, 18, 25, 0.84));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow);
+}
+
+.scoreflow-page .page-main {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.scoreflow-desk,
+.scoreflow-lead,
+.scoreflow-panel {
+  padding: 1.2rem 1.3rem;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-cool) 4%, transparent), transparent 52%),
+    color-mix(in srgb, var(--panel-alt) 92%, transparent);
+  border-radius: var(--radius-panel);
+}
+
+.scoreflow-desk .filters {
+  gap: 1rem 1.25rem;
+}
+
+.scoreflow-filter-block {
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.scoreflow-filter-block legend {
+  padding: 0;
+  margin-bottom: 0.45rem;
+  color: var(--accent-strong);
+  font-size: var(--type-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+
+.scoreflow-filter-summary {
+  margin: 0.65rem 0 0;
+  color: var(--muted);
+  font-size: var(--type-sm);
+}
+
+.scoreflow-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+}
+
+.scoreflow-secondary {
+  display: grid;
+  gap: var(--space-md);
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr);
+}
+
+.scoreflow-glossary {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.scoreflow-glossary dt {
+  color: var(--accent-strong);
+  font-size: var(--type-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+
+.scoreflow-glossary dd {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--type-sm);
+  line-height: 1.55;
+}
+
+@media (max-width: 860px) {
+  .scoreflow-secondary {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ----- Print ----- */
 @media print {
   .skip-link,

@@ -44,7 +44,128 @@
       </section>
     </header>
     <main id="main-content" class="page-shell page-main">
-      <!-- filter desk, summary band, records table, team rail, glossary -->
+
+      <section class="panel reveal scoreflow-desk">
+        <div id="scoreflow-status" class="status-banner" role="status" aria-live="polite" hidden></div>
+        <div class="panel__heading panel__heading--split">
+          <div>
+            <p class="panel__eyebrow">Momentum desk</p>
+            <h2>Choose the script</h2>
+            <p class="panel__lead">Start with seasons, then narrow to one club, one opponent, or one scoreflow scenario.</p>
+          </div>
+          <p id="scoreflow-meta" class="muted">Loading the scoreflow frame…</p>
+        </div>
+
+        <form id="scoreflow-filters" class="filters filters--dashboard" aria-label="Scoreflow filters">
+          <fieldset class="field field--wide scoreflow-filter-block">
+            <legend>Seasons</legend>
+            <div id="scoreflow-season-choices" class="scoreflow-chip-group season-choices" role="group" aria-label="Season choices"></div>
+            <p id="scoreflow-season-summary" class="scoreflow-filter-summary">Loading season choices…</p>
+            <select id="scoreflow-season" name="season" aria-describedby="scoreflow-season-summary" hidden>
+              <option value="">All seasons</option>
+            </select>
+          </fieldset>
+          <div class="field field--compact">
+            <label for="scoreflow-team">Team</label>
+            <select id="scoreflow-team" name="team_id">
+              <option value="">All teams</option>
+            </select>
+          </div>
+          <div class="field field--compact">
+            <label for="scoreflow-opponent">Opponent</label>
+            <select id="scoreflow-opponent" name="opponent_id">
+              <option value="">All opponents</option>
+            </select>
+          </div>
+          <div class="field field--compact">
+            <label for="scoreflow-scenario">Scenario</label>
+            <select id="scoreflow-scenario" name="scenario">
+              <option value="all">All games</option>
+              <option value="comeback_wins">Comeback wins</option>
+              <option value="won_trailing_most">Won trailing most</option>
+              <option value="trailed_most">Trailed most</option>
+              <option value="wins">Wins only</option>
+            </select>
+          </div>
+          <div class="field field--compact">
+            <label for="scoreflow-metric">Sort by</label>
+            <select id="scoreflow-metric" name="metric">
+              <option value="comeback_deficit_points">Comeback deficit</option>
+              <option value="largest_lead_points">Largest lead</option>
+              <option value="deepest_deficit_points">Deepest deficit</option>
+              <option value="seconds_leading">Time leading</option>
+              <option value="seconds_trailing">Time trailing</option>
+              <option value="trailing_share">Trailing share</option>
+            </select>
+          </div>
+          <div class="filter-actions">
+            <button type="submit" class="button">Apply</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel reveal scoreflow-lead">
+        <div class="panel__heading">
+          <p class="panel__eyebrow">Game records</p>
+          <h2 id="scoreflow-records-title">Loading scoreflow records…</h2>
+          <p id="scoreflow-records-copy" class="panel__lead">Pulling the strongest scoreflow stories from the current slice.</p>
+        </div>
+        <div class="table-wrapper">
+          <table id="scoreflow-records-table" class="stack-table" aria-label="Scoreflow game records">
+            <thead>
+              <tr>
+                <th scope="col" data-stack-label="Team">Team</th>
+                <th scope="col" data-stack-label="Opponent">Opponent</th>
+                <th scope="col" data-stack-label="Season">Season</th>
+                <th scope="col" data-stack-label="Round">Round</th>
+                <th scope="col" data-stack-label="Result">Result</th>
+                <th scope="col" data-stack-label="Comeback">Comeback pts</th>
+                <th scope="col" data-stack-label="Lead">Largest lead</th>
+                <th scope="col" data-stack-label="Trailing %">Trailing %</th>
+              </tr>
+            </thead>
+            <tbody id="scoreflow-records-body">
+              <tr><td colspan="8" class="empty-state" data-kicker="Loading">Loading scoreflow records…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="scoreflow-secondary reveal">
+        <article class="panel scoreflow-panel">
+          <div class="panel__heading">
+            <p class="panel__eyebrow">Team summary</p>
+            <h2 id="scoreflow-team-title">Team scoreflow totals</h2>
+            <p class="panel__lead">Aggregated lead and trail time across all qualifying matches.</p>
+          </div>
+          <div class="table-wrapper">
+            <table id="scoreflow-team-table" class="stack-table" aria-label="Scoreflow team summary">
+              <thead>
+                <tr>
+                  <th scope="col" data-stack-label="Team">Team</th>
+                  <th scope="col" data-stack-label="Matches">Matches</th>
+                  <th scope="col" data-stack-label="Led most">Led most</th>
+                  <th scope="col" data-stack-label="Comeback wins">Comebacks</th>
+                  <th scope="col" data-stack-label="Biggest comeback">Biggest comeback</th>
+                </tr>
+              </thead>
+              <tbody id="scoreflow-team-body">
+                <tr><td colspan="5" class="empty-state" data-kicker="Loading">Loading team summary…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="panel scoreflow-panel scoreflow-glossary-panel">
+          <div class="panel__heading">
+            <p class="panel__eyebrow">Reference</p>
+            <h2>Scoreflow glossary</h2>
+            <p class="panel__lead">Definitions for the metrics and scenarios used in this archive.</p>
+          </div>
+          <dl id="scoreflow-glossary" class="scoreflow-glossary"></dl>
+        </article>
+      </section>
+
     </main>
   </body>
 </html>

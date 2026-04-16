@@ -326,6 +326,9 @@
     if (pathname === "/player/:id") {
       return "player-profile";
     }
+    if (pathname === "/scoreflow") {
+      return "scoreflow-archive";
+    }
     return trimString(pathname.replace(/\//g, "-").replace(/^-+|-+$/g, ""), 60) || "unknown-page";
   }
 
