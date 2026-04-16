@@ -1156,6 +1156,48 @@ if (file.exists(helpers_path)) {
         )
       )
 
+      # 3. Completeness — every completed match in `matches` has rows here.
+      #    A build bug that silently drops whole matches would pass checks 1-2
+      #    (schema and pair count are fine for the rows that do exist) but fails
+      #    this cross-table population test.
+      completeness <- DBI::dbGetQuery(db_conn, paste(
+        "SELECT",
+        "  (SELECT COUNT(*) FROM matches",
+        "   WHERE home_score IS NOT NULL AND away_score IS NOT NULL) AS completed_matches,",
+        "  COUNT(DISTINCT match_id) AS summary_match_count",
+        "FROM match_scoreflow_summary"
+      ))
+      assert_true(
+        completeness$summary_match_count == completeness$completed_matches,
+        sprintf(
+          "match_scoreflow_summary covers %d of %d completed matches (%d missing)",
+          completeness$summary_match_count,
+          completeness$completed_matches,
+          completeness$completed_matches - completeness$summary_match_count
+        )
+      )
+
+      # 4. Home/away symmetry — each match has exactly one is_home = 1 row and
+      #    one is_home = 0 row.  The pair check (2 rows per match_id) already
+      #    passed, but does not distinguish (home, away) from (home, home) or
+      #    (away, away).
+      bad_symmetry <- DBI::dbGetQuery(db_conn, paste(
+        "SELECT match_id,",
+        "  SUM(is_home) AS home_rows,",
+        "  SUM(1 - is_home) AS away_rows",
+        "FROM match_scoreflow_summary",
+        "GROUP BY match_id",
+        "HAVING SUM(is_home) != 1 OR SUM(1 - is_home) != 1"
+      ))
+      assert_true(
+        nrow(bad_symmetry) == 0L,
+        sprintf(
+          "match_scoreflow_summary: %d match_id(s) lack exactly one home and one away row: %s",
+          nrow(bad_symmetry),
+          paste(head(bad_symmetry$match_id, 5L), collapse = ", ")
+        )
+      )
+
       # Report coverage before running invariants.
       coverage <- DBI::dbGetQuery(db_conn, paste(
         "SELECT COUNT(*) AS total_rows,",
@@ -1163,7 +1205,7 @@ if (file.exists(helpers_path)) {
         "FROM match_scoreflow_summary"
       ))
 
-      # 3. Invariants against actual data — the source of truth for whether the
+      # 5. Invariants against actual data — the source of truth for whether the
       #    build SQL produced correct results, not just whether the logic is right.
       inv <- DBI::dbGetQuery(db_conn, paste(
         "SELECT",
