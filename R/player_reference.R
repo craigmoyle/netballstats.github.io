@@ -1,11 +1,16 @@
-`%||%` <- get0("%||%", ifnotfound = function(x, y) if (is.null(x) || length(x) == 0) y else x)
+player_reference_default <- function(value, fallback) {
+  if (is.null(value) || length(value) == 0) {
+    return(fallback)
+  }
+  value
+}
 
 required_player_reference_columns <- function() {
   c("player_id", "date_of_birth", "nationality", "import_status", "source_label", "source_url", "verified_at", "notes")
 }
 
 normalize_import_status <- function(value) {
-  normalized <- tolower(trimws(as.character(value %||% "")))
+  normalized <- tolower(trimws(as.character(player_reference_default(value, ""))))
   if (!nzchar(normalized)) {
     return(NA_character_)
   }
@@ -13,6 +18,16 @@ normalize_import_status <- function(value) {
     stop("import_status must be either 'local' or 'import'.", call. = FALSE)
   }
   normalized
+}
+
+normalize_required_reference_text <- function(values) {
+  normalized <- trimws(as.character(values))
+  normalized[is.na(values)] <- NA_character_
+  normalized
+}
+
+has_missing_reference_text <- function(values) {
+  is.na(values) | !nzchar(values)
 }
 
 debut_age_band <- function(age_years) {
@@ -43,16 +58,17 @@ read_player_reference_csv <- function(path) {
   }
 
   rows$import_status <- vapply(rows$import_status, normalize_import_status, character(1))
-  rows$nationality <- trimws(as.character(rows$nationality))
-  rows$source_label <- trimws(as.character(rows$source_label))
-  rows$source_url <- trimws(as.character(rows$source_url))
+  rows$nationality <- normalize_required_reference_text(rows$nationality)
+  rows$source_label <- normalize_required_reference_text(rows$source_label)
+  rows$source_url <- normalize_required_reference_text(rows$source_url)
   rows$verified_at <- as.Date(rows$verified_at)
 
-  if (any(!nzchar(rows$nationality))) stop("nationality is required for every maintained row.", call. = FALSE)
-  if (any(!nzchar(rows$source_label))) stop("source_label is required for every maintained row.", call. = FALSE)
-  if (any(!nzchar(rows$source_url))) stop("source_url is required for every maintained row.", call. = FALSE)
+  if (any(has_missing_reference_text(rows$nationality))) stop("nationality is required for every maintained row.", call. = FALSE)
+  if (any(has_missing_reference_text(rows$source_label))) stop("source_label is required for every maintained row.", call. = FALSE)
+  if (any(has_missing_reference_text(rows$source_url))) stop("source_url is required for every maintained row.", call. = FALSE)
   if (any(is.na(rows$verified_at))) stop("verified_at must be ISO-8601 (YYYY-MM-DD) in every maintained row.", call. = FALSE)
 
-  rows$notes <- as.character(rows$notes %||% "")
+  rows$notes <- trimws(as.character(rows$notes))
+  rows$notes[is.na(rows$notes)] <- ""
   rows
 }
