@@ -18,6 +18,7 @@ script_path <- function() {
 
 repo_root_path <- normalizePath(file.path(dirname(script_path()), ".."), mustWork = FALSE)
 source(file.path(repo_root_path, "R", "database.R"), local = TRUE)
+source(file.path(repo_root_path, "R", "player_reference.R"), local = TRUE)
 source(file.path(repo_root_path, "api", "R", "helpers.R"), local = TRUE)
 config_path <- file.path(repo_root_path, "config", "competitions.csv")
 sample_mode <- identical(tolower(Sys.getenv("NETBALL_STATS_SAMPLE", "false")), "true")

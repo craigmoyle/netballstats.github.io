@@ -38,6 +38,7 @@ resolve_repo_root <- function() {
 repo_root_path <- resolve_repo_root()
 options(netballstats.repo_root = repo_root_path)
 source(file.path(repo_root_path, "R", "database.R"), local = TRUE)
+source(file.path(repo_root_path, "R", "player_reference.R"), local = TRUE)
 source(file.path(repo_root_path, "api", "R", "helpers.R"), local = TRUE)
 
 # Shared in-process cache for /meta responses (30-minute TTL).
