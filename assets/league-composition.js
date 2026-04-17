@@ -1,4 +1,5 @@
 const {
+  clearEmptyTableState = () => {},
   fetchJson,
   getCheckedValues = () => [],
   renderEmptyTableRow = () => {},
@@ -45,6 +46,7 @@ function renderSummaryRows(rows) {
     return;
   }
 
+  clearEmptyTableState(elements.summaryBody);
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
@@ -65,6 +67,7 @@ function renderBandRows(rows) {
     return;
   }
 
+  clearEmptyTableState(elements.bandBody);
   const fragment = document.createDocumentFragment();
   rows.forEach((row) => {
     const tr = document.createElement("tr");
