@@ -133,6 +133,14 @@ async function loadPage() {
     showStatusBanner(elements.status, "");
   } catch (error) {
     if (loadToken !== state.loadToken) return;
+    // Clear stale rendered content so old results are not left visible after a failed reload.
+    state.summary = [];
+    state.bands = [];
+    elements.leadHeadline.textContent = "League composition unavailable.";
+    elements.leadCopy.textContent = "Try again shortly, or narrow to a different season range.";
+    elements.coverageNote.textContent = "";
+    renderSummaryRows([]);
+    renderBandRows([]);
     if (elements.meta) elements.meta.textContent = "League composition unavailable.";
     showStatusBanner(elements.status, error.message || "Unable to load league composition data.", "error");
   }
