@@ -58,11 +58,32 @@ age_in_years_on <- function(date_of_birth, anchor_date) {
   floor(as.numeric(anchor_date - date_of_birth) / 365.25)
 }
 
+empty_summary_rows <- function(seasons, column_name, mode = c("numeric", "character")) {
+  mode <- match.arg(mode)
+  rows <- data.frame(season = seasons, stringsAsFactors = FALSE)
+  rows[[column_name]] <- if (mode == "character") NA_character_ else NA_real_
+  rows
+}
+
 build_player_reference_tables <- function(players_rows, player_period_rows, matches_rows, reference_rows) {
   debut_rows <- aggregate(season ~ player_id, data = unique(player_period_rows[c("player_id", "season")]), FUN = min)
   names(debut_rows)[2] <- "debut_season"
 
-  player_reference <- merge(players_rows, reference_rows, by = "player_id", all.x = TRUE, sort = FALSE)
+  if (nrow(reference_rows) > 0L) {
+    player_reference <- merge(players_rows, reference_rows, by = "player_id", all.x = TRUE, sort = FALSE)
+  } else {
+    player_reference <- data.frame(
+      players_rows,
+      date_of_birth = as.Date(rep(NA_character_, nrow(players_rows))),
+      nationality = rep(NA_character_, nrow(players_rows)),
+      import_status = rep(NA_character_, nrow(players_rows)),
+      source_label = rep(NA_character_, nrow(players_rows)),
+      source_url = rep(NA_character_, nrow(players_rows)),
+      verified_at = as.Date(rep(NA_character_, nrow(players_rows))),
+      notes = rep(NA_character_, nrow(players_rows)),
+      stringsAsFactors = FALSE
+    )
+  }
   player_reference <- merge(player_reference, debut_rows, by = "player_id", all.x = TRUE, sort = FALSE)
 
   anchors <- season_anchor_dates(matches_rows)
@@ -88,6 +109,7 @@ build_player_reference_tables <- function(players_rows, player_period_rows, matc
 
   players_per_season <- aggregate(player_id ~ season, data = season_players, FUN = length)
   names(players_per_season)[2] <- "players_with_matches"
+  season_keys <- unique(players_per_season["season"])
 
   age_counts <- aggregate(!is.na(age_years) ~ season, data = season_players, FUN = sum)
   names(age_counts)[2] <- "players_with_birth_date"
@@ -95,15 +117,32 @@ build_player_reference_tables <- function(players_rows, player_period_rows, matc
   import_counts <- aggregate(!is.na(import_status) ~ season, data = season_players, FUN = sum)
   names(import_counts)[2] <- "players_with_import_status"
 
-  avg_age <- aggregate(age_years ~ season, data = season_players, FUN = function(x) round(mean(x, na.rm = TRUE), 2))
   avg_experience <- aggregate(experience_seasons ~ season, data = season_players, FUN = function(x) round(mean(x, na.rm = TRUE), 2))
-  avg_debut_age <- aggregate(age_years ~ season, data = subset(season_players, season == debut_season), FUN = function(x) round(mean(x, na.rm = TRUE), 2))
-  names(avg_age)[2] <- "average_player_age"
   names(avg_experience)[2] <- "average_experience_seasons"
-  names(avg_debut_age)[2] <- "average_debut_age"
 
-  import_share <- aggregate(import_status == "import" ~ season, data = subset(season_players, !is.na(import_status)), FUN = function(x) round(mean(x), 4))
-  names(import_share)[2] <- "import_share"
+  avg_age_rows <- subset(season_players, !is.na(age_years))
+  if (nrow(avg_age_rows) > 0L) {
+    avg_age <- aggregate(age_years ~ season, data = avg_age_rows, FUN = function(x) round(mean(x, na.rm = TRUE), 2))
+    names(avg_age)[2] <- "average_player_age"
+  } else {
+    avg_age <- empty_summary_rows(season_keys$season, "average_player_age")
+  }
+
+  avg_debut_age_rows <- subset(season_players, season == debut_season & !is.na(age_years))
+  if (nrow(avg_debut_age_rows) > 0L) {
+    avg_debut_age <- aggregate(age_years ~ season, data = avg_debut_age_rows, FUN = function(x) round(mean(x, na.rm = TRUE), 2))
+    names(avg_debut_age)[2] <- "average_debut_age"
+  } else {
+    avg_debut_age <- empty_summary_rows(season_keys$season, "average_debut_age")
+  }
+
+  import_share_rows <- subset(season_players, !is.na(import_status))
+  if (nrow(import_share_rows) > 0L) {
+    import_share <- aggregate(import_status == "import" ~ season, data = import_share_rows, FUN = function(x) round(mean(x), 4))
+    names(import_share)[2] <- "import_share"
+  } else {
+    import_share <- empty_summary_rows(season_keys$season, "import_share")
+  }
 
   league_summary <- Reduce(function(left, right) merge(left, right, by = "season", all = TRUE), list(
     players_per_season, age_counts, import_counts, avg_age, avg_experience, avg_debut_age, import_share
@@ -112,12 +151,23 @@ build_player_reference_tables <- function(players_rows, player_period_rows, matc
   league_summary$import_coverage_share <- round(league_summary$players_with_import_status / league_summary$players_with_matches, 4)
 
   debut_rows_only <- subset(season_players, season == debut_season & !is.na(debut_age_band))
-  debut_band_counts <- aggregate(player_id ~ season + debut_age_band, data = debut_rows_only, FUN = length)
-  names(debut_band_counts) <- c("season", "age_band", "players")
-  debut_totals <- aggregate(players ~ season, data = debut_band_counts, FUN = sum)
-  names(debut_totals)[2] <- "total_debut_players"
-  debut_bands <- merge(debut_band_counts, debut_totals, by = "season", all.x = TRUE, sort = FALSE)
-  debut_bands$share <- round(debut_bands$players / debut_bands$total_debut_players, 4)
+  if (nrow(debut_rows_only) > 0L) {
+    debut_band_counts <- aggregate(player_id ~ season + debut_age_band, data = debut_rows_only, FUN = length)
+    names(debut_band_counts) <- c("season", "age_band", "players")
+    debut_totals <- aggregate(players ~ season, data = debut_band_counts, FUN = sum)
+    names(debut_totals)[2] <- "total_debut_players"
+    debut_bands <- merge(debut_band_counts, debut_totals, by = "season", all.x = TRUE, sort = FALSE)
+    debut_bands$share <- round(debut_bands$players / debut_bands$total_debut_players, 4)
+  } else {
+    debut_bands <- data.frame(
+      season = integer(),
+      age_band = character(),
+      players = integer(),
+      total_debut_players = integer(),
+      share = numeric(),
+      stringsAsFactors = FALSE
+    )
+  }
 
   list(
     player_reference = player_reference,
