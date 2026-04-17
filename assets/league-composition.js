@@ -10,6 +10,7 @@ const {
 
 const state = {
   meta: null,
+  loadToken: 0,
   seasons: [],
   summary: [],
   bands: []
@@ -109,6 +110,7 @@ async function loadMetadata() {
 }
 
 async function loadPage() {
+  const loadToken = ++state.loadToken;
   showStatusBanner(elements.status, "Loading league composition…", "loading");
   const seasons = selectedSeasons();
   const params = seasons.length ? { seasons: seasons.join(",") } : {};
@@ -119,6 +121,8 @@ async function loadPage() {
       fetchJson("/league-composition-debut-bands", params)
     ]);
 
+    if (loadToken !== state.loadToken) return;
+
     state.summary = summaryPayload.data || [];
     state.bands = bandsPayload.data || [];
     elements.meta.textContent = seasons.length ? `Showing ${seasons.length} selected seasons.` : "Showing all seasons.";
@@ -128,6 +132,7 @@ async function loadPage() {
     renderBandRows(state.bands);
     showStatusBanner(elements.status, "");
   } catch (error) {
+    if (loadToken !== state.loadToken) return;
     if (elements.meta) elements.meta.textContent = "League composition unavailable.";
     showStatusBanner(elements.status, error.message || "Unable to load league composition data.", "error");
   }
