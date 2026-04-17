@@ -11,7 +11,9 @@ script_path <- function() {
 repo_root <- normalizePath(file.path(dirname(script_path()), ".."), mustWork = FALSE)
 source(file.path(repo_root, "R", "player_reference.R"), local = TRUE)
 
+run_player_reference_tests <- function() {
 reference_path <- file.path(repo_root, "config", "player_reference.csv")
+raw_reference_rows <- utils::read.csv(reference_path, stringsAsFactors = FALSE, na.strings = c("", "NA"))
 reference_rows <- read_player_reference_csv(reference_path)
 invalid_reference_path <- file.path(repo_root, "config", ".player_reference_invalid_test.csv")
 duplicate_reference_path <- file.path(repo_root, "config", ".player_reference_duplicate_test.csv")
@@ -40,6 +42,8 @@ writeLines(
 )
 on.exit(unlink(c(invalid_reference_path, duplicate_reference_path, template_reference_path)), add = TRUE)
 
+stopifnot("player_name" %in% names(raw_reference_rows))
+stopifnot(all(nzchar(raw_reference_rows$player_name)))
 stopifnot(
   identical(
     names(reference_rows),
@@ -137,3 +141,6 @@ stopifnot(all(is.na(missing_match_date_tables$league_composition_summary$average
 stopifnot(nrow(missing_match_date_tables$league_composition_debut_bands) == 0L)
 
 cat("Player reference contract checks passed\n")
+}
+
+run_player_reference_tests()
