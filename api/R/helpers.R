@@ -4894,20 +4894,45 @@ parse_composition_seasons <- function(season = "", seasons = "") {
 # Queries league_composition_summary with optional season filtering.
 # Returns list(data = rows_to_records(...), coverage = record_to_scalars(...)).
 query_league_composition_summary <- function(conn, seasons = NULL) {
-  query  <- "SELECT * FROM league_composition_summary WHERE 1=1"
-  params <- list()
+  base_where  <- "WHERE 1=1"
+  base_params <- list()
 
-  season_result <- append_integer_in_filter(query, params, "season", seasons, "season")
-  query  <- season_result$query
+  season_result <- append_integer_in_filter(
+    paste("SELECT * FROM league_composition_summary", base_where),
+    base_params,
+    "season", seasons, "season"
+  )
+  # Strip the leading SELECT clause to get only the WHERE fragment for reuse.
+  where_fragment <- sub(
+    "^SELECT \\* FROM league_composition_summary",
+    "",
+    season_result$query
+  )
   params <- season_result$params
-  query  <- paste(query, "ORDER BY season")
 
-  rows <- query_rows(conn, query, params)
+  rows <- query_rows(
+    conn,
+    paste("SELECT * FROM league_composition_summary", where_fragment, "ORDER BY season"),
+    params
+  )
+
+  cov_rows <- query_rows(
+    conn,
+    paste(
+      "SELECT",
+      "  SUM(players_with_matches)       AS players_with_matches,",
+      "  SUM(players_with_birth_date)    AS players_with_birth_date,",
+      "  SUM(players_with_import_status) AS players_with_import_status",
+      "FROM league_composition_summary",
+      where_fragment
+    ),
+    params
+  )
 
   coverage <- record_to_scalars(list(
-    seasons_covered = nrow(rows),
-    min_season      = if (nrow(rows)) min(rows$season) else NA_integer_,
-    max_season      = if (nrow(rows)) max(rows$season) else NA_integer_
+    players_with_matches       = if (nrow(cov_rows)) cov_rows$players_with_matches[[1L]]       else NA_integer_,
+    players_with_birth_date    = if (nrow(cov_rows)) cov_rows$players_with_birth_date[[1L]]    else NA_integer_,
+    players_with_import_status = if (nrow(cov_rows)) cov_rows$players_with_import_status[[1L]] else NA_integer_
   ))
 
   list(

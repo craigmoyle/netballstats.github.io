@@ -1574,7 +1574,12 @@ assert_true(is.list(composition_summary$coverage),
   'Expected /league-composition-summary to return coverage metadata.')
 assert_true(length(composition_summary$data) >= 1L,
   'Expected /league-composition-summary to return at least one season row.')
-check_step('/league-composition-summary returns data rows and coverage metadata')
+coverage_fields <- c('players_with_matches', 'players_with_birth_date', 'players_with_import_status')
+missing_coverage_fields <- setdiff(coverage_fields, names(composition_summary$coverage))
+assert_true(length(missing_coverage_fields) == 0L,
+  sprintf('/league-composition-summary coverage missing required fields: %s',
+          paste(missing_coverage_fields, collapse = ', ')))
+check_step('/league-composition-summary returns data rows and coverage with required aggregate fields')
 
 cat("Checking /league-composition-debut-bands default response...\n")
 debut_bands <- request_json(base_url, '/league-composition-debut-bands')
