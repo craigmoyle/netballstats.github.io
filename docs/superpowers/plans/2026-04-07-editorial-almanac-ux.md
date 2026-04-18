@@ -1,6 +1,6 @@
 # Editorial Almanac UX Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Rework the archive homepage and player profile pages into a shared editorial almanac system where the archive is the discovery layer and the player page is the richer dossier.
 
@@ -40,7 +40,7 @@ Use these exact commands throughout the plan:
 - Modify: `player/index.html`
 - Modify: `assets/styles.css`
 
-- [ ] **Step 1: Write the failing smoke check**
+- [x] **Step 1: Write the failing smoke check**
 
 Create `scripts/verify_editorial_almanac_ux.mjs` with these exact assertions:
 
@@ -66,7 +66,7 @@ assert.match(css, /\.player-dossier__ledger\b/, "Expected built CSS to include .
 console.log("Editorial almanac smoke checks passed");
 ```
 
-- [ ] **Step 2: Run the smoke check to confirm it fails**
+- [x] **Step 2: Run the smoke check to confirm it fails**
 
 Run:
 
@@ -77,7 +77,7 @@ npm run build && node scripts/verify_editorial_almanac_ux.mjs
 
 Expected: FAIL with `Expected homepage build to include archive-control-desk`
 
-- [ ] **Step 3: Add the minimal homepage and player shell hooks**
+- [x] **Step 3: Add the minimal homepage and player shell hooks**
 
 Update `index.html` so the archive filter section gains an editorial shell and a dedicated context note:
 
@@ -137,7 +137,7 @@ Add the matching minimal CSS in `assets/styles.css`:
 }
 ```
 
-- [ ] **Step 4: Run the smoke check again**
+- [x] **Step 4: Run the smoke check again**
 
 Run:
 
@@ -148,7 +148,7 @@ npm run build && node scripts/verify_editorial_almanac_ux.mjs
 
 Expected: PASS with `Editorial almanac smoke checks passed`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/craig/Git/netballstats
@@ -165,7 +165,7 @@ git commit -m "feat: add editorial almanac layout shells"
 - Modify: `index.html`
 - Modify: `assets/styles.css`
 
-- [ ] **Step 1: Extend the smoke check with homepage-specific assertions**
+- [x] **Step 1: Extend the smoke check with homepage-specific assertions**
 
 Append these assertions to `scripts/verify_editorial_almanac_ux.mjs` after the existing homepage checks:
 
@@ -176,7 +176,7 @@ assert.match(css, /\.archive-results-intro\b/, "Expected built CSS to include .a
 assert.match(css, /\.archive-control-desk__header\b/, "Expected built CSS to include .archive-control-desk__header");
 ```
 
-- [ ] **Step 2: Run the smoke check to confirm it fails**
+- [x] **Step 2: Run the smoke check to confirm it fails**
 
 Run:
 
@@ -187,7 +187,7 @@ npm run build && node scripts/verify_editorial_almanac_ux.mjs
 
 Expected: FAIL with `Expected homepage build to include archive-results-intro`
 
-- [ ] **Step 3: Add the archive reading-order module and stronger control-desk styling**
+- [x] **Step 3: Add the archive reading-order module and stronger control-desk styling**
 
 Insert a new intro block at the top of the homepage results grid in `index.html`:
 
@@ -230,7 +230,7 @@ Tighten the archive control-desk and reading-order surfaces in `assets/styles.cs
 }
 ```
 
-- [ ] **Step 4: Re-run the homepage validation**
+- [x] **Step 4: Re-run the homepage validation**
 
 Run:
 
@@ -241,7 +241,7 @@ npm run build && node scripts/verify_editorial_almanac_ux.mjs
 
 Expected: PASS with `Editorial almanac smoke checks passed`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/craig/Git/netballstats
@@ -258,7 +258,7 @@ git commit -m "feat: add archive control desk and reading guide"
 - Modify: `assets/app.js`
 - Modify: `assets/styles.css`
 
-- [ ] **Step 1: Extend the smoke check for dossier link cues**
+- [x] **Step 1: Extend the smoke check for dossier link cues**
 
 Append these lines to `scripts/verify_editorial_almanac_ux.mjs` right after the existing `css` read:
 
@@ -276,7 +276,7 @@ assert.match(css, /\.table-link--dossier\b/, "Expected built CSS to include .tab
 assert.match(css, /\.table-link__meta\b/, "Expected built CSS to include .table-link__meta");
 ```
 
-- [ ] **Step 2: Run the smoke check to confirm it fails**
+- [x] **Step 2: Run the smoke check to confirm it fails**
 
 Run:
 
@@ -287,7 +287,7 @@ npm run build && node scripts/verify_editorial_almanac_ux.mjs
 
 Expected: FAIL with `Expected built archive script to include table-link--dossier`
 
-- [ ] **Step 3: Update archive rendering and dossier link treatment**
+- [x] **Step 3: Update archive rendering and dossier link treatment**
 
 In `assets/app.js`, add a dedicated archive-context renderer and a richer player link cell:
 
@@ -355,7 +355,7 @@ Add dossier link styling in `assets/styles.css`:
 }
 ```
 
-- [ ] **Step 4: Validate the archive JavaScript and smoke check**
+- [x] **Step 4: Validate the archive JavaScript and smoke check**
 
 Run:
 
@@ -370,7 +370,7 @@ Expected:
 - `node --check assets/app.js` exits with code `0`
 - smoke check prints `Editorial almanac smoke checks passed`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/craig/Git/netballstats
@@ -388,7 +388,7 @@ git commit -m "feat: add dossier cues to archive leaderboards"
 - Modify: `assets/player.js`
 - Modify: `assets/styles.css`
 
-- [ ] **Step 1: Extend the smoke check for dossier-specific hooks**
+- [x] **Step 1: Extend the smoke check for dossier-specific hooks**
 
 Append these assertions to `scripts/verify_editorial_almanac_ux.mjs`:
 
@@ -400,7 +400,7 @@ assert.match(css, /\.player-dossier__pillars\b/, "Expected built CSS to include 
 assert.match(css, /\.player-dossier__marginalia\b/, "Expected built CSS to include .player-dossier__marginalia");
 ```
 
-- [ ] **Step 2: Run the smoke check to confirm it fails**
+- [x] **Step 2: Run the smoke check to confirm it fails**
 
 Run:
 
@@ -411,7 +411,7 @@ npm run build && node scripts/verify_editorial_almanac_ux.mjs
 
 Expected: FAIL with `Expected player build to include player-dossier__pillars`
 
-- [ ] **Step 3: Add dossier markup, rendering helpers, and supporting styles**
+- [x] **Step 3: Add dossier markup, rendering helpers, and supporting styles**
 
 Update `player/index.html` so the current profile sections become a dossier layout:
 
@@ -586,7 +586,7 @@ Add the dossier styles in `assets/styles.css`:
 }
 ```
 
-- [ ] **Step 4: Validate the player dossier build**
+- [x] **Step 4: Validate the player dossier build**
 
 Run:
 
@@ -601,7 +601,7 @@ Expected:
 - `node --check assets/player.js` exits with code `0`
 - smoke check prints `Editorial almanac smoke checks passed`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/craig/Git/netballstats
@@ -619,7 +619,7 @@ git commit -m "feat: turn player profile into editorial dossier"
 - Modify: `player/index.html`
 - Modify: `assets/styles.css`
 
-- [ ] **Step 1: Extend the smoke check for final accessibility and polish hooks**
+- [x] **Step 1: Extend the smoke check for final accessibility and polish hooks**
 
 Append these assertions to `scripts/verify_editorial_almanac_ux.mjs`:
 
@@ -630,7 +630,7 @@ assert.match(css, /\.dossier-pillars\b/, "Expected built CSS to include .dossier
 assert.match(css, /\.player-dossier__context-grid\b/, "Expected built CSS to include .player-dossier__context-grid");
 ```
 
-- [ ] **Step 2: Run the smoke check to confirm it fails**
+- [x] **Step 2: Run the smoke check to confirm it fails**
 
 Run:
 
@@ -641,7 +641,7 @@ npm run build && node scripts/verify_editorial_almanac_ux.mjs
 
 Expected: FAIL with `Expected homepage build to include an archive reading guide label`
 
-- [ ] **Step 3: Add responsive and accessibility refinements**
+- [x] **Step 3: Add responsive and accessibility refinements**
 
 Ensure the new landmarks are present in markup:
 
@@ -676,7 +676,7 @@ Add responsive CSS in `assets/styles.css` so the new editorial layout collapses 
 }
 ```
 
-- [ ] **Step 4: Run the full validation pass**
+- [x] **Step 4: Run the full validation pass**
 
 Run:
 
@@ -709,7 +709,7 @@ Manual QA checklist:
 - season ledger remains readable in both Total and Avg/game modes
 - keyboard focus remains visible on links, season chips, and toggle buttons
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/craig/Git/netballstats
@@ -717,7 +717,7 @@ git add scripts/verify_editorial_almanac_ux.mjs index.html player/index.html ass
 git commit -m "feat: polish editorial almanac UX"
 ```
 
-- [ ] **Step 6: Deploy the frontend**
+- [x] **Step 6: Deploy the frontend**
 
 Run:
 

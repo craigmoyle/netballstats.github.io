@@ -31,11 +31,11 @@ const QUERY_STATUS_LABELS = {
 };
 const DEFAULT_QUERY_STATE = {
   title: "Supported question shapes",
-  description: "Keep the wording literal and stick to match totals the parser can trace.",
+  description: "Keep the wording literal and stick to match totals the parser can trace end to end.",
   items: [
-    "Player or team + stat + threshold + optional opponent/season",
-    "Player or team + highest/lowest + stat + optional opponent/season",
-    "List queries for players or teams meeting a stat filter"
+    "Player or team + stat + threshold + optional opponent or season",
+    "Player or team + highest or lowest + stat + optional opponent or season",
+    "List players or teams meeting a stat filter in a season"
   ]
 };
 const FALLBACK_EXAMPLES = [
@@ -61,6 +61,11 @@ const elements = {
   querySeasonSummary: document.getElementById("query-season-summary"),
   queryStatus: document.getElementById("query-status"),
   queryForm: document.getElementById("query-form"),
+  queryStepShape: document.getElementById("query-step-shape"),
+  queryStepCompose: document.getElementById("query-step-compose"),
+  queryStepRun: document.getElementById("query-step-run"),
+  queryTemplateStrip: document.getElementById("query-template-strip"),
+  queryRunwayHint: document.getElementById("query-runway-hint"),
   questionInput: document.getElementById("question-input"),
   questionCharacterCount: document.getElementById("question-character-count"),
   clearQuestion: document.getElementById("clear-question"),
@@ -85,6 +90,7 @@ const elements = {
 elements.submitButton = elements.queryForm.querySelector('[type="submit"]');
 
 const exampleButtons = Array.from(elements.exampleStrip.querySelectorAll("[data-example]"));
+const templateButtons = Array.from((elements.queryTemplateStrip?.querySelectorAll("[data-template]")) || []);
 const submitButtonDefaultLabel = elements.submitButton?.textContent || "Run question";
 
 if (elements.apiBase) {
@@ -189,24 +195,83 @@ function renderDefaultQueryState() {
   }
 }
 
+function setStepState(element, stepState) {
+  if (element) {
+    element.setAttribute("data-step-state", stepState);
+  }
+}
+
+function containsTemplatePlaceholders(value = "") {
+  return /\[[^\]]+\]/.test(value);
+}
+
+function updateQuestionWorkflowState(value = "") {
+  const trimmed = value.trim();
+  const hasText = Boolean(trimmed);
+  const hasPlaceholders = containsTemplatePlaceholders(value);
+
+  setStepState(elements.queryStepShape, hasText ? "ready" : "active");
+  setStepState(elements.queryStepCompose, hasText && !hasPlaceholders ? "ready" : "active");
+  setStepState(elements.queryStepRun, hasText && !hasPlaceholders ? "active" : "pending");
+
+  if (!elements.queryRunwayHint) {
+    return;
+  }
+
+  if (!hasText) {
+    elements.queryRunwayHint.textContent = "Choose a template or write one literal question before you run it.";
+    return;
+  }
+
+  if (hasPlaceholders) {
+    elements.queryRunwayHint.textContent = "Replace the bracketed placeholders with real names, stats, thresholds, or seasons before you run it.";
+    return;
+  }
+
+  elements.queryRunwayHint.textContent = "Ready to run. The answer card and evidence table will update together.";
+}
+
 function updateQuestionComposerState(value = "") {
+  const trimmed = value.trim();
+  const hasPlaceholders = containsTemplatePlaceholders(value);
+
   if (elements.questionCharacterCount) {
     elements.questionCharacterCount.textContent = `${value.length} / 220 characters`;
   }
 
-  elements.clearQuestion.disabled = value.trim().length === 0;
+  elements.clearQuestion.disabled = trimmed.length === 0;
 
   exampleButtons.forEach((button) => {
     const isActive = button.getAttribute("data-example") === value;
     button.setAttribute("aria-pressed", isActive ? "true" : "false");
   });
+
+  templateButtons.forEach((button) => {
+    const isActive = button.getAttribute("data-template") === value;
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+
+  if (elements.submitButton && !questionRunning) {
+    elements.submitButton.disabled = trimmed.length === 0 || hasPlaceholders;
+  }
+
+  updateQuestionWorkflowState(value);
+}
+
+function applyQuestionText(question, { focus = true } = {}) {
+  elements.questionInput.value = question;
+  updateQuestionComposerState(question);
+  if (focus) {
+    elements.questionInput.focus();
+    elements.questionInput.setSelectionRange(question.length, question.length);
+  }
 }
 
 function setIdleState() {
   setTableSchema("player");
-  setSummaryCards();
-  elements.answerHeadline.textContent = "Ask a question to see the answer.";
-  elements.answerMeta.textContent = "The answer card and evidence table will update together.";
+  setSummaryCards("--", "--", "--", "Choose a shape");
+  elements.answerHeadline.textContent = "Choose a template or ask a literal question.";
+  elements.answerMeta.textContent = "The answer card and evidence table will update together once the wording is specific enough for the parser.";
   elements.interpretationGrid.replaceChildren();
   renderDefaultQueryState();
   if (elements.queryHelp) {
@@ -324,15 +389,15 @@ function renderUnsupported(result) {
   setTableSchema("player");
   setSummaryCards("--", "--", "--", result.status === "ambiguous" ? "Ambiguous" : "Unsupported");
   elements.answerHeadline.textContent = reason;
-  elements.answerMeta.textContent = "Try one of the starter prompts or open the pattern guide below.";
+  elements.answerMeta.textContent = "Stay literal: subject + stat + request type. The guide below shows supported shapes and complete examples.";
   elements.interpretationGrid.replaceChildren();
   if (elements.queryHelpSummary) {
     elements.queryHelpSummary.textContent = result.status === "ambiguous"
-      ? "Need a more specific prompt?"
-      : "Supported question patterns";
+      ? "Need a tighter prompt?"
+      : "Rewrite it in a supported shape";
   }
   renderQueryState({
-    title: result.status === "ambiguous" ? "Need a more specific question" : "Supported questions",
+    title: result.status === "ambiguous" ? "Tighten the wording" : "Rewrite the question in one supported shape",
     description: reason,
     extraParagraphs: Array.isArray(result.candidates) && result.candidates.length
       ? [`Possible matches: ${result.candidates.join(", ")}`]
@@ -345,7 +410,7 @@ function renderUnsupported(result) {
   }
 
   elements.tableMeta.textContent = "";
-  clearTable("Ask a supported question to see matching rows.");
+  clearTable("Use a supported question shape to see matching rows.");
 }
 
 function renderResult(result) {
@@ -396,6 +461,12 @@ async function runQuestion(question, source = "manual") {
   if (!trimmed) {
     showStatus("Enter a question first.", "error");
     setIdleState();
+    return;
+  }
+
+  if (containsTemplatePlaceholders(trimmed)) {
+    showStatus("Replace the bracketed placeholders before running the question.", "error", { kicker: "Template incomplete" });
+    updateQuestionComposerState(trimmed);
     return;
   }
 
@@ -457,10 +528,10 @@ async function runQuestion(question, source = "manual") {
   } finally {
     questionRunning = false;
     if (submitBtn) {
-      submitBtn.disabled = false;
       submitBtn.removeAttribute("aria-busy");
       submitBtn.textContent = submitButtonDefaultLabel;
     }
+    updateQuestionComposerState(elements.questionInput.value);
   }
 }
 
@@ -478,8 +549,7 @@ async function init() {
   const params = new URLSearchParams(window.location.search);
   const initialQuestion = params.get("q");
   if (initialQuestion) {
-    elements.questionInput.value = initialQuestion;
-    updateQuestionComposerState(initialQuestion);
+    applyQuestionText(initialQuestion, { focus: false });
     await runQuestion(initialQuestion, "url");
     return;
   }
@@ -498,14 +568,29 @@ elements.questionInput.addEventListener("input", () => {
 
 elements.clearQuestion.addEventListener("click", () => {
   const previousQuestion = elements.questionInput.value || "";
-  elements.questionInput.value = "";
   showStatus("");
   updateUrl("");
+  applyQuestionText("", { focus: true });
   setIdleState();
   trackEvent("ask_stats_cleared", {
     previous_question_length_bucket: bucketCount(previousQuestion.length, [0, 20, 40, 80, 120, 180])
   });
 });
+
+if (elements.queryTemplateStrip) {
+  elements.queryTemplateStrip.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-template]");
+    if (!button) {
+      return;
+    }
+
+    const template = button.getAttribute("data-template") || "";
+    applyQuestionText(template);
+    trackEvent("ask_stats_template_selected", {
+      template: button.querySelector(".query-template-button__label")?.textContent || "template"
+    });
+  });
+}
 
 elements.exampleStrip.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-example]");
@@ -514,8 +599,7 @@ elements.exampleStrip.addEventListener("click", async (event) => {
   }
 
   const example = button.getAttribute("data-example") || "";
-  elements.questionInput.value = example;
-  updateQuestionComposerState(example);
+  applyQuestionText(example, { focus: false });
   await runQuestion(example, "example");
 });
 

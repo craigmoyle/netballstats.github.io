@@ -35,14 +35,14 @@
         <div class="hero-copy">
           <p class="eyebrow">Head to head across seasons</p>
           <h1>Compare players or teams</h1>
-          <p class="intro-copy">Line up the names, choose the stat, and let the archive call the edge before you read the chart and table.</p>
+          <p class="intro-copy">Choose the matchup, add the names, then use the archive verdict as the fast read before you check the chart and season table.</p>
         </div>
 
         <aside class="hero-aside" aria-label="Comparison summary">
           <div class="hero-aside__card">
             <span class="hero-aside__label">Head-to-head mode</span>
             <strong id="compare-hero-mode">Players</strong>
-            <p id="compare-hero-summary">Add names to start the head-to-head.</p>
+            <p id="compare-hero-summary">Choose a mode, then add two names to unlock the head-to-head.</p>
           </div>
         </aside>
       </section>
@@ -55,77 +55,118 @@
           <div>
             <p class="panel__eyebrow">Comparison builder</p>
             <h2>Build a comparison</h2>
-            <p class="panel__lead">Pick the mode first, add the names, then choose the stat and seasons. Read the verdict before you use the chart and table to inspect the edge.</p>
+            <p class="panel__lead">Set the matchup first, then add the shortlist before you tune the stat frame. The verdict gives the fast read; the chart and table explain it.</p>
           </div>
-          <p id="compare-summary" class="muted filter-summary">Choose names, a stat, and seasons.</p>
+          <p id="compare-summary" class="muted filter-summary">Step 1: choose whether this is player versus player or team versus team.</p>
         </div>
 
         <form id="compare-form" class="filters compare-builder" novalidate>
-          <div class="field field--wide">
-            <span class="field-label">Mode</span>
-            <div class="view-toggle compare-mode-toggle" role="group" aria-label="Comparison mode">
-              <button type="button" class="button button--small is-active" data-compare-mode="players" aria-pressed="true">Players</button>
-              <button type="button" class="button button--small button--ghost" data-compare-mode="teams" aria-pressed="false">Teams</button>
-            </div>
-          </div>
-
-          <div id="player-picker-field" class="field field--wide">
-            <label for="compare-player-search">Add players</label>
-            <div class="compare-combobox">
-              <input
-                id="compare-player-search"
-                type="search"
-                autocomplete="off"
-                 placeholder="Search by player name"
-                 role="combobox"
-                 aria-haspopup="listbox"
-                 aria-autocomplete="list"
-                 aria-expanded="false"
-                 aria-controls="player-search-results"
-              >
-              <div id="player-search-results" class="entity-picker" role="listbox" hidden></div>
-            </div>
-            <div id="selected-player-chips" class="tag-list compare-chip-list" aria-live="polite"></div>
-            <p id="player-selection-meta" class="compare-selection-meta muted">Choose 2 to 6 players.</p>
-          </div>
-
-          <div id="team-picker-field" class="field field--wide" hidden>
-            <div class="field__label-row">
-              <span class="field-label">Teams</span>
-              <p id="team-selection-meta" class="compare-selection-meta muted">Choose 2 to 8 teams.</p>
-            </div>
-            <div id="team-choices" class="season-choices compare-team-choices" role="group" aria-label="Team choices"></div>
-          </div>
-
-          <div class="field">
-            <label for="compare-stat">Stat</label>
-            <select id="compare-stat" name="compare-stat"></select>
-          </div>
-
-          <div class="field field--wide field--season-block">
-            <div class="field__label-row">
-              <span class="field-label">Seasons</span>
-              <div class="season-actions" role="group" aria-label="Season quick actions">
-                <button type="button" class="button button--ghost button--small" data-compare-season-action="recent">Recent 3</button>
-                <button type="button" class="button button--ghost button--small" data-compare-season-action="all">All</button>
-                <button type="button" class="button button--ghost button--small" data-compare-season-action="clear">Clear</button>
+          <section id="compare-step-mode" class="builder-step" data-step-state="ready" aria-labelledby="compare-step-mode-title">
+            <div class="builder-step__header">
+              <span class="builder-step__number" aria-hidden="true">1</span>
+              <div>
+                <h3 id="compare-step-mode-title">Set the matchup</h3>
+                <p class="builder-step__hint">Start by deciding whether this read is player versus player or club versus club.</p>
               </div>
             </div>
-            <div id="compare-season-choices" class="season-choices" role="group" aria-label="Season choices"></div>
-          </div>
-
-          <div class="field">
-            <span class="field-label">Metric</span>
-            <div class="view-toggle compare-metric-toggle" role="group" aria-label="Stat mode">
-              <button type="button" class="button button--small is-active" data-compare-metric="total" aria-pressed="true">Total</button>
-              <button type="button" class="button button--small button--ghost" data-compare-metric="average" aria-pressed="false">Avg/game</button>
+            <div class="field field--wide">
+              <span class="field-label">Mode</span>
+              <div class="view-toggle compare-mode-toggle" role="group" aria-label="Comparison mode">
+                <button type="button" class="button button--small is-active" data-compare-mode="players" aria-pressed="true">Players</button>
+                <button type="button" class="button button--small button--ghost" data-compare-mode="teams" aria-pressed="false">Teams</button>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div class="filter-actions field--wide">
-            <button type="submit">Compare</button>
-            <button type="button" id="reset-compare" class="button button--ghost">Reset</button>
-          </div>
+          <section id="compare-step-entities" class="builder-step" data-step-state="active" aria-labelledby="compare-step-entities-title">
+            <div class="builder-step__header">
+              <span class="builder-step__number" aria-hidden="true">2</span>
+              <div>
+                <h3 id="compare-step-entities-title">Add the shortlist</h3>
+                <p class="builder-step__hint">Pick the names first. The stat frame becomes more useful once the matchup is fixed.</p>
+              </div>
+            </div>
+
+            <div id="player-picker-field" class="field field--wide">
+              <label for="compare-player-search">Add players</label>
+              <div class="compare-combobox">
+                <input
+                  id="compare-player-search"
+                  type="search"
+                  autocomplete="off"
+                  placeholder="Search by player name"
+                  role="combobox"
+                  aria-haspopup="listbox"
+                  aria-autocomplete="list"
+                  aria-expanded="false"
+                  aria-controls="player-search-results"
+                >
+                <div id="player-search-results" class="entity-picker" role="listbox" hidden></div>
+              </div>
+              <div id="selected-player-chips" class="tag-list compare-chip-list" aria-live="polite"></div>
+              <p id="player-selection-meta" class="compare-selection-meta muted">Choose 2 to 6 players.</p>
+            </div>
+
+            <div id="team-picker-field" class="field field--wide" hidden>
+              <div class="field__label-row">
+                <span class="field-label">Teams</span>
+                <p id="team-selection-meta" class="compare-selection-meta muted">Choose 2 to 8 teams.</p>
+              </div>
+              <div id="team-choices" class="season-choices compare-team-choices" role="group" aria-label="Team choices"></div>
+            </div>
+          </section>
+
+          <section id="compare-step-details" class="builder-step" data-step-state="pending" aria-labelledby="compare-step-details-title">
+            <div class="builder-step__header">
+              <span class="builder-step__number" aria-hidden="true">3</span>
+              <div>
+                <h3 id="compare-step-details-title">Tune the stat frame</h3>
+                <p class="builder-step__hint">Once at least one name is in place, choose the stat, season window, and whether you want totals or per-game averages.</p>
+              </div>
+            </div>
+
+            <div class="builder-step__fields">
+              <div class="field">
+                <label for="compare-stat">Stat</label>
+                <select id="compare-stat" name="compare-stat"></select>
+              </div>
+
+              <div class="field">
+                <span class="field-label">Metric</span>
+                <div class="view-toggle compare-metric-toggle" role="group" aria-label="Stat mode">
+                  <button type="button" class="button button--small is-active" data-compare-metric="total" aria-pressed="true">Total</button>
+                  <button type="button" class="button button--small button--ghost" data-compare-metric="average" aria-pressed="false">Avg/game</button>
+                </div>
+              </div>
+
+              <div class="field field--wide field--season-block">
+                <div class="field__label-row">
+                  <span class="field-label">Seasons</span>
+                  <div class="season-actions" role="group" aria-label="Season quick actions">
+                    <button type="button" class="button button--ghost button--small" data-compare-season-action="recent">Recent 3</button>
+                    <button type="button" class="button button--ghost button--small" data-compare-season-action="all">All</button>
+                    <button type="button" class="button button--ghost button--small" data-compare-season-action="clear">Clear</button>
+                  </div>
+                </div>
+                <div id="compare-season-choices" class="season-choices" role="group" aria-label="Season choices"></div>
+              </div>
+            </div>
+          </section>
+
+          <section id="compare-step-action" class="builder-step builder-step--action" data-step-state="pending" aria-labelledby="compare-step-action-title">
+            <div class="builder-step__header">
+              <span class="builder-step__number" aria-hidden="true">4</span>
+              <div>
+                <h3 id="compare-step-action-title">Run the read</h3>
+                <p class="builder-step__hint">Use the verdict as the fast takeaway, then move straight into the chart and season table for the exact shape.</p>
+              </div>
+            </div>
+            <p id="compare-action-hint" class="builder-step__runway">Choose two names to unlock the verdict, chart, and season table.</p>
+            <div class="filter-actions">
+              <button type="submit">Compare</button>
+              <button type="button" id="reset-compare" class="button button--ghost">Reset</button>
+            </div>
+          </section>
         </form>
       </section>
 

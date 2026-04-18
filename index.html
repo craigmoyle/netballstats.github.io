@@ -78,44 +78,6 @@
     </header>
 
     <main id="main-content" class="page-shell page-main">
-      <section class="panel editorial-lead reveal" aria-label="Latest archive lead">
-        <div class="editorial-lead__feature">
-          <p class="panel__eyebrow">Latest archive lead</p>
-          <h2 id="editorial-lead-headline">Loading the latest completed round…</h2>
-          <p id="editorial-lead-copy" class="editorial-lead__copy">Pulling a fresh note from the most recent completed round.</p>
-          <p id="editorial-lead-note" class="editorial-lead__note">Open the recap for the full slate, then use the archive tools below to keep following the thread.</p>
-        </div>
-        <div class="editorial-lead__facts" aria-label="Latest round snapshot">
-          <article class="editorial-lead__fact">
-            <span id="editorial-lead-fact-label" class="summary-card__label">Lead note</span>
-            <strong id="editorial-lead-fact-value">--</strong>
-            <p id="editorial-lead-fact-copy">Loading the standout line.</p>
-          </article>
-          <article class="editorial-lead__fact">
-            <span id="editorial-lead-secondary-label" class="summary-card__label">Round frame</span>
-            <strong id="editorial-lead-secondary-value">--</strong>
-            <p id="editorial-lead-secondary-copy">Loading the latest round totals.</p>
-          </article>
-        </div>
-        <div class="editorial-lead__links" aria-label="Archive routes">
-          <a class="editorial-lead__link" href="/round/">Read the round recap</a>
-          <a class="editorial-lead__link" href="/query/">Ask the stats</a>
-          <a class="editorial-lead__link" href="/compare/">Build a comparison</a>
-        </div>
-      </section>
-
-      <section class="panel scoreflow-teaser reveal" aria-label="Scoreflow highlights" id="scoreflow-teaser-band">
-        <div class="scoreflow-teaser__header">
-          <p class="panel__eyebrow">Scoreflow</p>
-          <h2>Match momentum records</h2>
-          <p class="panel__lead">Which teams came back hardest, led longest, and won despite trailing? Three records from the scoreflow archive.</p>
-          <a class="scoreflow-teaser__all-link" href="/scoreflow/">Explore the full scoreflow archive →</a>
-        </div>
-        <div class="scoreflow-teaser__cards" id="scoreflow-teaser-cards" aria-live="polite" aria-label="Scoreflow featured records">
-          <!-- Populated by loadScoreflowHomeCards() in app.js -->
-        </div>
-      </section>
-
       <section class="panel query-panel query-panel--home archive-control-desk reveal">
         <div id="status-banner" class="status-banner" role="status" aria-live="polite" hidden></div>
         <div class="archive-control-desk__header">
@@ -213,6 +175,44 @@
             </div>
           </div>
         </form>
+      </section>
+
+      <section class="panel editorial-lead reveal" aria-label="Latest archive lead">
+        <div class="editorial-lead__feature">
+          <p class="panel__eyebrow">Latest archive lead</p>
+          <h2 id="editorial-lead-headline">Loading the latest completed round…</h2>
+          <p id="editorial-lead-copy" class="editorial-lead__copy">Pulling a fresh note from the most recent completed round.</p>
+          <p id="editorial-lead-note" class="editorial-lead__note">Open the recap for the full slate, then use the archive tools below to keep following the thread.</p>
+        </div>
+        <div class="editorial-lead__facts" aria-label="Latest round snapshot">
+          <article class="editorial-lead__fact">
+            <span id="editorial-lead-fact-label" class="summary-card__label">Lead note</span>
+            <strong id="editorial-lead-fact-value">--</strong>
+            <p id="editorial-lead-fact-copy">Loading the standout line.</p>
+          </article>
+          <article class="editorial-lead__fact">
+            <span id="editorial-lead-secondary-label" class="summary-card__label">Round frame</span>
+            <strong id="editorial-lead-secondary-value">--</strong>
+            <p id="editorial-lead-secondary-copy">Loading the latest round totals.</p>
+          </article>
+        </div>
+        <div class="editorial-lead__links" aria-label="Archive routes">
+          <a class="editorial-lead__link" href="/round/">Read the round recap</a>
+          <a class="editorial-lead__link" href="/query/">Ask the stats</a>
+          <a class="editorial-lead__link" href="/compare/">Build a comparison</a>
+        </div>
+      </section>
+
+      <section class="panel scoreflow-teaser reveal" aria-label="Scoreflow highlights" id="scoreflow-teaser-band">
+        <div class="scoreflow-teaser__header">
+          <p class="panel__eyebrow">Scoreflow</p>
+          <h2>Match momentum records</h2>
+          <p class="panel__lead">Which teams came back hardest, led longest, and won despite trailing? Three records from the scoreflow archive.</p>
+          <a class="scoreflow-teaser__all-link" href="/scoreflow/">Explore the full scoreflow archive →</a>
+        </div>
+        <div class="scoreflow-teaser__cards" id="scoreflow-teaser-cards" aria-live="polite" aria-label="Scoreflow featured records">
+          <!-- Populated by loadScoreflowHomeCards() in app.js -->
+        </div>
       </section>
 
       <section class="panel results-panel results-panel--wide results-panel--spotlight reveal">

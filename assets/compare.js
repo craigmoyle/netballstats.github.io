@@ -72,6 +72,11 @@ const elements = {
   compareSummary: document.getElementById("compare-summary"),
   heroMode: document.getElementById("compare-hero-mode"),
   heroSummary: document.getElementById("compare-hero-summary"),
+  compareStepMode: document.getElementById("compare-step-mode"),
+  compareStepEntities: document.getElementById("compare-step-entities"),
+  compareStepDetails: document.getElementById("compare-step-details"),
+  compareStepAction: document.getElementById("compare-step-action"),
+  compareActionHint: document.getElementById("compare-action-hint"),
   modeButtons: Array.from(document.querySelectorAll("[data-compare-mode]")),
   metricButtons: Array.from(document.querySelectorAll("[data-compare-metric]")),
   playerPickerField: document.getElementById("player-picker-field"),
@@ -97,6 +102,8 @@ const elements = {
   compareTableBody: document.getElementById("compare-table-body"),
   compareTableFoot: document.getElementById("compare-table-foot")
 };
+
+elements.submitButton = elements.compareForm.querySelector('[type="submit"]');
 
 function showStatus(message, tone = "neutral", options = {}) {
   showElementStatus(elements.statusBanner, message, tone, options);
@@ -186,6 +193,17 @@ function promptMessage() {
   return state.mode === "players"
     ? "Choose at least two players."
     : "Choose at least two teams.";
+}
+
+function entityNoun(count = 2) {
+  const singular = state.mode === "players" ? "player" : "team";
+  return count === 1 ? singular : `${singular}s`;
+}
+
+function setStepState(element, stepState) {
+  if (element) {
+    element.setAttribute("data-step-state", stepState);
+  }
 }
 
 function renderEmptyTable(message) {
@@ -294,22 +312,81 @@ function comparisonTelemetryProperties(entityCount = selectedEntities().length) 
 function updateSelectionMeta() {
   const playerCount = state.selectedPlayers.length;
   const teamCount = state.selectedTeamIds.length;
-  elements.playerSelectionMeta.textContent = `${playerCount} selected · choose 2 to ${MAX_PLAYERS}.`;
-  elements.teamSelectionMeta.textContent = `${teamCount} selected · choose 2 to ${MAX_TEAMS}.`;
+  elements.playerSelectionMeta.textContent = playerCount === 0
+    ? `Choose 2 to ${MAX_PLAYERS} players.`
+    : playerCount === 1
+      ? "1 player selected · add 1 more to unlock the verdict."
+      : `${playerCount} players selected · you can compare up to ${MAX_PLAYERS}.`;
+  elements.teamSelectionMeta.textContent = teamCount === 0
+    ? `Choose 2 to ${MAX_TEAMS} teams.`
+    : teamCount === 1
+      ? "1 team selected · add 1 more to unlock the verdict."
+      : `${teamCount} teams selected · you can compare up to ${MAX_TEAMS}.`;
+}
+
+function updateWorkflowState() {
+  const selectionCount = selectedEntities().length;
+  const hasAnySelection = selectionCount > 0;
+  const comparisonReady = selectionCount >= 2;
+  const seasonLabel = describeSeasons(getSelectedSeasons());
+
+  setStepState(elements.compareStepMode, "ready");
+  setStepState(elements.compareStepEntities, comparisonReady ? "ready" : "active");
+  setStepState(elements.compareStepDetails, hasAnySelection ? (comparisonReady ? "ready" : "active") : "pending");
+  setStepState(elements.compareStepAction, comparisonReady ? "active" : "pending");
+
+  elements.compareStat.disabled = !hasAnySelection;
+  elements.metricButtons.forEach((button) => {
+    button.disabled = !hasAnySelection;
+  });
+  elements.seasonActionButtons.forEach((button) => {
+    button.disabled = !hasAnySelection;
+  });
+  elements.seasonChoices.querySelectorAll("input").forEach((input) => {
+    input.disabled = !hasAnySelection;
+  });
+  if (elements.submitButton) {
+    elements.submitButton.disabled = !comparisonReady;
+  }
+
+  if (!elements.compareActionHint) {
+    return;
+  }
+
+  if (!selectionCount) {
+    elements.compareActionHint.textContent = `Choose at least two ${entityNoun(2)} to unlock the verdict, chart, and season table.`;
+    return;
+  }
+
+  if (!comparisonReady) {
+    elements.compareActionHint.textContent = `Add one more ${entityNoun(1)} to compare ${currentStatLabel()} across ${seasonLabel}.`;
+    return;
+  }
+
+  elements.compareActionHint.textContent = `Ready to compare ${selectionCount} ${entityNoun(selectionCount)} on ${currentStatLabel()} across ${seasonLabel}.`;
 }
 
 function updateBuilderSummary() {
   const entities = selectedEntities();
-  const entityLabel = entities.length
-    ? `${entities.length} ${state.mode}`
-    : `No ${state.mode} selected`;
   const seasonLabel = describeSeasons(getSelectedSeasons());
-
-  elements.compareSummary.textContent = `${entityLabel} • ${currentStatLabel()} • ${currentMetricLabel()} • ${seasonLabel}`;
   elements.heroMode.textContent = state.mode === "players" ? "Players" : "Teams";
-  elements.heroSummary.textContent = entities.length
-    ? `${entities.length} selected • ${seasonLabel} • ${currentStatLabel()} ${currentMetricLabel()}`
-    : "Add names to start the head-to-head.";
+  if (!entities.length) {
+    elements.compareSummary.textContent = `Step 2: add ${state.mode === "players" ? `2 to ${MAX_PLAYERS} players` : `2 to ${MAX_TEAMS} teams`} before you tune the stat frame.`;
+    elements.heroSummary.textContent = `Choose a mode, then add two ${entityNoun(2)} to unlock the head-to-head.`;
+    updateWorkflowState();
+    return;
+  }
+
+  if (entities.length === 1) {
+    elements.compareSummary.textContent = `1 ${entityNoun(1)} selected • add one more to unlock the verdict and chart.`;
+    elements.heroSummary.textContent = `1 ${entityNoun(1)} in place • add one more, then compare ${currentStatLabel()} by ${currentMetricLabel()}.`;
+    updateWorkflowState();
+    return;
+  }
+
+  elements.compareSummary.textContent = `${entities.length} ${entityNoun(entities.length)} • ${currentStatLabel()} • ${currentMetricLabel()} • ${seasonLabel}`;
+  elements.heroSummary.textContent = `${entities.length} selected • ${seasonLabel} • ${currentStatLabel()} ${currentMetricLabel()}`;
+  updateWorkflowState();
 }
 
 function populateStatSelect() {
