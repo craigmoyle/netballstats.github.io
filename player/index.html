@@ -19,6 +19,7 @@
     <header class="page-shell hero-shell reveal">
       <nav class="page-nav" aria-label="Site navigation">
         <a class="page-nav__link" href="/">Explore archive</a>
+        <a class="page-nav__link" href="/league-composition/">League composition</a>
         <a class="page-nav__link" href="/round/">Round recap</a>
         <a class="page-nav__link" href="/scoreflow/">Scoreflow</a>
         <a class="page-nav__link" href="/players/">Player profiles</a>
@@ -81,6 +82,15 @@
             <span id="summary-primary" class="summary-card__value summary-card__value--small">--</span>
           </article>
         </div>
+      </section>
+
+      <section class="panel reveal player-identity-card" aria-label="Player identity and debut context">
+        <div class="panel__heading">
+          <p class="panel__eyebrow">Identity context</p>
+          <h2>Profile context</h2>
+          <p id="player-identity-status" class="panel__lead">Loading birthday, nationality, debut, and import context.</p>
+        </div>
+        <dl id="player-identity-list" class="player-identity-list"></dl>
       </section>
 
       <section class="panel player-dossier__pillars reveal" aria-label="Career pillars">

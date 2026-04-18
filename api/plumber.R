@@ -38,6 +38,7 @@ resolve_repo_root <- function() {
 repo_root_path <- resolve_repo_root()
 options(netballstats.repo_root = repo_root_path)
 source(file.path(repo_root_path, "R", "database.R"), local = TRUE)
+source(file.path(repo_root_path, "R", "player_reference.R"), local = TRUE)
 source(file.path(repo_root_path, "api", "R", "helpers.R"), local = TRUE)
 
 # Shared in-process cache for /meta responses (30-minute TTL).
@@ -746,7 +747,7 @@ build_stat_summary <- function(rows, stats_order = NULL) {
   do.call(rbind, summary_rows)
 }
 
-build_player_profile_payload <- function(player_row, stats_rows) {
+build_player_profile_payload <- function(player_row, stats_rows, identity_row = NULL) {
   available_stats <- if (nrow(stats_rows)) {
     sort(unique(as.character(stats_rows$stat)))
   } else {
@@ -779,8 +780,53 @@ build_player_profile_payload <- function(player_row, stats_rows) {
     )
   }))
 
+  # Build the identity block from the optional player_reference/demographics row.
+  # Helpers to safely extract a typed field value from the identity row.
+  ir <- if (!is.null(identity_row) && nrow(identity_row) > 0L) {
+    identity_row[1L, , drop = FALSE]
+  } else {
+    NULL
+  }
+  ir_str <- function(col) {
+    if (is.null(ir)) return(json_scalar(NA_character_))
+    val <- ir[[col]]
+    if (is.null(val) || length(val) == 0L || all(is.na(val))) return(json_scalar(NA_character_))
+    json_scalar(as.character(val[[1L]]))
+  }
+  ir_int <- function(col) {
+    if (is.null(ir)) return(json_scalar(NA_integer_))
+    val <- ir[[col]]
+    if (is.null(val) || length(val) == 0L || all(is.na(val))) return(json_scalar(NA_integer_))
+    json_scalar(as.integer(val[[1L]]))
+  }
+  ir_date <- function(col) {
+    if (is.null(ir)) return(json_scalar(NA_character_))
+    val <- ir[[col]]
+    if (is.null(val) || length(val) == 0L || all(is.na(val))) return(json_scalar(NA_character_))
+    json_scalar(format(as.Date(val[[1L]]), "%Y-%m-%d"))
+  }
+  # reference_status: "maintained" when the player_reference row exists and has
+  # import_status populated; "missing" otherwise.
+  has_maintained_reference <- !is.null(ir) && {
+    s <- ir[["import_status"]]
+    !is.null(s) && length(s) > 0L && !all(is.na(s))
+  }
+
+  identity <- list(
+    date_of_birth      = ir_date("date_of_birth"),
+    nationality        = ir_str("nationality"),
+    import_status      = ir_str("import_status"),
+    source_label       = ir_str("source_label"),
+    source_url         = ir_str("source_url"),
+    verified_at        = ir_date("verified_at"),
+    debut_season       = ir_int("debut_season"),
+    experience_seasons = ir_int("experience_seasons"),
+    reference_status   = jsonlite::unbox(if (has_maintained_reference) "maintained" else "missing")
+  )
+
   list(
     player = record_to_scalars(as.list(player_row[1, , drop = FALSE])),
+    identity = identity,
     overview = list(
       games_played = jsonlite::unbox(as.integer(games_played)),
       seasons_played = jsonlite::unbox(as.integer(length(season_values))),
@@ -990,7 +1036,37 @@ function(player_id = "", res) {
       )
     }
 
-    build_player_profile_payload(player, stats_rows)
+    # Fetch identity row via LEFT JOIN over player_reference (and optionally
+    # player_season_demographics for experience_seasons). Both tables are optional;
+    # when absent the identity block is returned with all-NA fields.
+    identity_row <- if (has_player_reference(conn)) {
+      experience_col <- if (has_player_season_demographics(conn)) {
+        paste(
+          "       (SELECT MAX(psd.experience_seasons)",
+          "        FROM player_season_demographics psd",
+          "        WHERE psd.player_id = p.player_id) AS experience_seasons"
+        )
+      } else {
+        "       NULL AS experience_seasons"
+      }
+      query_rows(
+        conn,
+        paste(
+          "SELECT pr.date_of_birth, pr.nationality, pr.import_status,",
+          "       pr.source_label, pr.source_url, pr.verified_at, pr.debut_season,",
+          experience_col,
+          "FROM players p",
+          "LEFT JOIN player_reference pr ON pr.player_id = p.player_id",
+          "WHERE p.player_id = ?player_id",
+          "LIMIT 1"
+        ),
+        list(player_id = player_id)
+      )
+    } else {
+      NULL
+    }
+
+    build_player_profile_payload(player, stats_rows, identity_row)
   }, error = function(error) {
     handle_request_error(error, res)
   })
@@ -1741,6 +1817,53 @@ function(season = "", seasons = "", team_id = "", res) {
     handle_request_error(error, res)
   })
 }
+
+#* @get /league-composition-summary
+#* @get /api/league-composition-summary
+#* @serializer unboxedJSON
+#* @summary League composition summary — per-season player count and demographic aggregates
+#* @param season Optional single season year (e.g. 2023). Overridden by seasons.
+#* @param seasons Optional comma-separated season years (e.g. 2022,2023).
+function(season = "", seasons = "", res) {
+  conn <- tryCatch(get_db_conn(), error = function(error) error)
+  if (inherits(conn, "error")) {
+    return(database_unavailable(res, conn))
+  }
+
+  tryCatch({
+    effective_seasons <- parse_composition_seasons(season, seasons)
+    if (!has_league_composition_summary(conn)) {
+      return(json_error(res, 503, "League composition data is not yet available. The database requires a current build."))
+    }
+    query_league_composition_summary(conn, seasons = effective_seasons)
+  }, error = function(error) {
+    handle_request_error(error, res)
+  })
+}
+
+#* @get /league-composition-debut-bands
+#* @get /api/league-composition-debut-bands
+#* @serializer unboxedJSON
+#* @summary League debut age bands — per-season debut age distribution for debutants
+#* @param season Optional single season year (e.g. 2023). Overridden by seasons.
+#* @param seasons Optional comma-separated season years (e.g. 2022,2023).
+function(season = "", seasons = "", res) {
+  conn <- tryCatch(get_db_conn(), error = function(error) error)
+  if (inherits(conn, "error")) {
+    return(database_unavailable(res, conn))
+  }
+
+  tryCatch({
+    effective_seasons <- parse_composition_seasons(season, seasons)
+    if (!has_league_composition_debut_bands(conn)) {
+      return(json_error(res, 503, "League composition debut band data is not yet available. The database requires a current build."))
+    }
+    list(data = query_league_composition_debut_bands(conn, seasons = effective_seasons))
+  }, error = function(error) {
+    handle_request_error(error, res)
+  })
+}
+
 
 #* @plumber
 function(pr) {

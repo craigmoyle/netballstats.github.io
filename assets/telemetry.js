@@ -329,6 +329,9 @@
     if (pathname === "/scoreflow") {
       return "scoreflow-archive";
     }
+    if (pathname === "/league-composition") {
+      return "league-composition";
+    }
     return trimString(pathname.replace(/\//g, "-").replace(/^-+|-+$/g, ""), 60) || "unknown-page";
   }
 

@@ -4836,3 +4836,125 @@ fetch_scoreflow_featured_records <- function(conn, seasons = NULL, team_id = NUL
     )
   })
 }
+
+# Returns TRUE when the player_reference table is available in the database.
+# Returns TRUE once player_reference is confirmed present.
+# FALSE is never cached: a transient miss (e.g. before the first DB build
+# completes, or during a rolling deploy) must not permanently suppress identity
+# enrichment in /player-profile for the lifetime of the process.
+has_player_reference <- function(conn) {
+  if (isTRUE(getOption("netballstats.pr_available"))) return(TRUE)
+  result <- isTRUE(tryCatch(
+    DBI::dbExistsTable(conn, "player_reference"),
+    error = function(e) FALSE
+  ))
+  if (result) options(netballstats.pr_available = TRUE)
+  result
+}
+
+# Returns TRUE once player_season_demographics is confirmed present.
+# Same cache-TRUE-only policy as has_player_reference().
+has_player_season_demographics <- function(conn) {
+  if (isTRUE(getOption("netballstats.psd_available"))) return(TRUE)
+  result <- isTRUE(tryCatch(
+    DBI::dbExistsTable(conn, "player_season_demographics"),
+    error = function(e) FALSE
+  ))
+  if (result) options(netballstats.psd_available = TRUE)
+  result
+}
+
+# Returns TRUE once league_composition_summary is confirmed present.
+# FALSE is never cached so a transient miss during a rolling deploy does not
+# permanently disable the endpoint.
+has_league_composition_summary <- function(conn) {
+  if (isTRUE(getOption("netballstats.lcs_available"))) return(TRUE)
+  result <- isTRUE(tryCatch(
+    DBI::dbExistsTable(conn, "league_composition_summary"),
+    error = function(e) FALSE
+  ))
+  if (result) options(netballstats.lcs_available = TRUE)
+  result
+}
+
+# Returns TRUE once league_composition_debut_bands is confirmed present.
+has_league_composition_debut_bands <- function(conn) {
+  if (isTRUE(getOption("netballstats.lcdb_available"))) return(TRUE)
+  result <- isTRUE(tryCatch(
+    DBI::dbExistsTable(conn, "league_composition_debut_bands"),
+    error = function(e) FALSE
+  ))
+  if (result) options(netballstats.lcdb_available = TRUE)
+  result
+}
+
+# Delegates to parse_season_filter so the composition endpoints share the same
+# season-parsing rules as every other season-filtered endpoint.
+parse_composition_seasons <- function(season = "", seasons = "") {
+  parse_season_filter(season, seasons)
+}
+
+# Queries league_composition_summary with optional season filtering.
+# Returns list(data = rows_to_records(...), coverage = record_to_scalars(...)).
+query_league_composition_summary <- function(conn, seasons = NULL) {
+  base_where  <- "WHERE 1=1"
+  base_params <- list()
+
+  season_result <- append_integer_in_filter(
+    paste("SELECT * FROM league_composition_summary", base_where),
+    base_params,
+    "season", seasons, "season"
+  )
+  # Strip the leading SELECT clause to get only the WHERE fragment for reuse.
+  where_fragment <- sub(
+    "^SELECT \\* FROM league_composition_summary",
+    "",
+    season_result$query
+  )
+  params <- season_result$params
+
+  rows <- query_rows(
+    conn,
+    paste("SELECT * FROM league_composition_summary", where_fragment, "ORDER BY season"),
+    params
+  )
+
+  cov_rows <- query_rows(
+    conn,
+    paste(
+      "SELECT",
+      "  SUM(players_with_matches)       AS players_with_matches,",
+      "  SUM(players_with_birth_date)    AS players_with_birth_date,",
+      "  SUM(players_with_import_status) AS players_with_import_status",
+      "FROM league_composition_summary",
+      where_fragment
+    ),
+    params
+  )
+
+  coverage <- record_to_scalars(list(
+    players_with_matches       = if (nrow(cov_rows)) cov_rows$players_with_matches[[1L]]       else NA_integer_,
+    players_with_birth_date    = if (nrow(cov_rows)) cov_rows$players_with_birth_date[[1L]]    else NA_integer_,
+    players_with_import_status = if (nrow(cov_rows)) cov_rows$players_with_import_status[[1L]] else NA_integer_
+  ))
+
+  list(
+    data     = rows_to_records(rows),
+    coverage = coverage
+  )
+}
+
+# Queries league_composition_debut_bands with optional season filtering.
+# Returns rows via rows_to_records().
+query_league_composition_debut_bands <- function(conn, seasons = NULL) {
+  query  <- "SELECT * FROM league_composition_debut_bands WHERE 1=1"
+  params <- list()
+
+  season_result <- append_integer_in_filter(query, params, "season", seasons, "season")
+  query  <- season_result$query
+  params <- season_result$params
+  query  <- paste(query, "ORDER BY season, age_band")
+
+  rows <- query_rows(conn, query, params)
+  rows_to_records(rows)
+}

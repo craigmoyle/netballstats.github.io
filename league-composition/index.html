@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="/assets/theme.js"></script>
+    <title>League Composition | Netball Stats Database</title>
+    <meta name="description" content="Track youth break-ins, league age and experience, and import share across the netball archive.">
+    <link rel="preload" href="/assets/fonts/fraunces-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/assets/fonts/teko-600-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/styles.css">
+    <script defer src="/assets/config.js"></script>
+    <script defer src="/assets/telemetry.js"></script>
+    <script defer src="/assets/league-composition.js"></script>
+  </head>
+  <body class="league-composition-page">
+    <a href="#main-content" class="skip-link">Skip to content</a>
+    <header class="page-shell hero-shell reveal">
+      <nav class="page-nav" aria-label="Site navigation">
+        <a class="page-nav__link" href="/">Explore archive</a>
+        <a class="page-nav__link" href="/league-composition/" aria-current="page">League composition</a>
+        <a class="page-nav__link" href="/round/">Round recap</a>
+        <a class="page-nav__link" href="/scoreflow/">Scoreflow</a>
+        <a class="page-nav__link" href="/players/">Player profiles</a>
+        <a class="page-nav__link" href="/query/">Ask the stats</a>
+        <a class="page-nav__link" href="/compare/">Compare</a>
+        <a class="page-nav__link" href="/home-court-advantage/">Home court advantage</a>
+        <a class="page-nav__link" href="/changelog/">Changelog</a>
+        <a class="page-nav__link" href="/nwar/">nWAR</a>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Switch to light theme">Light</button>
+      </nav>
+      <section class="hero-panel composition-hero">
+        <div class="hero-copy">
+          <p class="eyebrow">League composition archive</p>
+          <h1>Who is getting into the league?</h1>
+          <p class="intro-copy">Track debut age, league age and experience, and import share season by season.</p>
+        </div>
+      </section>
+    </header>
+    <main id="main-content" class="page-shell page-main">
+      <section class="panel reveal league-composition-desk">
+        <div id="league-composition-status" class="status-banner" role="status" aria-live="polite" hidden></div>
+        <div class="panel__heading">
+          <p class="panel__eyebrow">Composition desk</p>
+          <h2>Choose the season frame</h2>
+          <p id="league-composition-meta" class="panel__lead">Loading season coverage…</p>
+        </div>
+        <form id="league-composition-filters" class="filters filters--dashboard" aria-label="League composition filters">
+          <fieldset class="field field--wide">
+            <legend>Seasons</legend>
+            <div id="league-composition-season-choices" class="season-choices" role="group" aria-label="Season choices"></div>
+          </fieldset>
+        </form>
+      </section>
+      <section class="panel reveal league-composition-editorial-lead">
+        <div class="panel__heading">
+          <p class="panel__eyebrow">Editorial lead</p>
+          <h2 id="league-composition-lead-headline">Loading the current league frame…</h2>
+          <p id="league-composition-lead-copy" class="panel__lead">Reading the trend story across the selected seasons.</p>
+        </div>
+        <p id="league-composition-coverage-note" class="league-composition-coverage-note">Checking age and import coverage…</p>
+      </section>
+      <section class="panel reveal">
+        <div class="panel__heading">
+          <p class="panel__eyebrow">League summary</p>
+          <h2>Season-by-season trends</h2>
+        </div>
+        <div class="table-wrapper">
+          <table class="stack-table">
+            <tbody id="league-composition-summary-body"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel reveal">
+        <div class="panel__heading">
+          <p class="panel__eyebrow">Youth break-ins</p>
+          <h2>Debut age bands</h2>
+        </div>
+        <div class="table-wrapper">
+          <table class="stack-table">
+            <tbody id="league-composition-band-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
