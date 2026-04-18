@@ -45,6 +45,12 @@ on.exit(unlink(c(invalid_reference_path, duplicate_reference_path, template_refe
 stopifnot("player_name" %in% names(raw_reference_rows))
 stopifnot(all(nzchar(raw_reference_rows$player_name)))
 stopifnot(
+  raw_reference_rows$nationality[match("Abigail Latu-Meafou", raw_reference_rows$player_name)] == "Australia"
+)
+stopifnot(
+  raw_reference_rows$nationality[match("Alice Teague-Neeld", raw_reference_rows$player_name)] == "Australia"
+)
+stopifnot(
   raw_reference_rows$nationality[match("Ameliaranne Ekenasio", raw_reference_rows$player_name)] == ""
 )
 stopifnot(
