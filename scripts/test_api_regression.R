@@ -1557,4 +1557,36 @@ assert_true(all(c("slug", "label", "metric", "scenario", "href_query", "record")
   "Expected featured scoreflow cards to expose slug, label, metric, scenario, href_query, and record.")
 check_step('/scoreflow-featured-records returns a valid payload with three cards')
 
+cat("Checking /player-profile includes identity block...\n")
+assert_true(is.list(profile_payload$identity),
+  'Expected /player-profile to include an identity block.')
+assert_true("debut_season" %in% names(profile_payload$identity),
+  'Expected /player-profile identity to contain debut_season.')
+assert_true("reference_status" %in% names(profile_payload$identity),
+  'Expected /player-profile identity to contain reference_status.')
+check_step('/player-profile identity block includes debut_season and reference_status')
+
+cat("Checking /league-composition-summary default response...\n")
+composition_summary <- request_json(base_url, '/league-composition-summary')
+assert_true(is.list(composition_summary$data),
+  'Expected /league-composition-summary to return a data list.')
+assert_true(is.list(composition_summary$coverage),
+  'Expected /league-composition-summary to return coverage metadata.')
+assert_true(length(composition_summary$data) >= 1L,
+  'Expected /league-composition-summary to return at least one season row.')
+coverage_fields <- c('players_with_matches', 'players_with_birth_date', 'players_with_import_status')
+missing_coverage_fields <- setdiff(coverage_fields, names(composition_summary$coverage))
+assert_true(length(missing_coverage_fields) == 0L,
+  sprintf('/league-composition-summary coverage missing required fields: %s',
+          paste(missing_coverage_fields, collapse = ', ')))
+check_step('/league-composition-summary returns data rows and coverage with required aggregate fields')
+
+cat("Checking /league-composition-debut-bands default response...\n")
+debut_bands <- request_json(base_url, '/league-composition-debut-bands')
+assert_true(is.list(debut_bands$data),
+  'Expected /league-composition-debut-bands to return a data list.')
+assert_true(length(debut_bands$data) >= 1L,
+  'Expected /league-composition-debut-bands to return at least one band row.')
+check_step('/league-composition-debut-bands returns at least one debut age band row')
+
 cat('All API regression checks passed.\n')

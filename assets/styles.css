@@ -4577,6 +4577,59 @@ caption.table-caption {
   }
 }
 
+/* ----- League composition ----- */
+.league-composition-desk,
+.player-identity-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.league-composition-editorial-lead {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 44%),
+    var(--panel-solid);
+}
+
+.league-composition-coverage-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-ui-size);
+  line-height: 1.65;
+}
+
+.player-identity-card {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent-cool) 6%, transparent), transparent 44%),
+    var(--panel-solid);
+}
+
+.player-identity-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+@media (max-width: 700px) {
+  .player-identity-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.player-identity-list dt {
+  color: var(--muted);
+  font-size: var(--type-xs);
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+
+.player-identity-list dd {
+  margin: 0.25rem 0 0;
+}
+
+.player-identity-status {
+  margin: 0;
+}
+
 /* ----- Print ----- */
 @media print {
   .skip-link,

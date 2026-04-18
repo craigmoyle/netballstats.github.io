@@ -18,6 +18,7 @@
     <header class="page-shell hero-shell reveal">
       <nav class="page-nav" aria-label="Site navigation">
         <a class="page-nav__link" href="/">Explore archive</a>
+        <a class="page-nav__link" href="/league-composition/">League composition</a>
         <a class="page-nav__link" href="/round/">Round recap</a>
         <a class="page-nav__link" href="/scoreflow/">Scoreflow</a>
         <a class="page-nav__link" href="/players/">Player profiles</a>
@@ -40,6 +41,23 @@
 
     <main id="main-content" class="page-shell page-main">
       <section class="changelog-stack" aria-label="Recent updates">
+        <article class="panel changelog-entry reveal">
+          <div class="changelog-entry__header">
+            <p class="results-panel__eyebrow">17 Apr 2026</p>
+            <h2>League composition trends and player identity context.</h2>
+            <p class="panel__lead">A new league composition page surfaces season-by-season youth break-in rates, league age and experience spreads, and import share trends. Player dossiers now include an identity context block showing birthday, nationality, and import status from the maintained player reference file, alongside debut season and experience derived from archive data.</p>
+          </div>
+          <ul class="changelog-list">
+            <li>New <a href="/league-composition/">League composition</a> page tracks how the SSN player pool has evolved each season across age, experience, and import dimensions.</li>
+            <li>Youth break-in rate, median debut age, and import share are each broken out by season band so long-run shifts are easy to read.</li>
+            <li>Player dossiers now show an identity context panel with birthday, nationality, and import status from <code>config/player_reference.csv</code>, plus debut season and accumulated experience derived from archive data.</li>
+            <li>The <code>/player-profile</code> API endpoint now returns an <code>identity</code> block alongside the existing career overview, stats, and pillars.</li>
+          </ul>
+          <div class="changelog-link-list">
+            <a class="changelog-link" href="/league-composition/">Open League composition</a>
+          </div>
+        </article>
+
         <article class="panel changelog-entry reveal">
           <div class="changelog-entry__header">
             <p class="results-panel__eyebrow">15 Apr 2026</p>

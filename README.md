@@ -17,6 +17,7 @@ The production operating model is now **Azure + PostgreSQL first**. Legacy Rende
 
 - `index.html` + `assets/`: static frontend
 - `query/`, `compare/`, `players/`, `player/`: page shells for the major frontend flows
+- `league-composition/`: season-by-season youth break-in, league age/experience, and import-share analysis backed by the maintained `config/player_reference.csv` reference file
 - `api/plumber.R`: read-only API entry point
 - `api/R/helpers.R`: validation, query-building, and response helpers
 - `R/database.R`: PostgreSQL connection helpers and runtime DB config

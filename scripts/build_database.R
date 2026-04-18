@@ -18,6 +18,7 @@ script_path <- function() {
 
 repo_root_path <- normalizePath(file.path(dirname(script_path()), ".."), mustWork = FALSE)
 source(file.path(repo_root_path, "R", "database.R"), local = TRUE)
+source(file.path(repo_root_path, "R", "player_reference.R"), local = TRUE)
 source(file.path(repo_root_path, "api", "R", "helpers.R"), local = TRUE)
 config_path <- file.path(repo_root_path, "config", "competitions.csv")
 sample_mode <- identical(tolower(Sys.getenv("NETBALL_STATS_SAMPLE", "false")), "true")
@@ -454,13 +455,22 @@ prepare_match_tables <- function(entries, competitions) {
     dplyr::distinct(player_id, alias_name, alias_search_name) %>%
     dplyr::arrange(player_id, alias_name)
 
+  match_rows_bound <- dplyr::bind_rows(match_rows)
+  reference_rows <- read_player_reference_csv(file.path(repo_root_path, "config", "player_reference.csv"))
+  reference_tables <- build_player_reference_tables(
+    players,
+    player_period_stats,
+    dplyr::mutate(match_rows_bound, match_date = as.Date(substr(dplyr::coalesce(local_start_time, utc_start_time), 1, 10))),
+    reference_rows
+  )
+
   list(
     competitions = competitions %>%
       dplyr::mutate(
         season = as.integer(season),
         competition_id = as.integer(competition_id)
       ),
-    matches = dplyr::bind_rows(match_rows) %>%
+    matches = match_rows_bound %>%
       dplyr::arrange(season, competition_phase, round_number, game_number),
     teams = dplyr::bind_rows(team_rows) %>%
       dplyr::distinct(squad_id, .keep_all = TRUE) %>%
@@ -470,7 +480,11 @@ prepare_match_tables <- function(entries, competitions) {
     team_period_stats = dplyr::bind_rows(team_stat_rows),
     player_period_stats = player_period_stats,
     score_flow_events = dplyr::bind_rows(score_flow_event_rows),
-    match_period_durations = dplyr::bind_rows(match_period_duration_rows)
+    match_period_durations = dplyr::bind_rows(match_period_duration_rows),
+    player_reference = reference_tables$player_reference,
+    player_season_demographics = reference_tables$player_season_demographics,
+    league_composition_summary = reference_tables$league_composition_summary,
+    league_composition_debut_bands = reference_tables$league_composition_debut_bands
   )
 }
 
@@ -519,7 +533,7 @@ configure_postgres_api_user <- function(conn) {
   DBI::dbExecute(conn, paste0("GRANT CONNECT ON DATABASE ", quoted_database, " TO ", quoted_username))
   DBI::dbExecute(conn, paste0("GRANT USAGE ON SCHEMA public TO ", quoted_username))
 
-  for (table_name in c("competitions", "matches", "teams", "players", "player_aliases", "team_period_stats", "player_period_stats", "player_match_stats", "player_match_positions", "team_match_stats", "home_venue_impact_rows", "home_venue_breakdown_rows", "score_flow_events", "match_period_durations", "match_lead_state", "match_scoreflow_summary", "metadata")) {
+  for (table_name in c("competitions", "matches", "teams", "players", "player_aliases", "team_period_stats", "player_period_stats", "player_match_stats", "player_match_positions", "team_match_stats", "home_venue_impact_rows", "home_venue_breakdown_rows", "score_flow_events", "match_period_durations", "match_lead_state", "match_scoreflow_summary", "player_reference", "player_season_demographics", "league_composition_summary", "league_composition_debut_bands", "metadata")) {
     quoted_table <- DBI::dbQuoteIdentifier(conn, DBI::Id(schema = "public", table = table_name))
     DBI::dbExecute(conn, paste0("GRANT SELECT ON TABLE ", quoted_table, " TO ", quoted_username))
   }
@@ -542,6 +556,10 @@ write_database <- function(tables, build_mode) {
     DBI::dbWriteTable(conn, "player_aliases", tables$player_aliases, overwrite = TRUE)
     DBI::dbWriteTable(conn, "team_period_stats", tables$team_period_stats, overwrite = TRUE)
     DBI::dbWriteTable(conn, "player_period_stats", tables$player_period_stats, overwrite = TRUE)
+    DBI::dbWriteTable(conn, "player_reference", tables$player_reference, overwrite = TRUE)
+    DBI::dbWriteTable(conn, "player_season_demographics", tables$player_season_demographics, overwrite = TRUE)
+    DBI::dbWriteTable(conn, "league_composition_summary", tables$league_composition_summary, overwrite = TRUE)
+    DBI::dbWriteTable(conn, "league_composition_debut_bands", tables$league_composition_debut_bands, overwrite = TRUE)
     DBI::dbWriteTable(conn, "score_flow_events", tables$score_flow_events, overwrite = TRUE)
     # Actual period clock durations from periodInfo — used by match_lead_state to
     # determine exact period-end boundaries so lead/tied seconds are not truncated
@@ -1355,6 +1373,8 @@ write_database <- function(tables, build_mode) {
                   "team_period_stats", "player_period_stats", "player_match_stats", "player_match_positions",
                   "team_match_stats", "home_venue_impact_rows", "home_venue_breakdown_rows",
                   "score_flow_events", "match_period_durations", "match_lead_state",
+                  "player_reference", "player_season_demographics", "league_composition_summary",
+                  "league_composition_debut_bands",
                   "match_scoreflow_summary", "player_match_participation", "metadata")) {
       DBI::dbExecute(conn, paste0("ANALYZE ", DBI::dbQuoteIdentifier(conn, tbl)))
     }

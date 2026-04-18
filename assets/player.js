@@ -69,6 +69,8 @@ const elements = {
   playerPillars: document.getElementById("player-pillars"),
   playerMarginalia: document.getElementById("player-marginalia"),
   seasonLedgerNotes: document.getElementById("season-ledger-notes"),
+  playerIdentityStatus: document.getElementById("player-identity-status"),
+  playerIdentityList: document.getElementById("player-identity-list"),
   metricButtons: Array.from(document.querySelectorAll("[data-metric]"))
 };
 
@@ -364,6 +366,33 @@ function setMetric(nextMetric) {
   }
 }
 
+function renderIdentityRow(label, value) {
+  const wrapper = document.createElement("div");
+  const dt = document.createElement("dt");
+  dt.textContent = label;
+  const dd = document.createElement("dd");
+  dd.textContent = value || "Not yet verified";
+  wrapper.append(dt, dd);
+  return wrapper;
+}
+
+function renderPlayerIdentity(profile) {
+  const identity = profile.identity || {};
+  elements.playerIdentityList.replaceChildren(
+    renderIdentityRow("Birthday", identity.date_of_birth),
+    renderIdentityRow("Nationality", identity.nationality),
+    renderIdentityRow("Import status", identity.import_status),
+    renderIdentityRow("Debut season", identity.debut_season != null ? `${identity.debut_season}` : ""),
+    renderIdentityRow("Experience", identity.experience_seasons != null ? `Season ${identity.experience_seasons}` : "")
+  );
+
+  elements.playerIdentityStatus.textContent = identity.reference_status === "maintained"
+    ? `Verified against ${identity.source_label || "the maintained player reference file"}.`
+    : identity.reference_status === "missing"
+      ? "Some maintained identity fields are not yet verified for this player."
+      : "Birthday, nationality, and import status are drawn from the maintained player reference file where available.";
+}
+
 function renderProfile(profile) {
   state.profile = profile;
 
@@ -396,6 +425,7 @@ function renderProfile(profile) {
     : "No totals yet";
 
   renderSquads(overview.squad_names || []);
+  renderPlayerIdentity(profile);
   renderCareerStats(careerStats);
   renderDossierPillars(pillars);
   renderDossierNotes(notes);
