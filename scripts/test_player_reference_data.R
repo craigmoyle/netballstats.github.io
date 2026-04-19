@@ -54,7 +54,7 @@ stopifnot(
   raw_reference_rows$nationality[match("Ameliaranne Ekenasio", raw_reference_rows$player_name)] == ""
 )
 stopifnot(
-  all(raw_reference_rows$nationality[raw_reference_rows$player_name == "Hulita Veve"] == "")
+  all(raw_reference_rows$nationality[raw_reference_rows$player_name == "Hulita Veve"] == "Tonga")
 )
 stopifnot(
   all(
