@@ -124,6 +124,12 @@ build_player_reference_tables <- function(players_rows, player_period_rows, matc
     vapply(season_players$age_years, debut_age_band, character(1)),
     NA_character_
   )
+  # Import classifications only map cleanly to the SSN-era roster rules.
+  season_players$summary_import_status <- ifelse(
+    season_players$season >= 2017L & season_players$season <= 2026L,
+    season_players$import_status,
+    NA_character_
+  )
 
   players_per_season <- aggregate(player_id ~ season, data = season_players, FUN = length)
   names(players_per_season)[2] <- "players_with_matches"
@@ -132,8 +138,13 @@ build_player_reference_tables <- function(players_rows, player_period_rows, matc
   age_counts <- aggregate(!is.na(age_years) ~ season, data = season_players, FUN = sum)
   names(age_counts)[2] <- "players_with_birth_date"
 
-  import_counts <- aggregate(!is.na(import_status) ~ season, data = season_players, FUN = sum)
-  names(import_counts)[2] <- "players_with_import_status"
+  import_count_rows <- subset(season_players, season >= 2017L & season <= 2026L)
+  if (nrow(import_count_rows) > 0L) {
+    import_counts <- aggregate(!is.na(import_status) ~ season, data = import_count_rows, FUN = sum)
+    names(import_counts)[2] <- "players_with_import_status"
+  } else {
+    import_counts <- empty_summary_rows(season_keys$season, "players_with_import_status")
+  }
 
   avg_experience <- aggregate(experience_seasons ~ season, data = season_players, FUN = function(x) round(mean(x, na.rm = TRUE), 2))
   names(avg_experience)[2] <- "average_experience_seasons"
@@ -154,9 +165,9 @@ build_player_reference_tables <- function(players_rows, player_period_rows, matc
     avg_debut_age <- empty_summary_rows(season_keys$season, "average_debut_age")
   }
 
-  import_share_rows <- subset(season_players, !is.na(import_status))
+  import_share_rows <- subset(season_players, !is.na(summary_import_status))
   if (nrow(import_share_rows) > 0L) {
-    import_share <- aggregate(import_status == "import" ~ season, data = import_share_rows, FUN = function(x) round(mean(x), 4))
+    import_share <- aggregate(summary_import_status == "import" ~ season, data = import_share_rows, FUN = function(x) round(mean(x), 4))
     names(import_share)[2] <- "import_share"
   } else {
     import_share <- empty_summary_rows(season_keys$season, "import_share")

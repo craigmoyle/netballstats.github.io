@@ -199,6 +199,43 @@ check_step('natural-language query endpoint supports representative team queries
 
 helpers_env <- new.env(parent = globalenv())
 sys.source('api/R/helpers.R', envir = helpers_env)
+composition_helpers_env <- new.env(parent = globalenv())
+sys.source('api/R/helpers.R', envir = composition_helpers_env)
+composition_helpers_env$record_to_scalars <- function(values) values
+composition_helpers_env$rows_to_records <- function(rows) rows
+composition_helpers_env$query_rows <- function(conn, query, params = list()) {
+  normalized_query <- normalize_sql(query)
+  if (grepl("^SELECT \\* FROM league_composition_summary", normalized_query)) {
+    return(data.frame(
+      season = c(2016L, 2017L),
+      players_with_matches = c(2L, 2L),
+      players_with_birth_date = c(2L, 2L),
+      players_with_import_status = c(NA_integer_, 2L),
+      average_player_age = c(24.5, 25.5),
+      average_experience_seasons = c(1.0, 2.0),
+      average_debut_age = c(19.5, 20.5),
+      import_share = c(NA_real_, 0.5),
+      age_coverage_share = c(1.0, 1.0),
+      import_coverage_share = c(NA_real_, 1.0),
+      stringsAsFactors = FALSE
+    ))
+  }
+  if (grepl("SUM\\(players_with_matches\\)", normalized_query)) {
+    return(data.frame(
+      players_with_matches = 4L,
+      players_with_birth_date = 4L,
+      players_with_import_status = 2L,
+      stringsAsFactors = FALSE
+    ))
+  }
+  stop(sprintf("Unexpected league composition summary query in regression test: %s", normalized_query))
+}
+mixed_composition_payload <- composition_helpers_env$query_league_composition_summary(conn = NULL, seasons = c(2016L, 2017L))
+assert_true(
+  is.na(mixed_composition_payload$coverage$players_with_import_status),
+  'Expected mixed ANZC/SSN league composition coverage to return NA import coverage metadata.'
+)
+check_step('league composition coverage marks mixed ANZC and SSN import coverage as not applicable')
 assert_true(
   identical(
     helpers_env$resolve_query_stat(

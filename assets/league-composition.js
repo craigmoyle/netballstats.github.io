@@ -88,13 +88,21 @@ function renderBandRows(rows) {
 }
 
 function renderCoverage(summaryPayload) {
-  const ageCoverage = Number(summaryPayload.coverage?.players_with_birth_date || 0) / Number(summaryPayload.coverage?.players_with_matches || 1);
-  const importCoverage = Number(summaryPayload.coverage?.players_with_import_status || 0) / Number(summaryPayload.coverage?.players_with_matches || 1);
+  const playersWithMatches = Number(summaryPayload.coverage?.players_with_matches || 0);
+  const ageCoverage = Number(summaryPayload.coverage?.players_with_birth_date || 0) / Number(playersWithMatches || 1);
+  const importStatusCount = summaryPayload.coverage?.players_with_import_status;
+
+  if (importStatusCount == null) {
+    elements.coverageNote.textContent = "Import classifications only apply to SSN seasons, so mixed-era selections report age coverage only.";
+    return;
+  }
+
+  const importCoverage = Number(importStatusCount) / Number(playersWithMatches || 1);
   const coverageFloor = Math.min(ageCoverage, importCoverage);
 
   elements.coverageNote.textContent = coverageFloor < 0.85
     ? "Coverage is below the release target for at least one maintained field, so treat the trend lines as partial rather than final."
-    : "Coverage is above the release target for age and import classifications in the selected season frame.";
+    : "Coverage is above the release target for age and SSN-era import classifications in the selected season frame.";
 }
 
 function renderLead(rows) {

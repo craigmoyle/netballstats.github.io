@@ -4935,7 +4935,11 @@ query_league_composition_summary <- function(conn, seasons = NULL) {
   coverage <- record_to_scalars(list(
     players_with_matches       = if (nrow(cov_rows)) cov_rows$players_with_matches[[1L]]       else NA_integer_,
     players_with_birth_date    = if (nrow(cov_rows)) cov_rows$players_with_birth_date[[1L]]    else NA_integer_,
-    players_with_import_status = if (nrow(cov_rows)) cov_rows$players_with_import_status[[1L]] else NA_integer_
+    players_with_import_status = if (nrow(cov_rows) && nrow(rows) > 0L && all(rows$season >= 2017L & rows$season <= 2026L)) {
+      cov_rows$players_with_import_status[[1L]]
+    } else {
+      NA_integer_
+    }
   ))
 
   list(

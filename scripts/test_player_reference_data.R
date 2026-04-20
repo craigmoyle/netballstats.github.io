@@ -48,6 +48,9 @@ stopifnot(
   raw_reference_rows$nationality[match("Abigail Latu-Meafou", raw_reference_rows$player_name)] == "Australia"
 )
 stopifnot(
+  raw_reference_rows$import_status[match("Abigail Latu-Meafou", raw_reference_rows$player_name)] == "local"
+)
+stopifnot(
   raw_reference_rows$nationality[match("Alice Teague-Neeld", raw_reference_rows$player_name)] == "Australia"
 )
 stopifnot(
@@ -177,6 +180,49 @@ stopifnot(all(is.na(missing_match_date_tables$player_season_demographics$match_d
 stopifnot(all(is.na(missing_match_date_tables$league_composition_summary$average_player_age)))
 stopifnot(all(is.na(missing_match_date_tables$league_composition_summary$average_debut_age)))
 stopifnot(nrow(missing_match_date_tables$league_composition_debut_bands) == 0L)
+
+import_rule_player_period_fixture <- data.frame(
+  player_id = c(1L, 2L, 1L, 2L),
+  season = c(2016L, 2016L, 2017L, 2017L),
+  match_id = c(30L, 31L, 40L, 41L),
+  squad_name = c("Swifts", "Fever", "Swifts", "Fever"),
+  stringsAsFactors = FALSE
+)
+
+import_rule_matches_fixture <- data.frame(
+  match_id = c(30L, 31L, 40L, 41L),
+  season = c(2016L, 2016L, 2017L, 2017L),
+  match_date = as.Date(c("2016-04-01", "2016-04-02", "2017-04-01", "2017-04-02")),
+  home_squad_id = c(1L, 2L, 1L, 2L),
+  away_squad_id = c(9L, 8L, 9L, 8L),
+  stringsAsFactors = FALSE
+)
+
+import_rule_tables <- build_player_reference_tables(
+  players_fixture,
+  import_rule_player_period_fixture,
+  import_rule_matches_fixture,
+  reference_fixture
+)
+import_rule_summary <- import_rule_tables$league_composition_summary
+
+stopifnot(
+  is.na(import_rule_summary$players_with_import_status[import_rule_summary$season == 2016L][[1]])
+)
+stopifnot(is.na(import_rule_summary$import_coverage_share[import_rule_summary$season == 2016L][[1]]))
+stopifnot(is.na(import_rule_summary$import_share[import_rule_summary$season == 2016L][[1]]))
+stopifnot(
+  identical(
+    import_rule_summary$players_with_import_status[import_rule_summary$season == 2017L][[1]],
+    2L
+  )
+)
+stopifnot(
+  identical(
+    import_rule_summary$import_share[import_rule_summary$season == 2017L][[1]],
+    0.5
+  )
+)
 
 cat("Player reference contract checks passed\n")
 }
