@@ -236,6 +236,26 @@ assert_true(
   'Expected mixed ANZC/SSN league composition coverage to return NA import coverage metadata.'
 )
 check_step('league composition coverage marks mixed ANZC and SSN import coverage as not applicable')
+plumber_helpers_env <- new.env(parent = globalenv())
+sys.source('api/plumber.R', envir = plumber_helpers_env)
+serializer_payload <- list(
+  coverage = plumber_helpers_env$record_to_scalars(list(players_with_import_status = NA_integer_)),
+  data = plumber_helpers_env$rows_to_records(data.frame(
+    season = 2016L,
+    import_share = NA_real_,
+    stringsAsFactors = FALSE
+  ))
+)
+serializer_json <- jsonlite::toJSON(serializer_payload, auto_unbox = TRUE, null = 'null')
+assert_true(
+  grepl('"players_with_import_status":null', serializer_json, fixed = TRUE),
+  'Expected record_to_scalars to serialize NA coverage values as JSON null.'
+)
+assert_true(
+  grepl('"import_share":null', serializer_json, fixed = TRUE),
+  'Expected rows_to_records to serialize NA row values as JSON null.'
+)
+check_step('shared API serializers emit JSON null for NA scalar values')
 assert_true(
   identical(
     helpers_env$resolve_query_stat(

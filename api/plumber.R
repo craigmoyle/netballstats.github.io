@@ -687,8 +687,17 @@ home_venue_breakdown_statement_timeout_ms <- function() {
 }
 
 json_scalar <- function(value) {
+  if (is.null(value) || length(value) == 0L) {
+    return(NULL)
+  }
+
   if (!is.list(value) && length(value) == 1L) {
-    return(jsonlite::unbox(value))
+    scalar <- value[[1L]]
+    if (is.null(scalar) || length(scalar) == 0L || (length(scalar) == 1L && is.na(scalar))) {
+      return(NULL)
+    }
+
+    return(jsonlite::unbox(unname(scalar)))
   }
 
   value
