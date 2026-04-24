@@ -208,9 +208,30 @@ if (identical(round_preview_status, 200L)) {
     'Expected /round-preview-summary to return upcoming matches.'
   )
   first_preview_match <- first_record(round_preview_payload$matches)
+  assert_true(is.list(first_preview_match$fixture), 'Expected round preview matches to include fixture metadata.')
   assert_true(
-    is.list(first_preview_match$fixture),
-    'Expected round preview matches to include fixture metadata.'
+    is.list(first_preview_match$head_to_head) || nzchar(as.character(scalar_value(first_preview_match$history_note %||% ''))),
+    'Expected round preview matches to include head-to-head context or an explicit sparse-history note.'
+  )
+  assert_true(
+    is.list(first_preview_match$last_meeting) || nzchar(as.character(scalar_value(first_preview_match$history_note %||% ''))),
+    'Expected round preview matches to include last-meeting context or an explicit sparse-history note.'
+  )
+  assert_true(
+    is.list(first_preview_match$recent_form),
+    'Expected round preview matches to include recent-form summaries.'
+  )
+  assert_true(
+    is.list(first_preview_match$streaks),
+    'Expected round preview matches to include streak summaries.'
+  )
+  assert_true(
+    is.list(first_preview_match$player_watch),
+    'Expected round preview matches to include player-watch notes.'
+  )
+  assert_true(
+    is.list(first_preview_match$fact_cards),
+    'Expected round preview matches to include editorial fact cards.'
   )
   check_step('round preview endpoint returns upcoming-round content')
 } else {

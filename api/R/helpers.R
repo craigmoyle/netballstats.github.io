@@ -2892,26 +2892,313 @@ build_round_preview_payload <- function(conn, season = NULL) {
     ),
     matches = lapply(seq_len(nrow(matches)), function(i) {
       row <- matches[i, , drop = FALSE]
+      home_team <- normalize_record_value(row$home_squad_name[[1]])
+      away_team <- normalize_record_value(row$away_squad_name[[1]])
+      home_squad_id <- suppressWarnings(as.integer(row$home_squad_id[[1]]))
+      away_squad_id <- suppressWarnings(as.integer(row$away_squad_id[[1]]))
+      head_to_head <- fetch_preview_head_to_head(conn, home_squad_id, away_squad_id, home_team, away_team)
+      last_meeting <- fetch_preview_last_meeting(conn, home_squad_id, away_squad_id)
+      home_recent <- fetch_preview_recent_form(conn, home_squad_id, season_value, limit = 5L)
+      away_recent <- fetch_preview_recent_form(conn, away_squad_id, season_value, limit = 5L)
+      home_recent_note <- fetch_preview_player_watch(conn, home_squad_id, seasons = season_value, context = "recent_form")
+      away_recent_note <- fetch_preview_player_watch(conn, away_squad_id, seasons = season_value, context = "recent_form")
+      home_last_meeting_note <- fetch_preview_player_watch(conn, home_squad_id, match_id = last_meeting$match_id %||% NULL, seasons = season_value, context = "last_meeting")
+      away_last_meeting_note <- fetch_preview_player_watch(conn, away_squad_id, match_id = last_meeting$match_id %||% NULL, seasons = season_value, context = "last_meeting")
+
+      sparse_history_note <- if (is.null(head_to_head)) {
+        "First recorded meeting in the archive."
+      } else if (head_to_head$meetings <= 2L) {
+        sprintf("Only %s prior meetings are logged.", head_to_head$meetings)
+      } else {
+        NULL
+      }
+
       list(
         fixture = list(
           match_id = suppressWarnings(as.integer(row$match_id[[1]])),
-          home_team = normalize_record_value(row$home_squad_name[[1]]),
-          away_team = normalize_record_value(row$away_squad_name[[1]]),
-          home_team_id = suppressWarnings(as.integer(row$home_squad_id[[1]])),
-          away_team_id = suppressWarnings(as.integer(row$away_squad_id[[1]])),
+          home_team = home_team,
+          away_team = away_team,
+          home_team_id = home_squad_id,
+          away_team_id = away_squad_id,
           home_logo_url = NULL,
           away_logo_url = NULL,
           venue = normalize_record_value(row$venue_name[[1]] %||% NULL),
           local_start_time = normalize_record_value(row$local_start_time[[1]] %||% NULL)
         ),
-        head_to_head = NULL,
-        last_meeting = NULL,
-        recent_form = NULL,
-        streaks = NULL,
-        player_watch = list(),
-        fact_cards = list()
+        head_to_head = head_to_head,
+        last_meeting = last_meeting,
+        recent_form = list(
+          home = home_recent,
+          away = away_recent,
+          summary = sprintf("%s; %s", home_recent$summary, away_recent$summary)
+        ),
+        streaks = list(
+          home = summarize_preview_streak(home_recent$results, home_team),
+          away = summarize_preview_streak(away_recent$results, away_team)
+        ),
+        player_watch = Filter(Negate(is.null), list(
+          if (!is.null(home_recent_note)) c(list(team = home_team), home_recent_note) else NULL,
+          if (!is.null(home_last_meeting_note)) c(list(team = home_team), home_last_meeting_note) else NULL,
+          if (!is.null(away_recent_note)) c(list(team = away_team), away_recent_note) else NULL,
+          if (!is.null(away_last_meeting_note)) c(list(team = away_team), away_last_meeting_note) else NULL
+        )),
+        fact_cards = Filter(Negate(is.null), list(
+          sparse_history_note,
+          if (!is.null(last_meeting)) last_meeting$summary else NULL
+        )),
+        history_note = sparse_history_note
       )
     })
+  )
+}
+
+fetch_preview_head_to_head <- function(conn, home_squad_id, away_squad_id, home_team_name, away_team_name) {
+  rows <- query_rows(
+    conn,
+    paste(
+      "SELECT COUNT(*) AS meetings,",
+      "SUM(CASE WHEN home_score > away_score AND home_squad_id = ?home_squad_id THEN 1",
+      "         WHEN away_score > home_score AND away_squad_id = ?home_squad_id THEN 1 ELSE 0 END) AS home_wins,",
+      "SUM(CASE WHEN home_score > away_score AND home_squad_id = ?away_squad_id THEN 1",
+      "         WHEN away_score > home_score AND away_squad_id = ?away_squad_id THEN 1 ELSE 0 END) AS away_wins",
+      "FROM matches",
+      "WHERE home_score IS NOT NULL AND away_score IS NOT NULL",
+      "AND ((home_squad_id = ?home_squad_id AND away_squad_id = ?away_squad_id)",
+      "  OR (home_squad_id = ?away_squad_id AND away_squad_id = ?home_squad_id))"
+    ),
+    list(home_squad_id = as.integer(home_squad_id), away_squad_id = as.integer(away_squad_id))
+  )
+
+  if (!nrow(rows) || is.na(rows$meetings[[1]]) || rows$meetings[[1]] == 0) {
+    return(NULL)
+  }
+
+  meetings <- as.integer(rows$meetings[[1]])
+  home_wins <- as.integer(rows$home_wins[[1]] %||% 0L)
+  away_wins <- as.integer(rows$away_wins[[1]] %||% 0L)
+  summary <- if (home_wins == away_wins) {
+    sprintf("%s and %s are level %s-%s over %s meetings.", home_team_name, away_team_name, home_wins, away_wins, meetings)
+  } else if (home_wins > away_wins) {
+    sprintf("%s lead the archive series %s-%s over %s meetings.", home_team_name, home_wins, away_wins, meetings)
+  } else {
+    sprintf("%s lead the archive series %s-%s over %s meetings.", away_team_name, away_wins, home_wins, meetings)
+  }
+
+  list(
+    meetings = meetings,
+    home_wins = home_wins,
+    away_wins = away_wins,
+    summary = summary
+  )
+}
+
+fetch_preview_last_meeting <- function(conn, home_squad_id, away_squad_id) {
+  rows <- query_rows(
+    conn,
+    paste(
+      "SELECT match_id, season, round_number, local_start_time, home_squad_name, away_squad_name, home_score, away_score,",
+      "CASE WHEN home_score > away_score THEN home_squad_name",
+      "     WHEN away_score > home_score THEN away_squad_name",
+      "     ELSE 'Draw' END AS winner_name",
+      "FROM matches",
+      "WHERE home_score IS NOT NULL AND away_score IS NOT NULL",
+      "AND ((home_squad_id = ?home_squad_id AND away_squad_id = ?away_squad_id)",
+      "  OR (home_squad_id = ?away_squad_id AND away_squad_id = ?home_squad_id))",
+      "ORDER BY local_start_time DESC, season DESC, round_number DESC LIMIT 1"
+    ),
+    list(home_squad_id = as.integer(home_squad_id), away_squad_id = as.integer(away_squad_id))
+  )
+
+  if (!nrow(rows)) {
+    return(NULL)
+  }
+
+  margin <- abs(as.integer(rows$home_score[[1]]) - as.integer(rows$away_score[[1]]))
+
+  list(
+    winner = normalize_record_value(rows$winner_name[[1]]),
+    scoreline = sprintf("%s-%s", rows$home_score[[1]], rows$away_score[[1]]),
+    season = as.integer(rows$season[[1]]),
+    round_number = as.integer(rows$round_number[[1]]),
+    match_id = suppressWarnings(as.integer(rows$match_id[[1]] %||% NA_integer_)),
+    local_start_time = normalize_record_value(rows$local_start_time[[1]] %||% NULL),
+    summary = sprintf(
+      "%s won the last meeting by %s points in Round %s, %s.",
+      rows$winner_name[[1]],
+      margin,
+      rows$round_number[[1]],
+      rows$season[[1]]
+    )
+  )
+}
+
+fetch_preview_recent_form <- function(conn, squad_id, season, limit = 5L) {
+  rows <- query_rows(
+    conn,
+    paste(
+      "SELECT season, round_number, local_start_time,",
+      "CASE",
+      "WHEN home_squad_id = ?squad_id AND home_score > away_score THEN 'W'",
+      "WHEN away_squad_id = ?squad_id AND away_score > home_score THEN 'W'",
+      "WHEN home_squad_id = ?squad_id AND home_score < away_score THEN 'L'",
+      "WHEN away_squad_id = ?squad_id AND away_score < home_score THEN 'L'",
+      "ELSE 'D' END AS result",
+      "FROM matches",
+      "WHERE home_score IS NOT NULL AND away_score IS NOT NULL",
+      "AND (home_squad_id = ?squad_id OR away_squad_id = ?squad_id)",
+      "AND season <= ?season",
+      "ORDER BY CASE WHEN season = ?season THEN 0 ELSE 1 END, season DESC, local_start_time DESC",
+      "LIMIT ?limit"
+    ),
+    list(squad_id = as.integer(squad_id), season = as.integer(season), limit = as.integer(limit))
+  )
+
+  results <- unlist(rows$result %||% character(), use.names = FALSE)
+  wins <- sum(results == "W")
+  losses <- sum(results == "L")
+
+  list(
+    wins = wins,
+    losses = losses,
+    results = as.list(results),
+    summary = sprintf("%s wins from the last %s completed matches.", wins, length(results))
+  )
+}
+
+summarize_preview_streak <- function(results, team_name) {
+  values <- unlist(results %||% character(), use.names = FALSE)
+  if (!length(values)) {
+    return(NULL)
+  }
+
+  first_value <- values[[1]]
+  streak_length <- 1L
+  if (length(values) > 1L) {
+    for (idx in 2:length(values)) {
+      if (!identical(values[[idx]], first_value)) break
+      streak_length <- streak_length + 1L
+    }
+  }
+
+  if (identical(first_value, "W")) {
+    return(list(type = "win", length = streak_length, summary = sprintf("%s enter on a %s-match winning streak.", team_name, streak_length)))
+  }
+  if (identical(first_value, "L")) {
+    return(list(type = "loss", length = streak_length, summary = sprintf("%s have dropped their last %s.", team_name, streak_length)))
+  }
+
+  list(type = "draw", length = streak_length, summary = sprintf("%s have drawn %s straight.", team_name, streak_length))
+}
+
+fetch_preview_player_watch <- function(conn, squad_id, match_id = NULL, seasons, context = c("recent_form", "last_meeting")) {
+  context <- match.arg(context)
+  if (identical(context, "last_meeting") && is.null(match_id)) {
+    return(NULL)
+  }
+
+  if (identical(context, "recent_form")) {
+    query <- paste(
+      "WITH recent_matches AS (",
+      "  SELECT match_id",
+      "  FROM matches",
+      "  WHERE home_score IS NOT NULL AND away_score IS NOT NULL",
+      "    AND (home_squad_id = ?squad_id OR away_squad_id = ?squad_id)",
+      "    AND season <= ?season",
+      "  ORDER BY CASE WHEN season = ?season THEN 0 ELSE 1 END, local_start_time DESC",
+      "  LIMIT 5",
+      "), point_rows AS (",
+      "  SELECT pms.player_id, players.canonical_name, SUM(CASE WHEN pms.stat = 'goal1' THEN pms.value_number WHEN pms.stat = 'goal2' THEN pms.value_number * 2 ELSE 0 END) AS total_points",
+      "  FROM player_match_stats pms",
+      "  JOIN players ON players.player_id = pms.player_id",
+      "  WHERE pms.match_id IN (SELECT match_id FROM recent_matches) AND pms.squad_id = ?squad_id",
+      "  GROUP BY pms.player_id, players.canonical_name",
+      "  ORDER BY total_points DESC, players.canonical_name ASC",
+      "  LIMIT 1",
+      ")",
+      "SELECT canonical_name, total_points FROM point_rows"
+    )
+    rows <- query_rows(conn, query, list(squad_id = as.integer(squad_id), season = as.integer(seasons)))
+    if (nrow(rows) && !is.na(rows$total_points[[1]]) && rows$total_points[[1]] > 0) {
+      return(list(
+        context = "recent_form",
+        summary = sprintf("%s leads this side with %s points across its last five completed matches.", rows$canonical_name[[1]], rows$total_points[[1]])
+      ))
+    }
+
+    gain_rows <- query_rows(
+      conn,
+      paste(
+        "WITH recent_matches AS (",
+        "  SELECT match_id",
+        "  FROM matches",
+        "  WHERE home_score IS NOT NULL AND away_score IS NOT NULL",
+        "    AND (home_squad_id = ?squad_id OR away_squad_id = ?squad_id)",
+        "    AND season <= ?season",
+        "  ORDER BY CASE WHEN season = ?season THEN 0 ELSE 1 END, local_start_time DESC",
+        "  LIMIT 5",
+        ")",
+        "SELECT players.canonical_name, SUM(pms.value_number) AS total_gain",
+        "FROM player_match_stats pms",
+        "JOIN players ON players.player_id = pms.player_id",
+        "WHERE pms.match_id IN (SELECT match_id FROM recent_matches)",
+        "  AND pms.squad_id = ?squad_id",
+        "  AND pms.stat = 'gain'",
+        "GROUP BY players.canonical_name",
+        "ORDER BY total_gain DESC, players.canonical_name ASC",
+        "LIMIT 1"
+      ),
+      list(squad_id = as.integer(squad_id), season = as.integer(seasons))
+    )
+    if (!nrow(gain_rows) || is.na(gain_rows$total_gain[[1]]) || gain_rows$total_gain[[1]] <= 0) {
+      return(NULL)
+    }
+
+    return(list(
+      context = "recent_form",
+      summary = sprintf("%s leads this side with %s gains across its last five completed matches.", gain_rows$canonical_name[[1]], gain_rows$total_gain[[1]])
+    ))
+  }
+
+  query <- paste(
+    "WITH point_rows AS (",
+    "  SELECT pms.player_id, players.canonical_name, SUM(CASE WHEN pms.stat = 'goal1' THEN pms.value_number WHEN pms.stat = 'goal2' THEN pms.value_number * 2 ELSE 0 END) AS total_points",
+    "  FROM player_match_stats pms",
+    "  JOIN players ON players.player_id = pms.player_id",
+    "  WHERE pms.match_id = ?match_id AND pms.squad_id = ?squad_id",
+    "  GROUP BY pms.player_id, players.canonical_name",
+    "  ORDER BY total_points DESC, players.canonical_name ASC",
+    "  LIMIT 1",
+    ")",
+    "SELECT canonical_name, total_points FROM point_rows"
+  )
+  rows <- query_rows(conn, query, list(match_id = as.integer(match_id), squad_id = as.integer(squad_id)))
+  if (nrow(rows) && !is.na(rows$total_points[[1]]) && rows$total_points[[1]] > 0) {
+    return(list(
+      context = "last_meeting",
+      summary = sprintf("%s scored %s points in the last meeting.", rows$canonical_name[[1]], rows$total_points[[1]])
+    ))
+  }
+
+  gain_rows <- query_rows(
+    conn,
+    paste(
+      "SELECT players.canonical_name, SUM(pms.value_number) AS total_gain",
+      "FROM player_match_stats pms",
+      "JOIN players ON players.player_id = pms.player_id",
+      "WHERE pms.match_id = ?match_id AND pms.squad_id = ?squad_id AND pms.stat = 'gain'",
+      "GROUP BY players.canonical_name",
+      "ORDER BY total_gain DESC, players.canonical_name ASC",
+      "LIMIT 1"
+    ),
+    list(match_id = as.integer(match_id), squad_id = as.integer(squad_id))
+  )
+  if (!nrow(gain_rows) || is.na(gain_rows$total_gain[[1]]) || gain_rows$total_gain[[1]] <= 0) {
+    return(NULL)
+  }
+
+  list(
+    context = "last_meeting",
+    summary = sprintf("%s recorded %s gains in the last meeting.", gain_rows$canonical_name[[1]], gain_rows$total_gain[[1]])
   )
 }
 
