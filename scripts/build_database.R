@@ -1445,24 +1445,35 @@ if (!sample_mode) {
             away_name <- team_map[[m$awaySquadName]] %||% m$awaySquadName
             
             tryCatch({
+              # Extract home_squad_id and away_squad_id from API (or use 0 as placeholder)
+              home_squad_id <- if (!is.null(m$homeSquadId)) as.integer(m$homeSquadId) else 0L
+              away_squad_id <- if (!is.null(m$awaySquadId)) as.integer(m$awaySquadId) else 0L
+              game_number <- if (!is.null(m$gameNumber)) as.integer(m$gameNumber) else 1L
+              season_year <- as.integer(format(Sys.Date(), "%Y")) + 1L
+              
               DBI::dbExecute(conn, "
                 INSERT INTO matches (
-                  match_id, champion_data_match_id, home_team, away_team,
-                  local_start_time, utc_start_time, round_number, 
-                  venue, venue_location, home_score, away_score, status
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                  match_id, champion_data_match_id, season, round_number, game_number,
+                  local_start_time, utc_start_time, venue_name, competition_phase,
+                  home_squad_id, home_squad_name, away_squad_id, away_squad_name,
+                  home_score, away_score, status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
                 ON CONFLICT (match_id) DO NOTHING
               ", list(
                 paste0("netball_", m$matchId),
                 m$matchId,
-                home_name,
-                away_name,
+                season_year,
+                m$roundNumber,
+                game_number,
                 m$localStartTime,
                 m$utcStartTime,
-                m$roundNumber,
                 m$venueName,
-                m$venueLocation,
-                0, 0, "upcoming"
+                "",
+                home_squad_id,
+                home_name,
+                away_squad_id,
+                away_name,
+                NA_integer_, NA_integer_, "upcoming"
               ))
               inserts_done <- inserts_done + 1
             }, error = function(e) {
