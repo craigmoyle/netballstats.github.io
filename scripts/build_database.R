@@ -20,6 +20,7 @@ script_path <- function() {
 
 repo_root_path <- normalizePath(file.path(dirname(script_path()), ".."), mustWork = FALSE)
 source(file.path(repo_root_path, "R", "database.R"), local = TRUE)
+source(file.path(repo_root_path, "R", "bootstrap_fixtures.R"), local = TRUE)
 source(file.path(repo_root_path, "R", "player_reference.R"), local = TRUE)
 source(file.path(repo_root_path, "api", "R", "helpers.R"), local = TRUE)
 config_path <- file.path(repo_root_path, "config", "competitions.csv")
@@ -1403,18 +1404,28 @@ message(sprintf("Database written to %s with %s matches.", database_target_descr
 if (!sample_mode) {
   tryCatch({
     message("Bootstrapping future season fixtures from netball.com.au...")
-    conn <- get_connection(database_target_description())
+    conn <- open_database_connection()
     
-    # Check if we already have fixtures for a future season
-    future_matches <- DBI::dbGetQuery(conn, "
-      SELECT COUNT(*) as cnt FROM matches 
-      WHERE extract(year from local_start_time) > extract(year from CURRENT_DATE)
-    ")
+    current_season <- as.integer(format(Sys.Date(), "%Y"))
+    now_utc <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+    future_matches <- DBI::dbGetQuery(
+      conn,
+      "
+      SELECT COUNT(*) AS cnt
+      FROM matches
+      WHERE season = $1
+        AND home_score IS NULL
+        AND away_score IS NULL
+        AND utc_start_time IS NOT NULL
+        AND utc_start_time > $2
+      ",
+      params = list(current_season, now_utc)
+    )
     
     if (future_matches$cnt[[1]] == 0) {
       message("  No future season matches found. Attempting to fetch from netball.com.au API...")
       resp <- httr::GET("https://api.netball.com.au/v1/matches",
-        query = list(competitionId = 291, season = format(Sys.Date(), "%Y")),
+        query = list(competitionId = 291, season = current_season),
         httr::timeout(20)
       )
       
@@ -1424,58 +1435,49 @@ if (!sample_mode) {
         message(sprintf("  Fetched %d total matches from API", length(matches_raw)))
         
         # Filter to upcoming
-        now_utc <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
         upcoming <- Filter(function(m) m$utcStartTime > now_utc, matches_raw)
         message(sprintf("  Found %d upcoming matches after filtering by time", length(upcoming)))
         
         if (length(upcoming) > 0) {
-          # Map team names
-          team_map <- list(
-            "Swifts" = "NSW Swifts",
-            "GIANTS" = "GIANTS Netball",
-            "Thunderbirds" = "Queensland Thunderbirds",
-            "Lightning" = "Sunshine Coast Lightning",
-            "Firebirds" = "Brisbane Firebirds",
-            "Mavericks" = "West Coast Mavericks",
-            "Fever" = "Perth Fever",
-            "Vixens" = "Melbourne Vixens"
-          )
-          
           inserts_done <- 0
           for (m in upcoming) {
-            home_name <- team_map[[m$homeSquadName]] %||% m$homeSquadName
-            away_name <- team_map[[m$awaySquadName]] %||% m$awaySquadName
+            home_name <- normalize_fixture_team_name(m$homeSquadName)
+            away_name <- normalize_fixture_team_name(m$awaySquadName)
             
             tryCatch({
-              # Extract home_squad_id and away_squad_id from API (or use 0 as placeholder)
               home_squad_id <- if (!is.null(m$homeSquadId)) as.integer(m$homeSquadId) else 0L
               away_squad_id <- if (!is.null(m$awaySquadId)) as.integer(m$awaySquadId) else 0L
-              game_number <- if (!is.null(m$gameNumber)) as.integer(m$gameNumber) else 1L
-              season_year <- as.integer(format(Sys.Date(), "%Y"))
+              round_number <- normalize_fixture_round_number(m$roundNumber)
+              game_number <- normalize_fixture_match_number(m$matchNumber)
+              venue_id <- if (!is.null(m$venueId)) as.integer(m$venueId) else NA_integer_
+              match_id <- if (!is.null(m$matchId)) as.integer(m$matchId) else NA_integer_
               
               DBI::dbExecute(conn, "
                 INSERT INTO matches (
-                  match_id, champion_data_match_id, season, round_number, game_number,
-                  local_start_time, utc_start_time, venue_name, competition_phase,
+                  match_id, season, competition_phase, competition_id, round_number, game_number,
+                  match_type, match_status, venue_id, local_start_time, utc_start_time, venue_name,
                   home_squad_id, home_squad_name, away_squad_id, away_squad_name,
-                  home_score, away_score, status
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                  home_score, away_score
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
                 ON CONFLICT (match_id) DO NOTHING
               ", list(
-                paste0("netball_", m$matchId),
-                m$matchId,
-                season_year,
-                m$roundNumber,
+                match_id,
+                current_season,
+                "regular",
+                as.integer(m$competitionId),
+                round_number,
                 game_number,
+                m$matchType %||% NA_character_,
+                m$matchStatus %||% NA_character_,
+                venue_id,
                 m$localStartTime,
                 m$utcStartTime,
                 m$venueName,
-                "",
                 home_squad_id,
                 home_name,
                 away_squad_id,
                 away_name,
-                NA_integer_, NA_integer_, "upcoming"
+                NA_integer_, NA_integer_
               ))
               inserts_done <- inserts_done + 1
             }, error = function(e) {
