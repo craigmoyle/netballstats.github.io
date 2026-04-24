@@ -1414,7 +1414,7 @@ if (!sample_mode) {
     if (future_matches$cnt[[1]] == 0) {
       message("  No future season matches found. Attempting to fetch from netball.com.au API...")
       resp <- httr::GET("https://api.netball.com.au/v1/matches",
-        query = list(competitionId = 291, season = format(Sys.Date(), "%Y") + 1),
+        query = list(competitionId = 291, season = format(Sys.Date(), "%Y")),
         httr::timeout(20)
       )
       
