@@ -5,6 +5,8 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(purrr)
   library(superNetballR)
+  library(httr)
+  library(jsonlite)
 })
 
 script_path <- function() {
@@ -1396,3 +1398,87 @@ if (!length(entries)) {
 tables <- prepare_match_tables(entries, competitions)
 invisible(write_database(tables, if (sample_mode) "sample" else "production"))
 message(sprintf("Database written to %s with %s matches.", database_target_description(), nrow(tables$matches)))
+
+# Bootstrap future season fixtures from netball.com.au API if not already in database
+if (!sample_mode) {
+  tryCatch({
+    message("Bootstrapping future season fixtures from netball.com.au...")
+    conn <- get_connection(database_target_description())
+    
+    # Check if we already have fixtures for a future season
+    future_matches <- DBI::dbGetQuery(conn, "
+      SELECT COUNT(*) as cnt FROM matches 
+      WHERE extract(year from local_start_time) > extract(year from CURRENT_DATE)
+    ")
+    
+    if (future_matches$cnt[[1]] == 0) {
+      message("  No future season matches found. Attempting to fetch from netball.com.au API...")
+      resp <- httr::GET("https://api.netball.com.au/v1/matches",
+        query = list(competitionId = 291, season = format(Sys.Date(), "%Y") + 1),
+        httr::timeout(20)
+      )
+      
+      if (httr::status_code(resp) == 200) {
+        data <- jsonlite::fromJSON(httr::content(resp, "text"), simplifyVector = FALSE)
+        matches_raw <- data$data
+        
+        # Filter to upcoming
+        now_utc <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+        upcoming <- Filter(function(m) m$utcStartTime > now_utc, matches_raw)
+        
+        if (length(upcoming) > 0) {
+          # Map team names
+          team_map <- list(
+            "Swifts" = "NSW Swifts",
+            "GIANTS" = "GIANTS Netball",
+            "Thunderbirds" = "Queensland Thunderbirds",
+            "Lightning" = "Sunshine Coast Lightning",
+            "Firebirds" = "Brisbane Firebirds",
+            "Mavericks" = "West Coast Mavericks",
+            "Fever" = "Perth Fever",
+            "Vixens" = "Melbourne Vixens"
+          )
+          
+          inserts_done <- 0
+          for (m in upcoming) {
+            home_name <- team_map[[m$homeSquadName]] %||% m$homeSquadName
+            away_name <- team_map[[m$awaySquadName]] %||% m$awaySquadName
+            
+            tryCatch({
+              DBI::dbExecute(conn, "
+                INSERT INTO matches (
+                  match_id, champion_data_match_id, home_team, away_team,
+                  local_start_time, utc_start_time, round_number, 
+                  venue, venue_location, home_score, away_score, status
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                ON CONFLICT (match_id) DO NOTHING
+              ", list(
+                paste0("netball_", m$matchId),
+                m$matchId,
+                home_name,
+                away_name,
+                m$localStartTime,
+                m$utcStartTime,
+                m$roundNumber,
+                m$venueName,
+                m$venueLocation,
+                0, 0, "upcoming"
+              ))
+              inserts_done <- inserts_done + 1
+            }, error = function(e) {
+              warning(sprintf("Failed to insert fixture %s: %s", m$matchId, conditionMessage(e)))
+            })
+          }
+          
+          message(sprintf("  ✓ Bootstrapped %d future season fixtures", inserts_done))
+        }
+      } else {
+        message(sprintf("  ⚠ netball.com.au API returned %d", httr::status_code(resp)))
+      }
+    }
+    
+    DBI::dbDisconnect(conn)
+  }, error = function(e) {
+    warning(sprintf("Bootstrap fixtures failed (non-blocking): %s", conditionMessage(e)))
+  })
+}
