@@ -3105,6 +3105,9 @@ summarize_preview_streak <- function(results, team_name) {
 
 fetch_preview_player_watch <- function(conn, squad_id, match_id = NULL, seasons, context = c("recent_form", "last_meeting")) {
   context <- match.arg(context)
+  if (!has_player_match_stats(conn)) {
+    return(NULL)
+  }
   if (identical(context, "last_meeting") && is.null(match_id)) {
     return(NULL)
   }
