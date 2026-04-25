@@ -23,9 +23,10 @@ COPY renv.lock renv/settings.json ./
 COPY renv/ ./renv/
 
 # Install renv and restore dependencies (cached if renv.lock unchanged)
-# Use --no-restore --no-save to skip startup files, and -s to run in silent mode
+# Explicitly set library paths BEFORE restore so renv uses our custom location
 RUN mkdir -p /opt/renv/cache /opt/renv/library && \
     R --no-restore --no-save -q -e " \
+  .libPaths(c('/opt/renv/library/R-4.5', .libPaths())); \
   options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
   install.packages('renv'); \
   renv::consent(provided = TRUE); \
