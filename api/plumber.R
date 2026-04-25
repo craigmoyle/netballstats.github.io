@@ -40,6 +40,7 @@ options(netballstats.repo_root = repo_root_path)
 source(file.path(repo_root_path, "R", "database.R"), local = TRUE)
 source(file.path(repo_root_path, "R", "player_reference.R"), local = TRUE)
 source(file.path(repo_root_path, "api", "R", "helpers.R"), local = TRUE)
+source(file.path(repo_root_path, "api", "R", "parse_question.R"), local = TRUE)
 
 # Shared in-process cache for /meta responses (30-minute TTL).
 .meta_cache <- new.env(parent = emptyenv())
@@ -1732,6 +1733,67 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
       )),
       rows = rows_to_records(rows)
     )
+  }, error = function(error) {
+    handle_request_error(error, res)
+  })
+}
+
+#* @post /query/parse
+#* @post /api/query/parse
+#* @summary Parse a freeform natural language question
+#* @param question Character question text (POST body JSON: { "question": "..." })
+function(req, res) {
+  tryCatch({
+    # Parse JSON body
+    raw_body <- req$postBody %||% ""
+    if (!nzchar(raw_body)) {
+      res$status <- 400L
+      return(list(
+        success = jsonlite::unbox(FALSE),
+        error = jsonlite::unbox("Request body is empty. Expected JSON with 'question' field.")
+      ))
+    }
+
+    body_data <- tryCatch({
+      jsonlite::fromJSON(raw_body, simplifyVector = FALSE)
+    }, error = function(e) {
+      NULL
+    })
+
+    if (is.null(body_data)) {
+      res$status <- 400L
+      return(list(
+        success = jsonlite::unbox(FALSE),
+        error = jsonlite::unbox("Invalid JSON in request body.")
+      ))
+    }
+
+    question_text <- body_data$question %||% ""
+    if (!is.character(question_text) || !nzchar(trimws(question_text))) {
+      res$status <- 400L
+      return(list(
+        success = jsonlite::unbox(FALSE),
+        error = jsonlite::unbox("'question' field must be a non-empty string.")
+      ))
+    }
+
+    # Call the parser
+    parse_result <- parse_natural_language_question(question_text)
+
+    if (identical(parse_result$success, TRUE)) {
+      # Successful parse: return parsed fields as boxed scalars
+      return(list(
+        success = jsonlite::unbox(TRUE),
+        parsed = record_to_scalars(parse_result$parsed)
+      ))
+    } else {
+      # Parse failed: return error
+      res$status <- 200L  # 200 because it's a valid request, just no match
+      return(list(
+        success = jsonlite::unbox(FALSE),
+        error = jsonlite::unbox(parse_result$error)
+      ))
+    }
   }, error = function(error) {
     handle_request_error(error, res)
   })

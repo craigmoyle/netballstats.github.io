@@ -704,6 +704,28 @@ function updateUrl(question) {
 
 let questionRunning = false;
 
+async function tryParseQuestion(question) {
+  try {
+    const response = await fetch(buildUrl("/query/parse"), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({ question })
+    });
+
+    if (!response.ok) {
+      return { success: false, error: "Parser request failed" };
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    return { success: false, error: error.message || "Parse request error" };
+  }
+}
+
 async function runQuestion(question, source = "manual") {
   if (questionRunning) return;
 
@@ -738,6 +760,13 @@ async function runQuestion(question, source = "manual") {
   });
 
   try {
+    // Try to parse the question to provide UX feedback
+    const parseResult = await tryParseQuestion(trimmed);
+    let parseInfo = {};
+    if (parseResult.success && parseResult.parsed) {
+      parseInfo = parseResult.parsed;
+    }
+
     const result = await fetchJson("/query", { question: trimmed, limit: 12 });
     renderResult(result);
     updateUrl(trimmed);
