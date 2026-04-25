@@ -17,9 +17,9 @@ WORKDIR /app
 
 ENV RENV_PATHS_CACHE=/opt/renv/cache
 
-# Copy only dependency files first (renv.lock, renv/settings.dcf)
+# Copy only dependency files first (renv.lock, renv/settings.json)
 # This layer is cached if dependencies don't change
-COPY renv.lock renv/settings.dcf ./
+COPY renv.lock renv/settings.json ./
 COPY renv/ ./renv/
 
 # Install renv and restore dependencies (cached if renv.lock unchanged)
