@@ -6384,7 +6384,17 @@ attempt_complex_parse <- function(question) {
       result$shape <- "record"
       result$parsed <- record_parse$parsed
       result$confidence <- record_parse$confidence
-      result$status <- "success"
+      
+      # Determine status based on confidence tier
+      if (result$confidence >= 0.85) {
+        result$status <- "success"
+      } else if (result$confidence >= 0.65) {
+        result$status <- "parse_help_needed"
+        result$builder_prefill <- extract_builder_prefill(result$shape, result$parsed)
+      } else {
+        result$status <- "error"
+        result$error_message <- "Confidence too low for reliable parsing"
+      }
       return(result)
     }
   }
@@ -6396,7 +6406,17 @@ attempt_complex_parse <- function(question) {
       result$shape <- "comparison"
       result$parsed <- comp_parse$parsed
       result$confidence <- comp_parse$confidence
-      result$status <- "success"
+      
+      # Determine status based on confidence tier
+      if (result$confidence >= 0.85) {
+        result$status <- "success"
+      } else if (result$confidence >= 0.65) {
+        result$status <- "parse_help_needed"
+        result$builder_prefill <- extract_builder_prefill(result$shape, result$parsed)
+      } else {
+        result$status <- "error"
+        result$error_message <- "Confidence too low for reliable parsing"
+      }
       return(result)
     }
   }
@@ -6408,7 +6428,17 @@ attempt_complex_parse <- function(question) {
       result$shape <- "trend"
       result$parsed <- trend_parse$parsed
       result$confidence <- trend_parse$confidence
-      result$status <- "success"
+      
+      # Determine status based on confidence tier
+      if (result$confidence >= 0.85) {
+        result$status <- "success"
+      } else if (result$confidence >= 0.65) {
+        result$status <- "parse_help_needed"
+        result$builder_prefill <- extract_builder_prefill(result$shape, result$parsed)
+      } else {
+        result$status <- "error"
+        result$error_message <- "Confidence too low for reliable parsing"
+      }
       return(result)
     }
   }
@@ -6420,13 +6450,82 @@ attempt_complex_parse <- function(question) {
       result$shape <- "combination"
       result$parsed <- comb_parse$parsed
       result$confidence <- comb_parse$confidence
-      result$status <- "success"
+      
+      # Determine status based on confidence tier
+      if (result$confidence >= 0.85) {
+        result$status <- "success"
+      } else if (result$confidence >= 0.65) {
+        result$status <- "parse_help_needed"
+        result$builder_prefill <- extract_builder_prefill(result$shape, result$parsed)
+      } else {
+        result$status <- "error"
+        result$error_message <- "Confidence too low for reliable parsing"
+      }
       return(result)
     }
   }
 
   result$error_message <- "Could not parse query into a recognized pattern"
   result
+}
+
+extract_builder_prefill <- function(shape, parsed) {
+  if (is.null(shape) || is.null(parsed)) {
+    return(list())
+  }
+
+  prefill <- list()
+
+  if (shape == "comparison") {
+    # Comparison: subjects, stat, seasons
+    if (!is.null(parsed$subjects)) {
+      prefill$subjects <- parsed$subjects
+    }
+    if (!is.null(parsed$stat)) {
+      prefill$stat <- parsed$stat
+    }
+    if (!is.null(parsed$seasons)) {
+      prefill$seasons <- parsed$seasons
+    }
+  } else if (shape == "trend") {
+    # Trend: subject, stat, seasons
+    if (!is.null(parsed$subject)) {
+      prefill$subject <- parsed$subject
+    }
+    if (!is.null(parsed$stat)) {
+      prefill$stat <- parsed$stat
+    }
+    if (!is.null(parsed$seasons)) {
+      prefill$seasons <- parsed$seasons
+    }
+  } else if (shape == "record") {
+    # Record: stat, operator, seasons, scope
+    if (!is.null(parsed$stat)) {
+      prefill$stat <- parsed$stat
+    }
+    if (!is.null(parsed$operator)) {
+      prefill$operator <- parsed$operator
+    }
+    if (!is.null(parsed$seasons)) {
+      prefill$seasons <- parsed$seasons
+    }
+    if (!is.null(parsed$scope)) {
+      prefill$scope <- parsed$scope
+    }
+  } else if (shape == "combination") {
+    # Combination: filters, logical_operator, seasons
+    if (!is.null(parsed$filters)) {
+      prefill$filters <- parsed$filters
+    }
+    if (!is.null(parsed$logical_operator)) {
+      prefill$logical_operator <- parsed$logical_operator
+    }
+    if (!is.null(parsed$seasons)) {
+      prefill$seasons <- parsed$seasons
+    }
+  }
+
+  prefill
 }
 
 detect_record_pattern <- function(question_lower) {
