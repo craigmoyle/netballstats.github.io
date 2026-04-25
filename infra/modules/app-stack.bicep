@@ -946,6 +946,7 @@ resource staticWebAppLinkedBackend 'Microsoft.Web/staticSites/linkedBackends@202
   kind: 'ContainerApp'
   properties: {
     backendResourceId: apiContainerApp.id
+    routingPath: '/api'
     region: location
   }
 }
