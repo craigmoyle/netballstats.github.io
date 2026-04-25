@@ -78,6 +78,7 @@
               </div>
 
               <div id="query-template-strip" class="query-template-strip" role="group" aria-label="Question templates">
+                <!-- Simple shapes (text templates with placeholders) -->
                 <button type="button" class="query-template-button" data-template="How many times has [player] recorded [threshold] or more [stat]?">
                   <span class="query-template-button__label">Count threshold</span>
                   <span class="query-template-button__text">How many times has [player] recorded [threshold] or more [stat]?</span>
@@ -93,6 +94,38 @@
                 <button type="button" class="query-template-button" data-template="Which teams had the lowest [stat] in [season]?">
                   <span class="query-template-button__label">Team low mark</span>
                   <span class="query-template-button__text">Which teams had the lowest [stat] in [season]?</span>
+                </button>
+
+                <!-- Complex shapes (real examples using builder or direct queries) -->
+                <button type="button" class="query-template-button query-template-button--example" data-template-id="head-to-head">
+                  <span class="query-template-button__label">Head-to-Head</span>
+                  <span class="query-template-button__text">Vixens vs Swifts goals in 2025</span>
+                  <span class="query-template-button__badge">comparison</span>
+                </button>
+                <button type="button" class="query-template-button query-template-button--example" data-template-id="player-combo">
+                  <span class="query-template-button__label">Player Combo</span>
+                  <span class="query-template-button__text">Tara + Taryn feeds & intercepts</span>
+                  <span class="query-template-button__badge">combination</span>
+                </button>
+                <button type="button" class="query-template-button query-template-button--example" data-template-id="alltime-record">
+                  <span class="query-template-button__label">Record Holder</span>
+                  <span class="query-template-button__text">All-time most points</span>
+                  <span class="query-template-button__badge">record</span>
+                </button>
+                <button type="button" class="query-template-button query-template-button--example" data-template-id="multi-team">
+                  <span class="query-template-button__label">Multi-Team</span>
+                  <span class="query-template-button__text">Vixens, Swifts, Magpies gains 2025</span>
+                  <span class="query-template-button__badge">comparison</span>
+                </button>
+                <button type="button" class="query-template-button query-template-button--example" data-template-id="quarter-penalties">
+                  <span class="query-template-button__label">Quarter Breakdown</span>
+                  <span class="query-template-button__text">Vixens penalties by quarter</span>
+                  <span class="query-template-button__badge">trend</span>
+                </button>
+                <button type="button" class="query-template-button query-template-button--example" data-template-id="rising-stars">
+                  <span class="query-template-button__label">Rising Stars</span>
+                  <span class="query-template-button__text">Young players intercepts 2023–2025</span>
+                  <span class="query-template-button__badge">trend</span>
                 </button>
               </div>
               <p class="builder-step__note">Treat the bracketed placeholders as a checklist. Replace each one with a real name, stat, threshold, or season before you run it.</p>

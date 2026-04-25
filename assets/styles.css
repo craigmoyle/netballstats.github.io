@@ -3528,6 +3528,31 @@ caption.table-caption {
   line-height: 1.55;
 }
 
+.query-template-button__badge {
+  display: inline-block;
+  background-color: color-mix(in srgb, var(--accent-cool) 16%, transparent);
+  color: var(--accent-cool);
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: var(--type-2xs, 10px);
+  font-weight: 600;
+  margin-top: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  align-self: start;
+}
+
+.query-template-button--example {
+  background: color-mix(in srgb, var(--accent-cool) 6%, transparent);
+  border-color: color-mix(in srgb, var(--accent-cool) 12%, var(--border-strong));
+}
+
+.query-template-button--example:hover,
+.query-template-button--example:focus-visible {
+  background: color-mix(in srgb, var(--accent-cool) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent-cool) 34%, var(--border-strong));
+}
+
 .query-recipe {
   display: grid;
   gap: 0.35rem;
