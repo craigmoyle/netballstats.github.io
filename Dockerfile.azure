@@ -1,4 +1,4 @@
-FROM rocker/r-ver:4.5.2
+FROM rocker/r-ver:4.5.2 AS build
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
@@ -17,20 +17,42 @@ WORKDIR /app
 
 ENV RENV_PATHS_CACHE=/opt/renv/cache
 
-COPY . /app
+# Copy only dependency files first (renv.lock, renv/settings.dcf)
+# This layer is cached if dependencies don't change
+COPY renv.lock renv/settings.dcf ./
+COPY renv/ ./renv/
 
+# Install renv and restore dependencies (cached if renv.lock unchanged)
 RUN R -q -e " \
   options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
   install.packages('renv'); \
   renv::consent(provided = TRUE); \
   renv::restore(prompt = FALSE)"
 
-# Purge linux-libc-dev after R packages are compiled from source.
-# It is only needed at build time; removing it eliminates kernel-header
-# CVE alerts in Trivy scans without breaking the runtime image.
-# Do NOT use apt-get autoremove here — it can pull libgomp1 and other
-# R runtime libraries that were only recorded as auto-installed deps.
+# Copy application code (this layer updates on every code change)
+COPY . /app
+
+# Purge build-only dependencies after R packages are compiled
 RUN apt-get purge -y linux-libc-dev && rm -rf /var/lib/apt/lists/*
+
+# Runtime stage — copy only what's needed
+FROM rocker/r-ver:4.5.2
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libcurl4-openssl-dev \
+    libpq-dev \
+    libssl-dev \
+    libsodium-dev \
+    libxml2-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ENV RENV_PATHS_CACHE=/opt/renv/cache
+
+# Copy compiled R environment and app code from build stage
+COPY --from=build --chown=1000:1000 /opt/renv /opt/renv
+COPY --from=build --chown=1000:1000 /app /app
 
 ENV NETBALL_STATS_REPO_ROOT=/app
 ENV NETBALL_STATS_HOST=0.0.0.0

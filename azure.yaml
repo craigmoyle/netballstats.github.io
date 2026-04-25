@@ -40,26 +40,36 @@ hooks:
         --name "$SUN_JOB" \
         --query "properties.template.containers[0].name" \
         --output tsv)
+      
+      # Update both jobs' container images in parallel (background)
       az containerapp job update \
         --subscription "$AZURE_SUBSCRIPTION_ID" \
         --name "$SAT_JOB" \
         --resource-group "$RG" \
         --image "$API_IMAGE" \
-        --container-name "$SAT_CONTAINER"
+        --container-name "$SAT_CONTAINER" \
+        --no-wait &
       az containerapp job update \
         --subscription "$AZURE_SUBSCRIPTION_ID" \
         --name "$SUN_JOB" \
         --resource-group "$RG" \
         --image "$API_IMAGE" \
-        --container-name "$SUN_CONTAINER"
-      # Trigger an immediate DB rebuild so player_match_stats is created with
-      # the new image. Fire-and-forget — don't block the deploy on completion.
-      echo "Triggering DB refresh to rebuild player_match_stats..."
-      az containerapp job start \
-        --subscription "$AZURE_SUBSCRIPTION_ID" \
-        --name "$SAT_JOB" \
-        --resource-group "$RG" \
-        --output none || true
+        --container-name "$SUN_CONTAINER" \
+        --no-wait &
+      
+      # Only trigger DB refresh if R code was modified (check for R files in git diff)
+      # Skip DB refresh on frontend-only deployments to save ~2 minutes
+      if git diff --name-only HEAD~1 HEAD | grep -qE '\.(R|r)$|renv\.lock|scripts/build_database'; then
+        echo "R code detected in commit. Triggering DB refresh..."
+        wait  # Wait for job updates to complete before triggering refresh
+        az containerapp job start \
+          --subscription "$AZURE_SUBSCRIPTION_ID" \
+          --name "$SAT_JOB" \
+          --resource-group "$RG" \
+          --no-wait || true
+      else
+        echo "Frontend-only deploy. Skipping DB refresh."
+      fi
 services:
   web:
     project: .
