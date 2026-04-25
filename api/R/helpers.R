@@ -6112,8 +6112,8 @@ build_combination_query <- function(filters, logical_operator = "AND", season = 
   logical_operator <- toupper(logical_operator)
 
   # Validate each filter structure, operator, stat key, and coerce threshold to numeric before loop.
-  # Use lapply to prevent edge cases where tryCatch inside a loop closure doesn't halt function execution.
-  tryCatch({
+  # Capture validation result and check for errors before continuing
+  validation_result <- tryCatch({
     normalized_filters <- lapply(seq_along(filters), function(i) {
       f <- filters[[i]]
 
@@ -6149,13 +6149,19 @@ build_combination_query <- function(filters, logical_operator = "AND", season = 
         threshold = threshold_numeric
       )
     })
-    filters <- normalized_filters
+    list(success = TRUE, filters = normalized_filters)
   }, error = function(e) {
-    return(list(
+    list(success = FALSE, error = list(
       status = jsonlite::unbox("error"),
       error = jsonlite::unbox(conditionMessage(e))
     ))
   })
+
+  # Check validation result and return error if validation failed
+  if (!isTRUE(validation_result$success)) {
+    return(validation_result$error)
+  }
+  filters <- validation_result$filters
 
   # Build WHERE clause conditions for each filter
   where_conditions <- character(length(filters))
