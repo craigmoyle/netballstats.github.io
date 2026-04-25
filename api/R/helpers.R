@@ -6404,12 +6404,14 @@ fetch_player_season_aggregate <- function(conn, player_id, stat_key, season) {
 fetch_team_round_breakdown <- function(conn, team_id, stat_key, season) {
   query <- paste(
     "SELECT",
-    "  round_number,",
-    "  CAST(?stat AS NUMERIC) AS value",
-    "FROM team_period_stats",
-    "WHERE squad_id = ?team_id",
-    "  AND season = ?season",
-    "ORDER BY round_number ASC"
+    "  stats.round_number,",
+    "  CAST(?stat AS NUMERIC) AS value,",
+    paste0("  ", opponent_name_sql("stats.squad_id"), " AS opponent"),
+    "FROM team_period_stats stats",
+    "INNER JOIN matches ON matches.match_id = stats.match_id",
+    "WHERE stats.squad_id = ?team_id",
+    "  AND stats.season = ?season",
+    "ORDER BY stats.round_number ASC"
   )
 
   params <- list(stat = stat_key, team_id = team_id, season = season)
@@ -6422,6 +6424,7 @@ fetch_team_round_breakdown <- function(conn, team_id, stat_key, season) {
   lapply(seq_len(nrow(rows)), function(i) {
     list(
       round = as.integer(rows$round_number[[i]]),
+      opponent = rows$opponent[[i]],
       value = as.numeric(rows$value[[i]])
     )
   })
@@ -6434,12 +6437,14 @@ fetch_player_round_breakdown <- function(conn, player_id, stat_key, season) {
     query <- paste(
       "SELECT",
       "  pms1.round_number,",
+      paste0("  ", opponent_name_sql("pms1.squad_id"), " AS opponent,"),
       "  COALESCE(pms1.match_value, 0) +",
       "  2 * COALESCE((SELECT SUM(pms2.match_value) FROM player_match_stats pms2",
       "               WHERE pms2.player_id = pms1.player_id",
       "               AND pms2.match_id = pms1.match_id",
       "               AND pms2.stat = 'goal2'), 0) AS value",
       "FROM player_match_stats pms1",
+      "INNER JOIN matches ON matches.match_id = pms1.match_id",
       "WHERE pms1.player_id = ?player_id",
       "  AND pms1.season = ?season",
       "  AND pms1.stat = 'goal1'",
@@ -6448,13 +6453,15 @@ fetch_player_round_breakdown <- function(conn, player_id, stat_key, season) {
   } else {
     query <- paste(
       "SELECT",
-      "  round_number,",
-      "  COALESCE(match_value, 0) AS value",
-      "FROM player_match_stats",
-      "WHERE player_id = ?player_id",
-      "  AND season = ?season",
-      "  AND stat = ?stat",
-      "ORDER BY round_number ASC"
+      "  pms.round_number,",
+      paste0("  ", opponent_name_sql("pms.squad_id"), " AS opponent,"),
+      "  COALESCE(pms.match_value, 0) AS value",
+      "FROM player_match_stats pms",
+      "INNER JOIN matches ON matches.match_id = pms.match_id",
+      "WHERE pms.player_id = ?player_id",
+      "  AND pms.season = ?season",
+      "  AND pms.stat = ?stat",
+      "ORDER BY pms.round_number ASC"
     )
   }
 
@@ -6468,6 +6475,7 @@ fetch_player_round_breakdown <- function(conn, player_id, stat_key, season) {
   lapply(seq_len(nrow(rows)), function(i) {
     list(
       round = as.integer(rows$round_number[[i]]),
+      opponent = rows$opponent[[i]],
       value = as.numeric(rows$value[[i]])
     )
   })
