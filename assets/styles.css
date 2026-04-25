@@ -5243,6 +5243,17 @@ caption.table-caption {
   outline-offset: 2px;
 }
 
+#builder-validation-errors {
+  background-color: var(--color-error-bg, #fee);
+  color: var(--color-error-text, #c00);
+  padding: 12px 16px;
+  margin: 12px 0;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.5;
+  border-left: 4px solid var(--color-error-text, #c00);
+}
+
 .builder-form {
   display: flex;
   flex-direction: column;

@@ -830,8 +830,34 @@ function validateBuilderStep(stepNum) {
   }
 }
 
+function getValidationErrorMessage(step) {
+  switch (step) {
+    case 1: return "Please select a query shape to continue.";
+    case 2: return "Please select at least one subject to continue.";
+    case 3: return "Please select a stat to continue.";
+    case 4: return ""; // Filters are optional
+    case 5: return "Please select a timeframe to continue.";
+    default: return "Please complete this step.";
+  }
+}
+
+function showBuilderValidationError(message) {
+  const errorRegion = document.getElementById("builder-validation-errors");
+  if (errorRegion) {
+    errorRegion.textContent = message;
+    errorRegion.style.display = "block";
+    // Clear after 5 seconds
+    setTimeout(() => {
+      errorRegion.textContent = "";
+      errorRegion.style.display = "none";
+    }, 5000);
+  }
+}
+
 function nextBuilderStep() {
   if (!validateBuilderStep(builderState.currentStep)) {
+    // Show error message
+    showBuilderValidationError(getValidationErrorMessage(builderState.currentStep));
     return;
   }
   if (builderState.currentStep < 5) {
