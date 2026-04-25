@@ -274,6 +274,51 @@ parse_nwar_era <- function(value = "", name = "era") {
   parsed
 }
 
+# Safely coerce season parameter(s) to integer, handling empty vectors and NA values
+# Prevents crashes from accessing [[1]] on empty vectors
+# @param seasons Vector of season values (or NULL)
+# @param multiple If TRUE, return full vector as integer; if FALSE, return first element as integer
+# @return Integer or integer vector, or NULL if seasons is invalid
+# @examples
+#  coerce_seasons(c()) # Returns NULL (safe, doesn't crash)
+#  coerce_seasons(NA) # Returns NULL
+#  coerce_seasons(2023, multiple = FALSE) # Returns 2023L
+#  coerce_seasons(c(2022, 2023), multiple = TRUE) # Returns c(2022L, 2023L)
+coerce_seasons <- function(seasons, multiple = FALSE) {
+  # Check for NULL or empty vector first (no [[1]] access)
+  if (is.null(seasons) || length(seasons) == 0L) {
+    return(NULL)
+  }
+  
+  # Check if first element is NA
+  if (is.na(seasons[[1]])) {
+    return(NULL)
+  }
+  
+  # Convert to integer based on multiple parameter
+  if (isTRUE(multiple)) {
+    as.integer(seasons)
+  } else {
+    as.integer(seasons[[1]])
+  }
+}
+
+# Build SQL expression for goals stat (goal1 + 2 * goal2)
+# Centralizes goals logic to avoid duplication across multiple builder functions
+# @param pms1_alias Table alias for goal1 values (default: "pms1")
+# @param pms2_alias Table alias for goal2 values (default: "pms2")
+# @return SQL expression string for goals calculation
+# @examples
+#  build_goals_stat_expression("pms1", "pms2")
+#  # Returns: "(pms1.match_value + 2 * COALESCE(pms2.match_value, 0))"
+build_goals_stat_expression <- function(pms1_alias = "pms1", pms2_alias = "pms2") {
+  sprintf(
+    "(%s.match_value + 2 * COALESCE(%s.match_value, 0))",
+    pms1_alias,
+    pms2_alias
+  )
+}
+
 parse_nwar_position_group <- function(value = "", name = "position_group") {
   if (is.null(value) || !nzchar(trimws(value))) {
     return(NULL)
@@ -1527,11 +1572,21 @@ build_record_query <- function(stat, subject_type = c("player", "team"), season 
   subject_type <- match.arg(subject_type)
 
   if (is.null(stat) || !nzchar(stat)) {
-    return(list(status = jsonlite::unbox("unsupported"), error = jsonlite::unbox("Stat is required.")))
+    return(list(
+      status = jsonlite::unbox("unsupported"),
+      intent_type = jsonlite::unbox("record"),
+      error = jsonlite::unbox("Stat is required."),
+      code = jsonlite::unbox("VALIDATION_ERROR")
+    ))
   }
 
   if (!stat %in% DEFAULT_PLAYER_STATS && !stat %in% DEFAULT_TEAM_STATS) {
-    return(list(status = jsonlite::unbox("unsupported"), error = jsonlite::unbox(paste("Stat", stat, "is not recognized."))))
+    return(list(
+      status = jsonlite::unbox("unsupported"),
+      intent_type = jsonlite::unbox("record"),
+      error = jsonlite::unbox(paste("Stat", stat, "is not recognized.")),
+      code = jsonlite::unbox("STAT_NOT_FOUND")
+    ))
   }
 
   stat_label <- query_stat_label(stat)
@@ -6029,17 +6084,31 @@ build_trend_query <- function(subject, stat, seasons = NULL, conn) {
         list(player_id = subject_id, stat = stat, season = season)
       )
     } else {
-      season_data <- query_rows(
-        conn,
-        paste0(
-          "SELECT ",
-          "  SUM(tps.value_number) AS total, ",
-          "  COUNT(DISTINCT tps.match_id) AS games ",
-          "FROM team_period_stats tps ",
-          "WHERE tps.squad_id = ?team_id AND tps.stat = ?stat AND tps.season = ?season"
-        ),
-        list(team_id = subject_id, stat = stat, season = season)
-      )
+      if (has_team_match_stats(conn)) {
+        season_data <- query_rows(
+          conn,
+          paste0(
+            "SELECT ",
+            "  SUM(tms.match_value) AS total, ",
+            "  COUNT(DISTINCT tms.match_id) AS games ",
+            "FROM team_match_stats tms ",
+            "WHERE tms.squad_id = ?team_id AND tms.stat = ?stat AND tms.season = ?season"
+          ),
+          list(team_id = subject_id, stat = stat, season = season)
+        )
+      } else {
+        season_data <- query_rows(
+          conn,
+          paste0(
+            "SELECT ",
+            "  SUM(tps.value_number) AS total, ",
+            "  COUNT(DISTINCT tps.match_id) AS games ",
+            "FROM team_period_stats tps ",
+            "WHERE tps.squad_id = ?team_id AND tps.stat = ?stat AND tps.season = ?season"
+          ),
+          list(team_id = subject_id, stat = stat, season = season)
+        )
+      }
     }
 
     total <- if (nrow(season_data)) as.numeric(season_data$total[[1]]) %||% 0 else 0
@@ -6173,7 +6242,7 @@ build_combination_query <- function(filters, logical_operator = "AND", season = 
 
     # Build stat expression (handle "goals" as goal1 + 2*goal2)
     if (identical(stat_key, "goals")) {
-      stat_expr <- "(pms1.match_value + 2 * COALESCE(pms2.match_value, 0))"
+      stat_expr <- build_goals_stat_expression("pms1", "pms2")
     } else {
       stat_expr <- "pms.match_value"
     }
@@ -6189,11 +6258,12 @@ build_combination_query <- function(filters, logical_operator = "AND", season = 
   # Build the main query
   if (identical(tolower(filters[[1]]$stat), "goals")) {
     # Special handling for goals (goal1 + goal2)
+    goals_expr <- build_goals_stat_expression("pms1", "pms2")
     query <- paste(
       "SELECT pms1.player_id, players.canonical_name AS player_name, pms1.squad_name,",
       paste0(opponent_name_sql("pms1.squad_id"), " AS opponent,"),
       "pms1.season, pms1.match_id, matches.local_start_time,",
-      "(COALESCE(pms1.match_value, 0) + 2 * COALESCE(pms2.match_value, 0)) AS goals,",
+      paste0(goals_expr, " AS goals,"),
       "COALESCE(pms3.match_value, 0) AS gain",
       "FROM player_match_stats AS pms1",
       "LEFT JOIN player_match_stats AS pms2",
@@ -6224,7 +6294,9 @@ build_combination_query <- function(filters, logical_operator = "AND", season = 
     if (is.na(season_value) || season_value < 2008L || season_value > 2100L) {
       return(list(
         status = jsonlite::unbox("error"),
-        error = jsonlite::unbox(sprintf("Season must be between 2008 and 2100 (got %s)", season))
+        intent_type = jsonlite::unbox("combination"),
+        error = jsonlite::unbox(sprintf("Season must be between 2008 and 2100 (got %s)", season)),
+        code = jsonlite::unbox("VALIDATION_ERROR")
       ))
     }
     query <- paste0(query, " AND pms.season = ?season")
@@ -6233,9 +6305,10 @@ build_combination_query <- function(filters, logical_operator = "AND", season = 
 
   # Limit to 100 results for performance and consistency with other query builders
   if (identical(tolower(filters[[1]]$stat), "goals")) {
+    goals_expr <- build_goals_stat_expression("pms1", "pms2")
     query <- paste0(
       query,
-      " ORDER BY (COALESCE(pms1.match_value, 0) + 2 * COALESCE(pms2.match_value, 0) + COALESCE(pms3.match_value, 0)) DESC",
+      " ORDER BY (", goals_expr, " + COALESCE(pms3.match_value, 0)) DESC",
       ", pms1.season DESC, matches.local_start_time DESC",
       " LIMIT 100"
     )
@@ -6316,8 +6389,9 @@ build_comparison_query <- function(subjects, stat, season, conn) {
       if (!is.character(subjects) || length(subjects) != 2L) {
         return(list(
           status = jsonlite::unbox("error"),
+          intent_type = jsonlite::unbox("comparison"),
           error = jsonlite::unbox("Exactly 2 subjects required for comparison"),
-          intent_type = jsonlite::unbox("comparison")
+          code = jsonlite::unbox("VALIDATION_ERROR")
         ))
       }
 
@@ -6326,8 +6400,9 @@ build_comparison_query <- function(subjects, stat, season, conn) {
       if (is.na(season_int) || season_int < 2008L || season_int > 2100L) {
         return(list(
           status = jsonlite::unbox("error"),
+          intent_type = jsonlite::unbox("comparison"),
           error = jsonlite::unbox("Invalid season"),
-          intent_type = jsonlite::unbox("comparison")
+          code = jsonlite::unbox("VALIDATION_ERROR")
         ))
       }
 
@@ -6336,8 +6411,9 @@ build_comparison_query <- function(subjects, stat, season, conn) {
       if (is.null(stat_key)) {
         return(list(
           status = jsonlite::unbox("error"),
+          intent_type = jsonlite::unbox("comparison"),
           error = jsonlite::unbox("Stat not found"),
-          intent_type = jsonlite::unbox("comparison")
+          code = jsonlite::unbox("STAT_NOT_FOUND")
         ))
       }
 
@@ -6363,8 +6439,9 @@ build_comparison_query <- function(subjects, stat, season, conn) {
           if (is.null(agg)) {
             return(list(
               status = jsonlite::unbox("error"),
+              intent_type = jsonlite::unbox("comparison"),
               error = jsonlite::unbox(paste("No data found for", team_name, "in season", season_int)),
-              intent_type = jsonlite::unbox("comparison")
+              code = jsonlite::unbox("NO_DATA")
             ))
           }
 
@@ -6394,8 +6471,9 @@ build_comparison_query <- function(subjects, stat, season, conn) {
             if (is.null(agg)) {
               return(list(
                 status = jsonlite::unbox("error"),
+                intent_type = jsonlite::unbox("comparison"),
                 error = jsonlite::unbox(paste("No data found for", player_name, "in season", season_int)),
-                intent_type = jsonlite::unbox("comparison")
+                code = jsonlite::unbox("NO_DATA")
               ))
             }
 
@@ -6415,8 +6493,9 @@ build_comparison_query <- function(subjects, stat, season, conn) {
           } else {
             return(list(
               status = jsonlite::unbox("error"),
+              intent_type = jsonlite::unbox("comparison"),
               error = jsonlite::unbox(paste("Could not resolve subject:", subject_name)),
-              intent_type = jsonlite::unbox("comparison")
+              code = jsonlite::unbox("SUBJECT_NOT_FOUND")
             ))
           }
         }

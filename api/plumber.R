@@ -1619,18 +1619,21 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
 
       # Route to appropriate builder
       if (identical(shape, "comparison")) {
-        if (length(subjects) < 2 || length(subjects) == 0 || is.na(subjects[[1]]) ||
-            is.na(stat) || length(seasons) == 0 || is.na(seasons[[1]])) {
+        season_val <- coerce_seasons(seasons, multiple = FALSE)
+        if (length(subjects) < 2 || is.na(subjects[[1]]) ||
+            is.na(stat) || is.na(season_val)) {
           res$status <- 400L
           return(list(
             status = jsonlite::unbox("error"),
-            error = jsonlite::unbox("Comparison requires subjects (2 items), stat, and season")
+            intent_type = jsonlite::unbox("comparison"),
+            error = jsonlite::unbox("Comparison requires subjects (2 items), stat, and valid season"),
+            code = jsonlite::unbox("VALIDATION_ERROR")
           ))
         }
         builder_result <- build_comparison_query(
           subjects = as.character(subjects),
           stat = as.character(stat),
-          season = as.integer(seasons[[1]]),
+          season = season_val,
           conn = conn
         )
         return(builder_result)
@@ -1639,13 +1642,15 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
           res$status <- 400L
           return(list(
             status = jsonlite::unbox("error"),
-            error = jsonlite::unbox("Trend requires subject and stat")
+            intent_type = jsonlite::unbox("trend"),
+            error = jsonlite::unbox("Trend requires subject and stat"),
+            code = jsonlite::unbox("VALIDATION_ERROR")
           ))
         }
         builder_result <- build_trend_query(
           subject = as.character(subject),
           stat = as.character(stat),
-          seasons = if (length(seasons) == 0 || is.na(seasons[[1]])) NULL else as.integer(seasons),
+          seasons = coerce_seasons(seasons, multiple = TRUE),
           conn = conn
         )
         return(builder_result)
@@ -1654,13 +1659,15 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
           res$status <- 400L
           return(list(
             status = jsonlite::unbox("error"),
-            error = jsonlite::unbox("Record requires stat")
+            intent_type = jsonlite::unbox("record"),
+            error = jsonlite::unbox("Record requires stat"),
+            code = jsonlite::unbox("VALIDATION_ERROR")
           ))
         }
         builder_result <- build_record_query(
           stat = as.character(stat),
           subject_type = if (is.na(subject)) "player" else "team",
-          season = if (length(seasons) == 0 || is.na(seasons[[1]])) NULL else as.integer(seasons[[1]]),
+          season = coerce_seasons(seasons, multiple = FALSE),
           conn = conn
         )
         return(builder_result)
@@ -1669,13 +1676,15 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
           res$status <- 400L
           return(list(
             status = jsonlite::unbox("error"),
-            error = jsonlite::unbox("Combination requires filters")
+            intent_type = jsonlite::unbox("combination"),
+            error = jsonlite::unbox("Combination requires filters"),
+            code = jsonlite::unbox("VALIDATION_ERROR")
           ))
         }
         builder_result <- build_combination_query(
           filters = filters,
           logical_operator = logical_operator %||% "AND",
-          season = if (length(seasons) == 0 || is.na(seasons[[1]])) NULL else as.integer(seasons[[1]]),
+          season = coerce_seasons(seasons, multiple = FALSE),
           conn = conn
         )
         return(builder_result)
@@ -1683,7 +1692,8 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
         res$status <- 400L
         return(list(
           status = jsonlite::unbox("error"),
-          error = jsonlite::unbox(paste0("Unknown shape: ", shape))
+          error = jsonlite::unbox(paste0("Unknown shape: ", shape)),
+          code = jsonlite::unbox("INVALID_SHAPE")
         ))
       }
     }
