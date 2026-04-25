@@ -23,7 +23,8 @@ COPY renv.lock renv/settings.json ./
 COPY renv/ ./renv/
 
 # Install renv and restore dependencies (cached if renv.lock unchanged)
-RUN R -q -e " \
+RUN mkdir -p /opt/renv/cache /opt/renv/library && \
+    R -q -e " \
   options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
   install.packages('renv'); \
   renv::consent(provided = TRUE); \
@@ -66,6 +67,5 @@ EXPOSE 8000
 
 USER netballstats
 
-# Start plumber with explicit renv library path configuration
-# Use -s to skip .Rprofile but still load site library
-CMD ["R", "-s", "-q", "-e", ".libPaths(c('/opt/renv/library/R-4.5/x86_64-pc-linux-gnu', .libPaths())); pr <- plumber::plumb('api/plumber.R'); pr$run(host = Sys.getenv('NETBALL_STATS_HOST', '0.0.0.0'), port = as.integer(Sys.getenv('PORT', Sys.getenv('NETBALL_STATS_PORT', '8000'))))"]
+# Use standard Rscript invocation with .Rprofile auto-activation
+CMD ["Rscript", "-e", "pr <- plumber::plumb('api/plumber.R'); pr$run(host = Sys.getenv('NETBALL_STATS_HOST', '0.0.0.0'), port = as.integer(Sys.getenv('PORT', Sys.getenv('NETBALL_STATS_PORT', '8000'))))"]
