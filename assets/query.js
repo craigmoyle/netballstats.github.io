@@ -84,7 +84,10 @@ const elements = {
   queryTable: document.getElementById("query-table"),
   queryTableCaption: document.getElementById("query-table-caption"),
   queryTableHead: document.getElementById("query-table-head"),
-  queryRowsBody: document.getElementById("query-rows-body")
+  queryRowsBody: document.getElementById("query-rows-body"),
+  errorBanner: document.getElementById("error-banner"),
+  errorBannerMessage: document.getElementById("error-banner-message"),
+  errorBannerActions: document.getElementById("error-banner-actions")
 };
 
 elements.submitButton = elements.queryForm.querySelector('[type="submit"]');
@@ -95,6 +98,133 @@ const submitButtonDefaultLabel = elements.submitButton?.textContent || "Run ques
 
 if (elements.apiBase) {
   elements.apiBase.textContent = API_BASE_URL;
+}
+
+function escapeHtml(text) {
+  if (!text) return "";
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showErrorBanner(message) {
+  if (!elements.errorBanner) return;
+  elements.errorBanner.hidden = false;
+  if (elements.errorBannerMessage) {
+    elements.errorBannerMessage.textContent = message;
+  }
+}
+
+function hideErrorBanner() {
+  if (!elements.errorBanner) return;
+  elements.errorBanner.hidden = true;
+  if (elements.errorBannerMessage) {
+    elements.errorBannerMessage.textContent = "";
+  }
+  if (elements.errorBannerActions) {
+    elements.errorBannerActions.replaceChildren();
+  }
+}
+
+function showBuilderButton(prefill) {
+  if (!elements.errorBannerActions) return;
+  elements.errorBannerActions.replaceChildren();
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "button button--primary";
+  button.textContent = "Use the builder";
+  button.addEventListener("click", () => {
+    openBuilderModal(prefill);
+  });
+
+  elements.errorBannerActions.appendChild(button);
+}
+
+function openBuilderModal(prefill) {
+  const event = new CustomEvent("open-builder-modal", {
+    detail: { prefill }
+  });
+  window.dispatchEvent(event);
+}
+
+function rephraseSuggestion(suggestion) {
+  applyQuestionText(suggestion, { focus: true });
+  void runQuestion(suggestion, "suggestion");
+}
+
+function attemptComplexParse(question) {
+  if (!question || typeof question !== "string") {
+    return null;
+  }
+
+  const trimmed = question.trim().toLowerCase();
+  const confidence = { score: 0 };
+
+  let intentType = null;
+  let subjects = [];
+  let stat = null;
+  let filters = [];
+  let seasons = null;
+  let operator = "AND";
+
+  const comparisonMarkers = /\bvs\b|\bversus\b|\bcompared to\b|\bvs\./i;
+  const trendMarkers = /\bacross\b|\btrend\b/i;
+  const recordMarkers = /\ball[- ]?time\b|\bever\b|\branking\b|\brecord\b/i;
+  const seasonPattern = /\b(20\d{2})\b/g;
+  const seasonRangePattern = /\b(20\d{2})\s*[-–]\s*(20\d{2})\b/;
+  const logicalOpPattern = /\b(and|or)\b/i;
+
+  if (comparisonMarkers.test(trimmed)) {
+    intentType = "comparison";
+    confidence.score += 0.25;
+  } else if (recordMarkers.test(trimmed)) {
+    intentType = "record";
+    confidence.score += 0.25;
+  } else if (trendMarkers.test(trimmed) || /\bacross\s+(20\d{2})/.test(trimmed)) {
+    intentType = "trend";
+    confidence.score += 0.25;
+  } else if (logicalOpPattern.test(trimmed) && (trimmed.includes("and ") || trimmed.includes("or "))) {
+    intentType = "combination";
+    confidence.score += 0.25;
+  }
+
+  if (intentType && /\b\d+\+/.test(trimmed)) {
+    confidence.score += 0.1;
+  }
+
+  const seasonMatches = trimmed.match(seasonPattern);
+  if (seasonMatches && seasonMatches.length > 0) {
+    seasons = [...new Set(seasonMatches.map(Number))].sort();
+    confidence.score += 0.15;
+  }
+
+  const seasonRangeMatch = trimmed.match(seasonRangePattern);
+  if (seasonRangeMatch) {
+    const startYear = parseInt(seasonRangeMatch[1], 10);
+    const endYear = parseInt(seasonRangeMatch[2], 10);
+    seasons = [];
+    for (let year = startYear; year <= endYear; year++) {
+      seasons.push(year);
+    }
+    confidence.score += 0.15;
+  }
+
+  if (intentType === "record" || !intentType) {
+    return null;
+  }
+
+  confidence.score = Math.min(confidence.score, 1.0);
+
+  return {
+    intentType,
+    subjects,
+    stat,
+    filters,
+    seasons,
+    operator,
+    confidence: confidence.score
+  };
 }
 
 function showStatus(message, tone = "neutral", options = {}) {
@@ -268,6 +398,7 @@ function applyQuestionText(question, { focus = true } = {}) {
 }
 
 function setIdleState() {
+  hideErrorBanner();
   setTableSchema("player");
   setSummaryCards("--", "--", "--", "Choose a shape");
   elements.answerHeadline.textContent = "Choose a template or ask a literal question.";
@@ -414,7 +545,48 @@ function renderUnsupported(result) {
 }
 
 function renderResult(result) {
-  if (!result || result.status !== "supported") {
+  hideErrorBanner();
+
+  if (!result) {
+    renderUnsupported({});
+    return;
+  }
+
+  if (result.status === "parse_help_needed") {
+    const message = result.error_message || "I couldn't match all the parts of that question. Try rephrasing or use the builder to construct it step-by-step.";
+    showErrorBanner(message);
+
+    if (result.suggestion) {
+      const actions = elements.errorBannerActions;
+      if (actions) {
+        actions.replaceChildren();
+
+        const suggestionLink = document.createElement("button");
+        suggestionLink.type = "button";
+        suggestionLink.className = "button button--ghost";
+        suggestionLink.textContent = `Try: "${result.suggestion}"`;
+        suggestionLink.addEventListener("click", () => {
+          rephraseSuggestion(result.suggestion);
+        });
+
+        actions.appendChild(suggestionLink);
+
+        if (result.builder_prefill) {
+          showBuilderButton(result.builder_prefill);
+        }
+      }
+    }
+
+    setTableSchema("player");
+    setSummaryCards("--", "--", "--", "Help needed");
+    elements.answerHeadline.textContent = "Try a different approach or use the builder.";
+    elements.answerMeta.textContent = "";
+    elements.interpretationGrid.replaceChildren();
+    clearTable("No results yet. Use the builder or rephrase your question.");
+    return;
+  }
+
+  if (result.status !== "supported") {
     renderUnsupported(result || {});
     return;
   }
@@ -470,6 +642,8 @@ async function runQuestion(question, source = "manual") {
     return;
   }
 
+  hideErrorBanner();
+
   questionRunning = true;
   const submitBtn = elements.submitButton;
   if (submitBtn) {
@@ -504,11 +678,11 @@ async function runQuestion(question, source = "manual") {
     showStatus(
       result.status === "supported"
         ? "Answer ready."
-        : "That wording is not supported yet.",
+        : (result.status === "parse_help_needed" ? "I need clarification." : "That wording is not supported yet."),
       result.status === "supported" ? "success" : "error",
       result.status === "supported"
         ? { kicker: "Ready", autoHideMs: 2200 }
-        : { kicker: "Parser limit" }
+        : { kicker: result.status === "parse_help_needed" ? "Need help" : "Parser limit" }
     );
   } catch (error) {
     renderUnsupported({

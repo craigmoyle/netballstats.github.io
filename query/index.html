@@ -53,6 +53,12 @@
     <main id="main-content" class="page-shell page-main">
       <section class="panel reveal">
         <div id="query-status" class="status-banner" role="status" aria-live="polite" hidden></div>
+        <div id="error-banner" class="error-banner" role="alert" aria-live="assertive" hidden>
+          <div class="error-banner__content">
+            <p id="error-banner-message" class="error-banner__message"></p>
+            <div id="error-banner-actions" class="error-banner__actions"></div>
+          </div>
+        </div>
         <div class="query-board">
           <div class="query-board__header">
             <div class="panel__heading">
