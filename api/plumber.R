@@ -45,6 +45,12 @@ source(file.path(repo_root_path, "api", "R", "parse_question.R"), local = TRUE)
 # Shared in-process cache for /meta responses (30-minute TTL).
 .meta_cache <- new.env(parent = emptyenv())
 
+# Middleware: Per-client rate limiter using sliding window
+# Tracks requests per client IP (extracted from X-Forwarded-For) over a time window
+# Uses leftmost IP in X-Forwarded-For to prevent spoofing via appended IPs
+# Periodically prunes stale entries to prevent unbounded memory growth
+# Returns 429 Too Many Requests if limit exceeded; sets X-RateLimit-* headers
+# Configuration: NETBALL_STATS_RATE_LIMIT_WINDOW_SECONDS (default 60), NETBALL_STATS_RATE_LIMIT_MAX_REQUESTS (default 60)
 request_limiter <- local({
   entries <- new.env(parent = emptyenv())
   # Cache rate-limit config at build time — Sys.getenv is called once, not
@@ -193,15 +199,29 @@ browser_telemetry_instrumentation_key <- function() {
   fields[["instrumentationkey"]] %||% ""
 }
 
+# Format timestamp for telemetry in ISO8601 format with milliseconds (UTC)
+# @param time Timestamp to format (default: current time)
+# @return Character string in ISO8601 format with UTC timezone: "2024-01-15T10:30:45.123Z"
 telemetry_iso_time <- function(time = Sys.time()) {
   format(as.POSIXct(time, tz = "UTC"), "%Y-%m-%dT%H:%M:%OS3Z", tz = "UTC")
 }
 
+# Safely trim and normalize telemetry string values
+# Collapses whitespace, trims leading/trailing space, enforces max length
+# Prevents high-cardinality telemetry (e.g., free-text URLs, user IDs) from bloating logs
+# @param value Value to trim (coerced to character; NULL → "")
+# @param max_length Maximum allowed length (default: 120 chars)
+# @return Trimmed, normalized string (or empty string if input was NULL/NA)
 telemetry_trim_string <- function(value, max_length = 120L) {
   trimmed <- gsub("\\s+", " ", trimws(as.character(value %||% "")))
   substr(trimmed, 1L, max_length)
 }
 
+# Sanitize custom telemetry properties before sending to Application Insights
+# Validates property names (alphanumeric + underscore only), trims values
+# Filters out NULL, NA, empty values to prevent sparse log rows
+# @param properties List of custom properties (key → value)
+# @return Filtered, sanitized list of properties safe for telemetry
 telemetry_sanitise_properties <- function(properties) {
   if (is.null(properties) || !is.list(properties)) {
     return(list())
@@ -234,6 +254,12 @@ telemetry_sanitise_properties <- function(properties) {
   output
 }
 
+# Sanitize browser telemetry context (session/user metadata, device info)
+# Extracts and trims well-known context fields with field-specific max lengths
+# Only includes non-empty fields to minimize log cardinality
+# Validates field names and normalizes whitespace
+# @param context List of context metadata from browser (session_id, user_id, viewport_bucket, etc.)
+# @return Filtered, trimmed list of context fields safe for Application Insights
 telemetry_sanitise_context <- function(context) {
   if (is.null(context) || !is.list(context)) {
     return(list())
@@ -286,6 +312,15 @@ telemetry_sanitise_context <- function(context) {
   output
 }
 
+# Build Application Insights telemetry envelope from sanitized browser payload
+# Converts browser telemetry to Application Insights schema (JSON format)
+# Sanitizes all inputs (name, URI, context, properties)
+# Anonymizes client IP: zeros IPv4 last octet, IPv6 last 80 bits
+# Adds AI context tags (operation name, cloud role, device, session, user)
+# @param kind Character: "pageView" or "event" (determines AI baseType)
+# @param payload List with: name (string), uri (string), context (list), properties (list)
+# @param req Plumber request object (for extracting anonymized client IP)
+# @return List conforming to Application Insights 2.6 schema, ready for JSON serialization
 build_telemetry_envelope <- function(kind, payload, req) {
   instrumentation_key <- browser_telemetry_instrumentation_key()
   if (!nzchar(instrumentation_key)) {
@@ -887,6 +922,10 @@ function(res) {
   )
 }
 
+#* Serve application metadata: instrumentation key, season years, API version, DB refresh timestamp
+#* Cached in-process for 30 minutes (refreshed on DB rebuild)
+#* Critical for bootstrapping browser telemetry (instrumentation_key needed before first pageView)
+#* Returns 503 if database unavailable (with stale cache fallback if available)
 #* @get /meta
 #* @get /api/meta
 function(res) {
@@ -922,6 +961,11 @@ function(res) {
   })
 }
 
+#* Receive browser telemetry and forward to Application Insights
+#* Parses and validates browser payload (name, uri, context, properties, custom metrics)
+#* Sanitizes all strings to prevent high-cardinality telemetry and privacy leaks
+#* Returns 202 Accepted on success, 204 No Content if telemetry is disabled (via env var)
+#* Returns 400 Bad Request if payload fails validation
 #* @post /telemetry
 #* @post /api/telemetry
 function(req, res) {

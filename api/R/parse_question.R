@@ -1,7 +1,11 @@
-# Natural language question parser for Ask the Stats.
-# Extracts structured parameters (subject, stat, operator, threshold, opponent, season)
-# from freeform netball questions.
-
+# Parse natural language netball questions into structured query parameters
+# Supports 4 question types: trend, comparison, game_record, count_threshold
+# Extracts: subject (player/team), stat (goals, assists, etc.), operator, threshold, opponent, season
+# Returns structured result: success (bool), error (string), parsed (list)
+# If parsing fails, provides helpful error message with example patterns
+# @param question_text Character: freeform question (e.g. "highest goals by a player 2023?")
+# @param conn Optional DBI connection (for reference data validation; not currently used)
+# @return List with: success (bool), error (string), parsed (list with subject, stat, operator, threshold, opponent_name, season)
 parse_natural_language_question <- function(question_text, conn = NULL) {
   if (!is.character(question_text) || length(question_text) == 0L) {
     return(list(
@@ -98,6 +102,12 @@ parse_natural_language_question <- function(question_text, conn = NULL) {
 }
 
 # Detect operator type from question text
+# Extract operator type from question text
+# Supports: "which/list" (list), "how many times" (count_threshold), "highest/most" (highest),
+# "record" (highest), "lowest", "vs/versus" (head_to_head), "against", "at least/more than" (count_threshold)
+# Defaults to "highest" if no clear operator found
+# @param text Character: lowercased, trimmed question text
+# @return List with operator (string) and threshold (NULL, set by extract_threshold separately)
 extract_operator <- function(text) {
   # "which players|which teams|list players|list teams" → list (check FIRST, before "record")
   if (grepl("\\b(which|list)\\s+(players|teams|young players)\\b", text)) {
@@ -151,7 +161,11 @@ extract_operator <- function(text) {
   return(list(operator = "highest", threshold = NULL))
 }
 
-# Extract threshold number from text like "50 goals or more", "5+", "[threshold]+"
+# Extract numeric threshold from count-based questions
+# Supports patterns: "50 goals or more", "5+", "at least N", "more than N", "fewer than N", "at most N"
+# Used for count_threshold questions (e.g., "at least 10 goal assists per game")
+# @param text Character: lowercased, trimmed question text
+# @return Integer threshold or NULL if no threshold found
 extract_threshold <- function(text) {
   # Pattern 1: "N [word(s)] or more", "N [word(s)] or greater" (e.g., "50 goals or more")
   m <- regexpr("\\b(\\d+)(?:\\s+\\w+)*\\s+or\\s+(more|greater)", text, perl = TRUE)
@@ -206,7 +220,12 @@ extract_threshold <- function(text) {
   NULL
 }
 
-# Extract stat from text
+# Extract netball stat name from question text
+# Maps common aliases to canonical stat keys (goals, assists, gain, intercepts, etc.)
+# Prefers longest matching alias to avoid "goal" matching when "goals" is intended
+# Uses word boundaries to prevent partial matches ("goals" not matched in "goalAssists")
+# @param text Character: lowercased, trimmed question text
+# @return Character: canonical stat key (e.g., "goals", "goalAssists") or NULL if not found
 extract_stat <- function(text) {
   # Define stat mappings: lowercase aliases → canonical stat key
   stat_mappings <- list(

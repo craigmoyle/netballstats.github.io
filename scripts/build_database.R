@@ -83,6 +83,13 @@ extract_scoreflow_scores <- function(scoreflow_payload) {
   score_entries
 }
 
+# Fetch a single match from Champion Data via superNetballR
+# Handles 404 (match not found) by returning a structured error object
+# Gracefully handles network and API errors
+# @param comp_id Integer: competition ID from superNetballR
+# @param round_number Integer: round number (1-25)
+# @param game_number Integer: game number within round (1-10)
+# @return List: Match payload from superNetballR or structured error if 404
 fetch_match_payload <- function(comp_id, round_number, game_number) {
   tryCatch(
     superNetballR::downloadMatch(as.character(comp_id), round_number, game_number),
@@ -112,6 +119,12 @@ load_sample_entries <- function() {
   )
 }
 
+# Collect all match payloads from Champion Data for configured competitions
+# Iterates through seasons/phases and rounds/games, fetching each match
+# Skips unplayed matches and stops round iteration when first match of round is not found
+# Used during DB bootstrap to populate raw match data from superNetballR
+# @param competitions Data frame: must have season, phase, competition_id columns
+# @return List of entries, each containing: season, phase, competition_id, payload
 collect_live_entries <- function(competitions) {
   entries <- list()
   entry_index <- 0L
@@ -156,6 +169,18 @@ collect_live_entries <- function(competitions) {
   entries
 }
 
+# ETL: Transform raw match payloads into normalized database tables
+# Processes each match payload and extracts:
+#   - matches: match metadata (date, venue, teams, scores, etc.)
+#   - teams: team roster for each match
+#   - players: player appearances and career refs
+#   - team_period_stats: aggregated stats per team per period
+#   - player_match_stats: aggregated stats per player per match
+#   - score_flow_events: point-by-point scoring events
+# Used by database bootstrap to convert raw superNetballR payloads to schema
+# @param entries List: output from collect_live_entries()
+# @param competitions Data frame: competition metadata (season, phase, team names)
+# @return List of 6 elements (match_rows, team_rows, player_rows, team_stat_rows, player_stat_rows, score_flow_event_rows)
 prepare_match_tables <- function(entries, competitions) {
   team_colours_lookup <- superNetballR::team_colours
 
@@ -491,6 +516,11 @@ prepare_match_tables <- function(entries, competitions) {
   )
 }
 
+# Validate PostgreSQL identifier (username, table name, etc.)
+# Ensures identifier is valid and safe for use in unquoted SQL contexts
+# @param value Character string to validate
+# @param name Name of parameter (used in error message)
+# @return Invisible NULL on success; raises error if invalid
 validate_db_identifier <- function(value, name) {
   if (!grepl("^[A-Za-z][A-Za-z0-9_]*$", value)) {
     stop(
@@ -501,6 +531,13 @@ validate_db_identifier <- function(value, name) {
   }
 }
 
+# Create or sync read-only PostgreSQL API user with minimal grants
+# Reads credentials from env vars: NETBALL_STATS_API_DB_USERNAME, NETBALL_STATS_API_DB_PASSWORD
+# If both env vars are absent, silently skips (allows running without API user)
+# If only one is set, raises error (prevents misconfiguration)
+# Grants: SELECT on public tables, EXECUTE on public functions, USAGE on public schema
+# @param conn PostgreSQL DBI connection (must have admin privileges)
+# @return Invisible NULL; raises error if credentials incomplete or database grants fail
 configure_postgres_api_user <- function(conn) {
   api_username <- trimws(Sys.getenv("NETBALL_STATS_API_DB_USERNAME", ""))
   api_password <- Sys.getenv("NETBALL_STATS_API_DB_PASSWORD", "")
