@@ -1742,6 +1742,7 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
 #* @post /api/query/parse
 #* @summary Parse a freeform natural language question
 #* @param question Character question text (POST body JSON: { "question": "..." })
+#* @serializer unboxedJSONNullNA
 function(req, res) {
   tryCatch({
     # Parse JSON body
