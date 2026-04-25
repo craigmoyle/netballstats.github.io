@@ -1,8 +1,9 @@
 (function () {
   const localHosts = new Set(["localhost", "127.0.0.1"]);
+  const productionApiBaseUrl = "https://netballstats-api-wr5i2l.agreeablefield-6025affc.australiaeast.azurecontainerapps.io";
   const configuredApiBaseUrl = localHosts.has(window.location.hostname)
     ? "http://127.0.0.1:8000"
-    : "/api";
+    : productionApiBaseUrl;
 
   window.NETBALL_STATS_CONFIG = Object.assign(
     {
