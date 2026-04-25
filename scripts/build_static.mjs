@@ -31,6 +31,7 @@ for (const entry of staticEntries) {
 await rm(assetOutputDir, { recursive: true, force: true });
 await mkdir(assetOutputDir, { recursive: true });
 await cp(path.join(assetSourceDir, 'fonts'), path.join(assetOutputDir, 'fonts'), { recursive: true });
+await cp(path.join(assetSourceDir, 'noise.svg'), path.join(assetOutputDir, 'noise.svg'));
 
 const assetContents = new Map();
 for (const assetName of fingerprintedAssets) {
