@@ -3179,11 +3179,10 @@ fetch_current_or_next_round <- function(conn, season = NULL, now_utc = NULL) {
   in_progress_query <- paste0(
     base_query,
     where_clause,
-    ifelse(where_clause == "", " WHERE ", " AND "),
-    "MIN(local_start_time) <= ?now",
-    " AND (home_score IS NULL OR away_score IS NULL)",
     " GROUP BY season, COALESCE(competition_phase, ''), round_number",
-    " ORDER BY MIN(local_start_time) DESC, season DESC, round_number DESC LIMIT 1"
+    " HAVING MIN(utc_start_time) <= ?now",
+    " AND (MAX(home_score IS NULL) = 1 OR MAX(away_score IS NULL) = 1)",
+    " ORDER BY MIN(utc_start_time) DESC, season DESC, round_number DESC LIMIT 1"
   )
 
   in_progress <- query_rows(conn, in_progress_query, params)
@@ -3218,7 +3217,7 @@ fetch_upcoming_round_matches <- function(conn, season, competition_phase = "", r
       "FROM matches",
       "WHERE (home_score IS NULL OR away_score IS NULL)",
       "AND utc_start_time IS NOT NULL",
-      "AND local_start_time <= ?now",
+      "AND utc_start_time <= ?now",
       "AND season = ?season",
       "AND COALESCE(competition_phase, '') = ?competition_phase",
       "AND round_number = ?round_number",
