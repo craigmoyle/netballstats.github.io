@@ -186,8 +186,11 @@
         }
       }
 
+      const details = document.createElement("div");
+      details.className = "round-preview-card__details";
+
       if (meta.children.length) {
-        article.appendChild(meta);
+        details.appendChild(meta);
       }
 
       if (factCards.length) {
@@ -200,7 +203,7 @@
           facts.appendChild(p);
         });
         if (facts.children.length) {
-          article.appendChild(facts);
+          details.appendChild(facts);
         }
       }
 
@@ -214,9 +217,11 @@
           watchList.appendChild(item);
         });
         if (watchList.children.length) {
-          article.appendChild(watchList);
+          details.appendChild(watchList);
         }
       }
+
+      article.appendChild(details);
 
       fragment.appendChild(article);
     });

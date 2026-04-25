@@ -3169,16 +3169,15 @@ caption.table-caption {
 
 .round-preview-match-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: 1fr;
   gap: 1.1rem;
 }
 
 .round-preview-card {
   position: relative;
   overflow: hidden;
-  display: grid;
-  gap: 0.85rem;
-  padding: 1rem 1.05rem;
+  display: flex;
+  align-items: stretch;
   border-radius: var(--radius-panel);
   border: 1px solid color-mix(in srgb, var(--accent-cool) 18%, var(--border));
   background:
@@ -3188,26 +3187,48 @@ caption.table-caption {
 
 .round-preview-card__header {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.65rem;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.25rem 1.5rem;
+  width: 210px;
+  flex-shrink: 0;
+  border-right: 1px solid color-mix(in srgb, var(--accent-cool) 18%, var(--border));
+}
+
+.round-preview-card__vs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.25rem 0;
+  color: var(--muted);
+  font-size: var(--type-sm);
+}
+
+.round-preview-card__time {
+  font-size: var(--type-xs, 0.72rem);
+  color: var(--muted);
+  text-align: center;
 }
 
 .round-preview-team {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  justify-content: center;
+  gap: 0.5rem;
   font-family: var(--display-font);
-  font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+  font-size: clamp(0.9rem, 1.8vw, 1.2rem);
   line-height: 0.95;
   letter-spacing: 0.04em;
-  min-width: 0;
+  text-align: center;
 }
 
 .round-preview-team__logo {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   display: block;
   object-fit: contain;
 }
@@ -3217,15 +3238,24 @@ caption.table-caption {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: color-mix(in srgb, var(--accent-cool) 18%, var(--panel-alt));
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-family: var(--body-font);
   font-weight: 700;
   letter-spacing: 0;
   color: var(--text);
+}
+
+.round-preview-card__details {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  align-content: start;
 }
 
 .round-preview-card__meta {
@@ -3262,6 +3292,37 @@ caption.table-caption {
   font-size: var(--type-sm);
   color: var(--muted);
   border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+@media (max-width: 560px) {
+  .round-preview-card {
+    flex-direction: column;
+  }
+
+  .round-preview-card__header {
+    width: auto;
+    border-right: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--accent-cool) 18%, var(--border));
+    flex-direction: row;
+    justify-content: space-between;
+    padding: 0.9rem 1rem;
+    gap: 0.5rem;
+  }
+
+  .round-preview-card__vs {
+    flex-direction: column;
+  }
+
+  .round-preview-team {
+    flex-direction: column;
+    font-size: 0.85rem;
+  }
+
+  .round-preview-team__logo,
+  .round-preview-team__logo--fallback {
+    width: 36px;
+    height: 36px;
+  }
 }
 
 .query-board {
