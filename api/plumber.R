@@ -1500,13 +1500,188 @@ function(season = "", seasons = "", team_id = "", round = "", stat = "points", s
 
 #* @get /query
 #* @get /api/query
-function(question = "", limit = "12", res) {
+#* @post /query
+#* @post /api/query
+#* @param question Character query string (GET and POST)
+#* @param limit Character limit for results (GET only)
+#* @param builder_source Logical (POST only) - true if from builder form submission
+#* @param shape Character (POST only) - "comparison" | "combination" | "trend" | "record"
+#* @param subjects Character array (POST only) - for comparison
+#* @param subject Character (POST only) - for trend/record
+#* @param stat Character (POST only) - stat key
+#* @param seasons Integer array (POST only) - season list
+#* @param filters List (POST only) - for combination
+#* @param logical_operator Character (POST only) - "AND" | "OR"
+function(req, res, question = "", limit = "12", builder_source = FALSE, shape = NA, 
+         subjects = NA, subject = NA, stat = NA, seasons = NA, filters = NA, 
+         logical_operator = NA) {
   conn <- tryCatch(get_db_conn(), error = function(error) error)
   if (inherits(conn, "error")) {
     return(database_unavailable(res, conn))
   }
 
   tryCatch({
+    # Handle POST builder submissions
+    if (identical(tolower(req$REQUEST_METHOD), "post")) {
+      # Parse JSON body if present
+      raw_body <- req$postBody %||% ""
+      if (nzchar(raw_body)) {
+        body_data <- tryCatch({
+          jsonlite::fromJSON(raw_body, simplifyVector = FALSE)
+        }, error = function(e) {
+          return(list(
+            status = jsonlite::unbox("error"),
+            error = jsonlite::unbox("Invalid JSON in request body")
+          ))
+        })
+        if (is.list(body_data) && !is.null(body_data$status) && 
+            identical(body_data$status, "error")) {
+          return(body_data)
+        }
+        # Merge body data with parameters
+        if (is.list(body_data)) {
+          builder_source <- body_data$builder_source %||% builder_source
+          shape <- body_data$shape %||% shape
+          subjects <- body_data$subjects %||% subjects
+          subject <- body_data$subject %||% subject
+          stat <- body_data$stat %||% stat
+          seasons <- body_data$seasons %||% seasons
+          filters <- body_data$filters %||% filters
+          logical_operator <- body_data$logical_operator %||% logical_operator
+          question <- body_data$question %||% question
+        }
+      }
+    }
+
+    # If builder_source=true, skip parsing and go straight to builder
+    if (isTRUE(builder_source)) {
+      if (is.na(shape)) {
+        return(list(
+          status = jsonlite::unbox("error"),
+          error = jsonlite::unbox("Shape is required for builder submission")
+        ))
+      }
+
+      # Route to appropriate builder
+      if (identical(shape, "comparison")) {
+        if (is.na(subjects[[1]]) || is.na(stat) || is.na(seasons[[1]])) {
+          return(list(
+            status = jsonlite::unbox("error"),
+            error = jsonlite::unbox("Comparison requires subjects, stat, and season")
+          ))
+        }
+        builder_result <- build_comparison_query(
+          subjects = as.character(subjects),
+          stat = as.character(stat),
+          season = as.integer(seasons[[1]]),
+          conn = conn
+        )
+        return(builder_result)
+      } else if (identical(shape, "trend")) {
+        if (is.na(subject) || is.na(stat)) {
+          return(list(
+            status = jsonlite::unbox("error"),
+            error = jsonlite::unbox("Trend requires subject and stat")
+          ))
+        }
+        builder_result <- build_trend_query(
+          subject = as.character(subject),
+          stat = as.character(stat),
+          seasons = if (is.na(seasons[[1]])) NULL else as.integer(seasons),
+          conn = conn
+        )
+        return(builder_result)
+      } else if (identical(shape, "record")) {
+        if (is.na(stat)) {
+          return(list(
+            status = jsonlite::unbox("error"),
+            error = jsonlite::unbox("Record requires stat")
+          ))
+        }
+        builder_result <- build_record_query(
+          stat = as.character(stat),
+          subject_type = if (is.na(subject)) "player" else "team",
+          season = if (is.na(seasons[[1]])) NULL else as.integer(seasons[[1]]),
+          conn = conn
+        )
+        return(builder_result)
+      } else if (identical(shape, "combination")) {
+        if (!is.list(filters) || length(filters) == 0) {
+          return(list(
+            status = jsonlite::unbox("error"),
+            error = jsonlite::unbox("Combination requires filters")
+          ))
+        }
+        builder_result <- build_combination_query(
+          filters = filters,
+          logical_operator = logical_operator %||% "AND",
+          season = if (is.na(seasons[[1]])) NULL else as.integer(seasons[[1]]),
+          conn = conn
+        )
+        return(builder_result)
+      } else {
+        return(list(
+          status = jsonlite::unbox("error"),
+          error = jsonlite::unbox(paste0("Unknown shape: ", shape))
+        ))
+      }
+    }
+
+    # Attempt complex parse for question-based queries
+    if (nzchar(question)) {
+      parse_result <- attempt_complex_parse(question)
+      
+      # High confidence parse: route to builder directly
+      if (identical(parse_result$status, "success")) {
+        if (identical(parse_result$shape, "comparison")) {
+          builder_result <- build_comparison_query(
+            subjects = as.character(parse_result$parsed$subjects),
+            stat = as.character(parse_result$parsed$stat),
+            season = as.integer(parse_result$parsed$season),
+            conn = conn
+          )
+          return(builder_result)
+        } else if (identical(parse_result$shape, "trend")) {
+          builder_result <- build_trend_query(
+            subject = as.character(parse_result$parsed$subject),
+            stat = as.character(parse_result$parsed$stat),
+            seasons = if (is.null(parse_result$parsed$seasons)) NULL else as.integer(parse_result$parsed$seasons),
+            conn = conn
+          )
+          return(builder_result)
+        } else if (identical(parse_result$shape, "record")) {
+          builder_result <- build_record_query(
+            stat = as.character(parse_result$parsed$stat),
+            subject_type = parse_result$parsed$subject_type %||% "player",
+            season = if (is.null(parse_result$parsed$season)) NULL else as.integer(parse_result$parsed$season),
+            conn = conn
+          )
+          return(builder_result)
+        } else if (identical(parse_result$shape, "combination")) {
+          builder_result <- build_combination_query(
+            filters = parse_result$parsed$filters,
+            logical_operator = parse_result$parsed$logical_operator %||% "AND",
+            season = if (is.null(parse_result$parsed$season)) NULL else as.integer(parse_result$parsed$season),
+            conn = conn
+          )
+          return(builder_result)
+        }
+      }
+      
+      # Medium confidence parse: return parse_help_needed with builder hints
+      if (identical(parse_result$status, "parse_help_needed")) {
+        return(list(
+          status = jsonlite::unbox("parse_help_needed"),
+          query_type = jsonlite::unbox("parse_help_needed"),
+          confidence = jsonlite::unbox(parse_result$confidence),
+          builder_prefill = parse_result$builder_prefill,
+          message = jsonlite::unbox("Confidence too low for automatic parsing. Use the builder to refine."),
+          shape = jsonlite::unbox(parse_result$shape)
+        ))
+      }
+    }
+
+    # Fall back to simple query logic
     limit <- parse_limit(limit, default = 12L, maximum = 25L)
     intent <- parse_query_intent(conn, question, limit = limit)
     if (!identical(intent$status, "supported")) {

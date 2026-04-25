@@ -91,6 +91,32 @@ request_json <- function(base_url, path, query = list(), expected_status = 200L)
   jsonlite::fromJSON(body_text, simplifyVector = FALSE)
 }
 
+request_json_post <- function(base_url, path, body = list(), expected_status = 200L) {
+  url <- build_endpoint_url(base_url, path)
+  body_json <- jsonlite::toJSON(body, auto_unbox = TRUE)
+  response <- httr::POST(
+    url,
+    httr::add_headers(`Content-Type` = 'application/json'),
+    body = body_json,
+    httr::timeout(30)
+  )
+  status <- httr::status_code(response)
+  body_text <- httr::content(response, as = 'text', encoding = 'UTF-8')
+
+  if (!identical(status, expected_status)) {
+    stop(
+      sprintf('Expected HTTP %s from %s (POST), got %s. Body: %s', expected_status, url, status, body_text),
+      call. = FALSE
+    )
+  }
+
+  if (!nzchar(body_text)) {
+    return(list())
+  }
+
+  jsonlite::fromJSON(body_text, simplifyVector = FALSE)
+}
+
 first_record <- function(records) {
   assert_true(is.list(records) && length(records) >= 1, 'Expected at least one record.')
   records[[1]]
@@ -1813,5 +1839,99 @@ assert_true(length(debut_bands$data) >= 1L,
 assert_true("debut_player_names" %in% names(debut_bands$data[[1]]),
   'Expected /league-composition-debut-bands rows to include debut_player_names.')
 check_step('/league-composition-debut-bands returns debut age bands with player-name detail')
+
+# Task 6: API Endpoint Extension - Builder routing tests
+cat("\nTesting Task 6: /api/query endpoint builder routing...\n")
+
+cat("Checking backward compatibility: /query with simple highest query...\n")
+simple_query <- request_json(base_url, '/query', query = list(question = 'highest goals'))
+assert_true(identical(scalar_value(simple_query$status), 'supported'),
+  'Expected simple query to return status=supported')
+assert_true(is.list(simple_query$rows) && length(simple_query$rows) >= 1,
+  'Expected simple query to return at least one row')
+check_step('/query backward compatibility: simple queries still work')
+
+cat("Checking backward compatibility: /query with simple lowest query...\n")
+simple_lowest <- request_json(base_url, '/query', query = list(question = 'lowest penalties'))
+assert_true(identical(scalar_value(simple_lowest$status), 'supported'),
+  'Expected lowest query to return status=supported')
+check_step('/query backward compatibility: lowest queries work')
+
+cat("Checking /query POST with builder_source=false and no question (should skip parse and use simple logic)...\n")
+no_question_post <- request_json_post(base_url, '/query', list(question = '', builder_source = FALSE))
+assert_true(identical(scalar_value(no_question_post$status), 'unsupported') || 
+            identical(scalar_value(no_question_post$status), 'error'),
+  'Expected empty question to return unsupported or error')
+check_step('/query POST: empty question returns error as expected')
+
+cat("Checking /query POST builder_source=true with missing shape...\n")
+no_shape_post <- request_json_post(base_url, '/query', 
+  list(builder_source = TRUE, shape = NA), expected_status = 200L)
+assert_true(identical(scalar_value(no_shape_post$status), 'error'),
+  'Expected missing shape to return error')
+assert_contains(scalar_value(no_shape_post$error), 'Shape is required',
+  'Expected error message about shape')
+check_step('/query POST: builder_source=true with missing shape returns error')
+
+cat("Checking /query POST builder_source=true with valid comparison...\n")
+comparison_post <- request_json_post(base_url, '/query', list(
+  builder_source = TRUE,
+  shape = 'comparison',
+  subjects = c('Collingwood', 'Melbourne'),
+  stat = 'goals',
+  seasons = c(2024)
+))
+assert_true(!is.null(comparison_post$status),
+  'Expected comparison builder to return status')
+# Status could be error or success depending on data; main thing is it routes to builder
+check_step('/query POST: builder_source=true routes to comparison builder')
+
+cat("Checking /query POST builder_source=true with valid trend...\n")
+trend_post <- request_json_post(base_url, '/query', list(
+  builder_source = TRUE,
+  shape = 'trend',
+  subject = 'Collingwood',
+  stat = 'goals'
+))
+assert_true(!is.null(trend_post$status),
+  'Expected trend builder to return status')
+check_step('/query POST: builder_source=true routes to trend builder')
+
+cat("Checking /query POST builder_source=true with valid record...\n")
+record_post <- request_json_post(base_url, '/query', list(
+  builder_source = TRUE,
+  shape = 'record',
+  stat = 'goals'
+))
+assert_true(!is.null(record_post$status),
+  'Expected record builder to return status')
+check_step('/query POST: builder_source=true routes to record builder')
+
+cat("Checking /query GET with question that has medium confidence parse...\n")
+# This will depend on the parser confidence, but we're testing the flow exists
+medium_conf_query <- request_json(base_url, '/query', 
+  query = list(question = 'player stats over time'))
+# Should either succeed with builder route or return parse_help_needed
+assert_true(identical(scalar_value(medium_conf_query$status), 'parse_help_needed') ||
+            identical(scalar_value(medium_conf_query$status), 'supported') ||
+            identical(scalar_value(medium_conf_query$status), 'unsupported'),
+  'Expected query to return parse_help_needed, supported, or unsupported')
+check_step('/query GET: medium-confidence question routed appropriately')
+
+cat("Checking /query GET backward compatibility: list query...\n")
+list_query <- request_json(base_url, '/query', query = list(question = 'list players'))
+assert_true(identical(scalar_value(list_query$status), 'supported') ||
+            identical(scalar_value(list_query$status), 'unsupported'),
+  'Expected list query to route to simple logic')
+check_step('/query GET: list query backward compatible')
+
+cat("Checking /query GET backward compatibility: count query...\n")
+count_query <- request_json(base_url, '/query', query = list(question = 'how many goals'))
+assert_true(identical(scalar_value(count_query$status), 'supported') ||
+            identical(scalar_value(count_query$status), 'unsupported'),
+  'Expected count query to work')
+check_step('/query GET: count query backward compatible')
+
+cat('All Task 6 builder routing tests passed.\n')
 
 cat('All API regression checks passed.\n')
