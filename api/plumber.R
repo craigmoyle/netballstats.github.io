@@ -610,7 +610,7 @@ database_health_check <- function(include_metadata = FALSE) {
   list(ok = TRUE, metadata = metadata)
 }
 
-handle_request_error <- function(error, res) {
+handle_request_error <- function(error, res, timeout_message = "The query took too long. Try narrowing to a specific season or player.") {
   msg <- conditionMessage(error)
   timeout <- grepl("statement timeout|canceling statement|query_canceled", msg, ignore.case = TRUE)
   api_log(
@@ -620,7 +620,7 @@ handle_request_error <- function(error, res) {
     error_message = substr(msg, 1L, 200L)
   )
   if (timeout) {
-    json_error(res, 503, "The query took too long. Try narrowing to a specific season or player.")
+    json_error(res, 503, timeout_message)
   } else {
     json_error(res, 400, "Invalid request parameters.")
   }
@@ -1219,7 +1219,7 @@ function(season = "", res) {
 
     payload
   }, error = function(error) {
-    handle_request_error(error, res)
+    handle_request_error(error, res, timeout_message = "Round preview took too long to load. Try again shortly.")
   })
 }
 
