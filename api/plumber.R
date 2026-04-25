@@ -1257,7 +1257,15 @@ function(season = "", res) {
   tryCatch({
     season <- parse_optional_int(season, "season", minimum = 2017L, maximum = 2100L)
 
-    payload <- build_round_preview_payload(conn, season = season)
+    payload <- tryCatch({
+      build_round_preview_payload(conn, season = season)
+    }, error = function(e) {
+      api_log("ERROR", "round_preview_build_failed",
+        error_message = substr(conditionMessage(e), 1L, 500L),
+        stack_trace = paste(head(deparse(traceback()), 10), collapse = "; "))
+      stop(e)
+    })
+    
     if (is.null(payload)) {
       return(json_error(res, 404, "No upcoming round is available for that selection."))
     }
