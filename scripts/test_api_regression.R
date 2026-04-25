@@ -253,10 +253,10 @@ captured_preview_queries <- character()
 round_preview_helpers_env$query_rows <- function(conn, query, params = list()) {
   captured_preview_queries <<- c(captured_preview_queries, normalize_sql(query))
 
-  if (grepl('total_points', query, fixed = TRUE)) {
+  if (grepl('total_goals', query, fixed = TRUE)) {
     data.frame(
       canonical_name = 'Sample Shooter',
-      total_points = 17,
+      total_goals = 17,
       stringsAsFactors = FALSE
     )
   } else {
@@ -281,8 +281,8 @@ last_meeting_player_watch <- round_preview_helpers_env$fetch_preview_player_watc
   seasons = default_season,
   context = 'last_meeting'
 )
-assert_true(identical(recent_player_watch$summary, 'Sample Shooter leads this side with 17 points across its last five completed matches.'), 'Expected recent-form player watch to summarize points from player_match_stats.match_value.')
-assert_true(identical(last_meeting_player_watch$summary, 'Sample Shooter scored 17 points in the last meeting.'), 'Expected last-meeting player watch to summarize points from player_match_stats.match_value.')
+assert_true(identical(recent_player_watch$summary, 'Sample Shooter leads this side with 17 goals across its last five completed matches.'), 'Expected recent-form player watch to summarize goals from player_match_stats.match_value.')
+assert_true(identical(last_meeting_player_watch$summary, 'Sample Shooter scored 17 goals in the last meeting.'), 'Expected last-meeting player watch to summarize goals from player_match_stats.match_value.')
 assert_true(length(captured_preview_queries) == 2L, 'Expected player watch helpers to issue one query per context when point leaders are present.')
 assert_true(!any(grepl('pms.value_number', captured_preview_queries, fixed = TRUE)), 'Expected round preview player watch queries to avoid the missing player_match_stats.value_number column.')
 assert_true(all(grepl('pms.match_value', captured_preview_queries, fixed = TRUE)), 'Expected round preview player watch queries to use player_match_stats.match_value.')
@@ -291,10 +291,10 @@ captured_preview_queries <- character()
 round_preview_helpers_env$query_rows <- function(conn, query, params = list()) {
   captured_preview_queries <<- c(captured_preview_queries, normalize_sql(query))
 
-  if (grepl('total_points', query, fixed = TRUE)) {
+  if (grepl('total_goals', query, fixed = TRUE)) {
     return(data.frame(
       canonical_name = character(),
-      total_points = numeric(),
+      total_goals = numeric(),
       stringsAsFactors = FALSE
     ))
   }
@@ -325,6 +325,25 @@ assert_true(length(captured_preview_queries) == 4L, 'Expected player watch helpe
 assert_true(!any(grepl('pms.value_number', captured_preview_queries, fixed = TRUE)), 'Expected round preview player watch fallback queries to avoid the missing player_match_stats.value_number column.')
 assert_true(all(grepl('pms.match_value', captured_preview_queries, fixed = TRUE)), 'Expected round preview player watch fallback queries to use player_match_stats.match_value.')
 check_step('round preview helpers map crest assets and use player_match_stats.match_value')
+
+fantasy_env <- new.env(parent = globalenv())
+sys.source(file.path(getwd(), 'api', 'R', 'helpers.R'), envir = fantasy_env)
+fantasy_env$api_log <- function(...) NULL
+fantasy_env$has_player_match_stats <- function(conn) TRUE
+fantasy_env$query_rows <- function(conn, query, params = list()) {
+  data.frame(
+    canonical_name = 'Sample Player',
+    fantasy_score = 213.5,
+    stringsAsFactors = FALSE
+  )
+}
+fantasy_watch <- fantasy_env$fetch_preview_fantasy_watch(conn = NULL, squad_id = 804L, seasons = default_season)
+assert_true(!is.null(fantasy_watch), 'Expected fetch_preview_fantasy_watch to return a non-null result when query returns a player.')
+assert_true(identical(fantasy_watch$context, 'recent_form'), 'Expected fetch_preview_fantasy_watch to set context to recent_form.')
+assert_true(grepl('fantasy scoring', fantasy_watch$summary, fixed = TRUE), 'Expected fetch_preview_fantasy_watch summary to mention fantasy scoring.')
+assert_true(grepl('Sample Player', fantasy_watch$summary, fixed = TRUE), 'Expected fetch_preview_fantasy_watch summary to include player name.')
+assert_true(grepl('213.5 pts', fantasy_watch$summary, fixed = TRUE), 'Expected fetch_preview_fantasy_watch summary to include fantasy score.')
+check_step('fetch_preview_fantasy_watch returns a well-formed watch note')
 
 query_payload <- request_json(
   base_url,

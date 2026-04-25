@@ -2928,6 +2928,8 @@ build_round_preview_payload <- function(conn, season = NULL) {
       away_recent_note <- fetch_preview_player_watch(conn, away_squad_id, seasons = season_value, context = "recent_form")
       home_last_meeting_note <- fetch_preview_player_watch(conn, home_squad_id, match_id = last_meeting$match_id %||% NULL, seasons = season_value, context = "last_meeting")
       away_last_meeting_note <- fetch_preview_player_watch(conn, away_squad_id, match_id = last_meeting$match_id %||% NULL, seasons = season_value, context = "last_meeting")
+      home_fantasy_note <- fetch_preview_fantasy_watch(conn, home_squad_id, seasons = season_value)
+      away_fantasy_note <- fetch_preview_fantasy_watch(conn, away_squad_id, seasons = season_value)
 
       sparse_history_note <- if (is.null(head_to_head)) {
         "First time these teams have met in the database."
@@ -2962,8 +2964,10 @@ build_round_preview_payload <- function(conn, season = NULL) {
         ),
         player_watch = Filter(Negate(is.null), list(
           if (!is.null(home_recent_note)) c(list(team = home_team), home_recent_note) else NULL,
+          if (!is.null(home_fantasy_note)) c(list(team = home_team), home_fantasy_note) else NULL,
           if (!is.null(home_last_meeting_note)) c(list(team = home_team), home_last_meeting_note) else NULL,
           if (!is.null(away_recent_note)) c(list(team = away_team), away_recent_note) else NULL,
+          if (!is.null(away_fantasy_note)) c(list(team = away_team), away_fantasy_note) else NULL,
           if (!is.null(away_last_meeting_note)) c(list(team = away_team), away_last_meeting_note) else NULL
         )),
         fact_cards = Filter(Negate(is.null), list(
@@ -3146,22 +3150,22 @@ fetch_preview_player_watch <- function(conn, squad_id, match_id = NULL, seasons,
       "    AND season <= ?season",
       "  ORDER BY CASE WHEN season = ?season THEN 0 ELSE 1 END, local_start_time DESC",
       "  LIMIT 5",
-      "), point_rows AS (",
-      "  SELECT pms.player_id, players.canonical_name, SUM(CASE WHEN pms.stat = 'goal1' THEN pms.match_value WHEN pms.stat = 'goal2' THEN pms.match_value * 2 ELSE 0 END) AS total_points",
+      "), goal_rows AS (",
+      "  SELECT pms.player_id, players.canonical_name, SUM(CASE WHEN pms.stat = 'goal1' THEN pms.match_value WHEN pms.stat = 'goal2' THEN pms.match_value ELSE 0 END) AS total_goals",
       "  FROM player_match_stats pms",
       "  JOIN players ON players.player_id = pms.player_id",
       "  WHERE pms.match_id IN (SELECT match_id FROM recent_matches) AND pms.squad_id = ?squad_id",
       "  GROUP BY pms.player_id, players.canonical_name",
-      "  ORDER BY total_points DESC, players.canonical_name ASC",
+      "  ORDER BY total_goals DESC, players.canonical_name ASC",
       "  LIMIT 1",
       ")",
-      "SELECT canonical_name, total_points FROM point_rows"
+      "SELECT canonical_name, total_goals FROM goal_rows"
     )
     rows <- query_rows(conn, query, list(squad_id = as.integer(squad_id), season = as.integer(seasons)))
-    if (nrow(rows) && !is.na(rows$total_points[[1]]) && rows$total_points[[1]] > 0) {
+    if (nrow(rows) && !is.na(rows$total_goals[[1]]) && rows$total_goals[[1]] > 0) {
       return(list(
         context = "recent_form",
-        summary = sprintf("%s leads this side with %s points across its last five completed matches.", rows$canonical_name[[1]], rows$total_points[[1]])
+        summary = sprintf("%s leads this side with %s goals across its last five completed matches.", rows$canonical_name[[1]], rows$total_goals[[1]])
       ))
     }
 
@@ -3200,22 +3204,22 @@ fetch_preview_player_watch <- function(conn, squad_id, match_id = NULL, seasons,
   }
 
   query <- paste(
-    "WITH point_rows AS (",
-    "  SELECT pms.player_id, players.canonical_name, SUM(CASE WHEN pms.stat = 'goal1' THEN pms.match_value WHEN pms.stat = 'goal2' THEN pms.match_value * 2 ELSE 0 END) AS total_points",
+    "WITH goal_rows AS (",
+    "  SELECT pms.player_id, players.canonical_name, SUM(CASE WHEN pms.stat = 'goal1' THEN pms.match_value WHEN pms.stat = 'goal2' THEN pms.match_value ELSE 0 END) AS total_goals",
     "  FROM player_match_stats pms",
     "  JOIN players ON players.player_id = pms.player_id",
     "  WHERE pms.match_id = ?match_id AND pms.squad_id = ?squad_id",
     "  GROUP BY pms.player_id, players.canonical_name",
-    "  ORDER BY total_points DESC, players.canonical_name ASC",
+    "  ORDER BY total_goals DESC, players.canonical_name ASC",
     "  LIMIT 1",
     ")",
-    "SELECT canonical_name, total_points FROM point_rows"
+    "SELECT canonical_name, total_goals FROM goal_rows"
   )
   rows <- query_rows(conn, query, list(match_id = as.integer(match_id), squad_id = as.integer(squad_id)))
-  if (nrow(rows) && !is.na(rows$total_points[[1]]) && rows$total_points[[1]] > 0) {
+  if (nrow(rows) && !is.na(rows$total_goals[[1]]) && rows$total_goals[[1]] > 0) {
     return(list(
       context = "last_meeting",
-      summary = sprintf("%s scored %s points in the last meeting.", rows$canonical_name[[1]], rows$total_points[[1]])
+      summary = sprintf("%s scored %s goals in the last meeting.", rows$canonical_name[[1]], rows$total_goals[[1]])
     ))
   }
 
@@ -3242,7 +3246,85 @@ fetch_preview_player_watch <- function(conn, squad_id, match_id = NULL, seasons,
   )
 }
 
-# Per-process cache for round summary payloads (keyed by season+round+phase).
+fetch_preview_fantasy_watch <- function(conn, squad_id, seasons) {
+  if (!has_player_match_stats(conn)) {
+    return(NULL)
+  }
+
+  stat_in_sql <- paste0(
+    "pms.stat IN (",
+    paste(sprintf("'%s'", NWAR_STAT_KEYS), collapse = ", "),
+    ")"
+  )
+
+  query <- paste(
+    "WITH recent_matches AS (",
+    "  SELECT match_id",
+    "  FROM matches",
+    "  WHERE home_score IS NOT NULL AND away_score IS NOT NULL",
+    "    AND (home_squad_id = ?squad_id OR away_squad_id = ?squad_id)",
+    "    AND season <= ?season",
+    "  ORDER BY CASE WHEN season = ?season THEN 0 ELSE 1 END, local_start_time DESC",
+    "  LIMIT 5",
+    "), stats_agg AS (",
+    "  SELECT pms.player_id, players.canonical_name,",
+    "    COUNT(DISTINCT pms.match_id) AS games,",
+    "    SUM(CASE WHEN pms.stat = 'quartersPlayed'        THEN pms.match_value ELSE 0 END) AS total_quarters,",
+    "    SUM(CASE WHEN pms.stat = 'goal1'                 THEN pms.match_value ELSE 0 END) AS total_goal1,",
+    "    SUM(CASE WHEN pms.stat = 'goal2'                 THEN pms.match_value ELSE 0 END) AS total_goal2,",
+    "    SUM(CASE WHEN pms.stat = 'offensiveRebounds'     THEN pms.match_value ELSE 0 END) AS total_off_reb,",
+    "    SUM(CASE WHEN pms.stat = 'feeds'                 THEN pms.match_value ELSE 0 END) AS total_feeds,",
+    "    SUM(CASE WHEN pms.stat = 'centrePassReceives'    THEN pms.match_value ELSE 0 END) AS total_cpr,",
+    "    SUM(CASE WHEN pms.stat = 'secondPhaseReceive'    THEN pms.match_value ELSE 0 END) AS total_spr,",
+    "    SUM(CASE WHEN pms.stat = 'gain'                  THEN pms.match_value ELSE 0 END) AS total_gain,",
+    "    SUM(CASE WHEN pms.stat = 'intercepts'            THEN pms.match_value ELSE 0 END) AS total_intercepts,",
+    "    SUM(CASE WHEN pms.stat = 'deflections'           THEN pms.match_value ELSE 0 END) AS total_deflections,",
+    "    SUM(CASE WHEN pms.stat = 'defensiveRebounds'     THEN pms.match_value ELSE 0 END) AS total_def_reb,",
+    "    SUM(CASE WHEN pms.stat = 'pickups'               THEN pms.match_value ELSE 0 END) AS total_pickups,",
+    "    SUM(CASE WHEN pms.stat = 'goalMisses'            THEN pms.match_value ELSE 0 END) AS total_missed_goals,",
+    "    SUM(CASE WHEN pms.stat = 'generalPlayTurnovers'  THEN pms.match_value ELSE 0 END) AS total_gpto,",
+    "    SUM(CASE WHEN pms.stat = 'penalties'             THEN pms.match_value ELSE 0 END) AS total_penalties",
+    "  FROM player_match_stats pms",
+    "  JOIN players ON players.player_id = pms.player_id",
+    paste0("  WHERE pms.match_id IN (SELECT match_id FROM recent_matches) AND pms.squad_id = ?squad_id AND ", stat_in_sql),
+    "  GROUP BY pms.player_id, players.canonical_name",
+    ")",
+    "SELECT canonical_name,",
+    "  ROUND(",
+    "    games * 10.0 + total_quarters * 5.0",
+    "    + total_goal1 * 2.0 + total_goal2 * 6.0",
+    "    + total_off_reb * 4.0 + total_feeds * 2.0",
+    "    + total_cpr * 1.0 + total_spr * 1.0",
+    "    + total_gain * 6.0 + total_intercepts * 8.0",
+    "    + total_deflections * 6.0 + total_def_reb * 4.0",
+    "    + total_pickups * 6.0",
+    "    + total_missed_goals * (-4.0)",
+    "    + total_gpto * (-4.0)",
+    "    + total_penalties * (-0.5)",
+    "  , 1) AS fantasy_score",
+    "FROM stats_agg",
+    "ORDER BY fantasy_score DESC, canonical_name ASC",
+    "LIMIT 1"
+  )
+
+  rows <- tryCatch(
+    query_rows(conn, query, list(squad_id = as.integer(squad_id), season = as.integer(seasons))),
+    error = function(e) data.frame()
+  )
+
+  if (!nrow(rows) || is.na(rows$fantasy_score[[1]]) || rows$fantasy_score[[1]] <= 0) {
+    return(NULL)
+  }
+
+  list(
+    context = "recent_form",
+    summary = sprintf(
+      "%s leads in fantasy scoring over the last five matches (%s pts).",
+      rows$canonical_name[[1]],
+      rows$fantasy_score[[1]]
+    )
+  )
+}
 # Cleared automatically when the Container App restarts (e.g. after a DB refresh).
 .round_summary_cache <- new.env(parent = emptyenv())
 .round_cache_ttl_secs <- 3600L  # 1 hour
