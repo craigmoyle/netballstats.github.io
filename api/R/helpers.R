@@ -5920,24 +5920,24 @@ build_trend_query <- function(subject, stat, seasons = NULL, conn) {
         conn,
         paste0(
           "SELECT ",
-          "  SUM(CASE WHEN pms.", stat, " IS NOT NULL THEN pms.", stat, " ELSE 0 END) AS total, ",
+          "  SUM(pms.match_value) AS total, ",
           "  COUNT(DISTINCT pms.match_id) AS games ",
           "FROM player_match_stats pms ",
-          "WHERE pms.player_id = ?player_id AND pms.season = ?season"
+          "WHERE pms.player_id = ?player_id AND pms.stat = ?stat AND pms.season = ?season"
         ),
-        list(player_id = subject_id, season = season)
+        list(player_id = subject_id, stat = stat, season = season)
       )
     } else {
       season_data <- query_rows(
         conn,
         paste0(
           "SELECT ",
-          "  SUM(CASE WHEN tps.", stat, " IS NOT NULL THEN tps.", stat, " ELSE 0 END) AS total, ",
+          "  SUM(tps.value_number) AS total, ",
           "  COUNT(DISTINCT tps.match_id) AS games ",
           "FROM team_period_stats tps ",
-          "WHERE tps.squad_id = ?team_id AND tps.season = ?season"
+          "WHERE tps.squad_id = ?team_id AND tps.stat = ?stat AND tps.season = ?season"
         ),
-        list(team_id = subject_id, season = season)
+        list(team_id = subject_id, stat = stat, season = season)
       )
     }
     
