@@ -20,11 +20,17 @@ COPY . /app
 
 # Install plumber and all dependencies needed directly
 # This bypasses renv complexity and ensures packages are in the standard R library
-RUN R --no-restore --no-save -q -e " \
+RUN set -x && \
+    R --no-restore --no-save -q -e " \
+  cat('Setting repos...\\n'); \
   options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
+  cat('Packages to install:', paste(c('plumber', 'DBI', 'RPostgres', 'jsonlite', 'httr2', 'glue', 'rlang', 'lubridate', 'dplyr', 'tidyr'), collapse=', '), '\\n'); \
   packages <- c('plumber', 'DBI', 'RPostgres', 'jsonlite', 'httr2', 'glue', 'rlang', 'lubridate', 'dplyr', 'tidyr'); \
-  install.packages(packages, Ncpus = parallel::detectCores())
-"
+  install.packages(packages, Ncpus = parallel::detectCores()); \
+  cat('Installation complete\\n'); \
+  cat('Checking packages:\\n'); \
+  for (pkg in packages) { cat(pkg, ':', require(pkg, character.only=TRUE, quietly=TRUE), '\\n') }
+" && echo "R package installation done"
 
 # Runtime stage — copy only what's needed
 FROM rocker/r-ver:4.5.2
