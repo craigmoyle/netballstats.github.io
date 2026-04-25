@@ -23,8 +23,9 @@ COPY renv.lock renv/settings.json ./
 COPY renv/ ./renv/
 
 # Install renv and restore dependencies (cached if renv.lock unchanged)
+# We use --vanilla to skip loading system or user .Rprofile files
 RUN mkdir -p /opt/renv/cache /opt/renv/library && \
-    R -q -e " \
+    R --vanilla -q -e " \
   options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
   install.packages('renv'); \
   renv::consent(provided = TRUE); \
@@ -60,7 +61,9 @@ ENV RENV_PATHS_LIBRARY=/opt/renv/library
 ENV RENV_PATHS_CACHE=/opt/renv/cache
 
 # Ensure cache/library directories exist in runtime
-RUN mkdir -p /opt/renv/cache /opt/renv/library
+# Also temporarily disable .Rprofile to prevent renv activation issues
+RUN mkdir -p /opt/renv/cache /opt/renv/library && \
+    if [ -f /app/.Rprofile ]; then mv /app/.Rprofile /app/.Rprofile.disabled; fi
 
 RUN useradd -u 1000 -m -s /bin/false netballstats \
   && chown -R netballstats:netballstats /app /opt/renv
