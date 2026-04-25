@@ -40,6 +40,8 @@ COPY --from=build /app /app
 ENV NETBALL_STATS_REPO_ROOT=/app
 ENV NETBALL_STATS_HOST=0.0.0.0
 ENV NETBALL_STATS_PORT=8000
+ENV R_PROFILE_USER=""
+ENV RENV_PROFILE_ALLOWED=false
 
 RUN useradd -u 1000 -m -s /bin/false netballstats \
   && chown -R netballstats:netballstats /app
@@ -48,5 +50,5 @@ EXPOSE 8000
 
 USER netballstats
 
-# Run plumber with all startup files skipped
-CMD ["Rscript", "--no-restore", "--no-save", "-e", "pr <- plumber::plumb('api/plumber.R'); pr$run(host = Sys.getenv('NETBALL_STATS_HOST', '0.0.0.0'), port = as.integer(Sys.getenv('PORT', Sys.getenv('NETBALL_STATS_PORT', '8000'))))"]
+# Run plumber without loading project .Rprofile (which triggers renv)
+CMD ["Rscript", "--no-restore", "--no-save", "--no-site-file", "-e", "Sys.setenv(R_PROFILE=''); pr <- plumber::plumb('api/plumber.R'); pr$run(host = Sys.getenv('NETBALL_STATS_HOST', '0.0.0.0'), port = as.integer(Sys.getenv('PORT', Sys.getenv('NETBALL_STATS_PORT', '8000'))))"]
