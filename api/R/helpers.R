@@ -3181,7 +3181,7 @@ fetch_current_or_next_round <- function(conn, season = NULL, now_utc = NULL) {
     where_clause,
     " GROUP BY season, COALESCE(competition_phase, ''), round_number",
     " HAVING MIN(utc_start_time) <= ?now",
-    " AND (MAX(home_score IS NULL) = 1 OR MAX(away_score IS NULL) = 1)",
+    " AND (COUNT(CASE WHEN home_score IS NULL OR away_score IS NULL THEN 1 END) > 0)",
     " ORDER BY MIN(utc_start_time) DESC, season DESC, round_number DESC LIMIT 1"
   )
 
