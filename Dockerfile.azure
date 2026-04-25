@@ -15,28 +15,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-ENV RENV_PATHS_CACHE=/opt/renv/cache
-
-# Copy only dependency files first (renv.lock, renv/settings.json)
-# This layer is cached if dependencies don't change
-COPY renv.lock renv/settings.json ./
-COPY renv/ ./renv/
-
-# Install renv and restore dependencies (cached if renv.lock unchanged)
-# Explicitly set library paths BEFORE restore so renv uses our custom location
-RUN mkdir -p /opt/renv/cache /opt/renv/library && \
-    R --no-restore --no-save -q -e " \
-  .libPaths(c('/opt/renv/library/R-4.5', .libPaths())); \
-  options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
-  install.packages('renv'); \
-  renv::consent(provided = TRUE); \
-  renv::restore(prompt = FALSE)"
-
-# Copy application code (this layer updates on every code change)
+# Copy all source code  
 COPY . /app
 
-# Purge build-only dependencies after R packages are compiled
-RUN apt-get purge -y linux-libc-dev && rm -rf /var/lib/apt/lists/*
+# Install plumber and all dependencies needed directly
+# This bypasses renv complexity and ensures packages are in the standard R library
+RUN R --no-restore --no-save -q -e " \
+  options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
+  packages <- c('plumber', 'DBI', 'RPostgres', 'jsonlite', 'httr2', 'glue', 'rlang', 'lubridate', 'dplyr', 'tidyr'); \
+  install.packages(packages, Ncpus = parallel::detectCores())
+"
 
 # Runtime stage — copy only what's needed
 FROM rocker/r-ver:4.5.2
@@ -51,30 +39,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy compiled R environment and app code from build stage
-COPY --from=build /opt/renv /opt/renv
+# Copy only application code (R packages are in the standard library in rocker/r-ver)
 COPY --from=build /app /app
 
 ENV NETBALL_STATS_REPO_ROOT=/app
 ENV NETBALL_STATS_HOST=0.0.0.0
 ENV NETBALL_STATS_PORT=8000
-ENV RENV_PATHS_LIBRARY=/opt/renv/library
-ENV RENV_PATHS_CACHE=/opt/renv/cache
-
-# Ensure cache/library directories exist in runtime
-# Also temporarily disable .Rprofile to prevent renv activation issues
-RUN mkdir -p /opt/renv/cache /opt/renv/library && \
-    if [ -f /app/.Rprofile ]; then mv /app/.Rprofile /app/.Rprofile.disabled; fi
 
 RUN useradd -u 1000 -m -s /bin/false netballstats \
-  && chown -R netballstats:netballstats /app /opt/renv
+  && chown -R netballstats:netballstats /app
 
 EXPOSE 8000
 
 USER netballstats
 
-# Skip .Rprofile (which has renv activation issues) and run with explicit library paths
-# Set R_PROFILE_USER to empty to skip .Rprofile completely
-ENV R_PROFILE_USER=
-
-CMD ["Rscript", "--no-restore", "--no-save", "-e", ".libPaths(c('/opt/renv/library/R-4.5', .libPaths())); pr <- plumber::plumb('api/plumber.R'); pr$run(host = Sys.getenv('NETBALL_STATS_HOST', '0.0.0.0'), port = as.integer(Sys.getenv('PORT', Sys.getenv('NETBALL_STATS_PORT', '8000'))))"]
+# Run plumber with all startup files skipped
+CMD ["Rscript", "--no-restore", "--no-save", "-e", "pr <- plumber::plumb('api/plumber.R'); pr$run(host = Sys.getenv('NETBALL_STATS_HOST', '0.0.0.0'), port = as.integer(Sys.getenv('PORT', Sys.getenv('NETBALL_STATS_PORT', '8000'))))"]
