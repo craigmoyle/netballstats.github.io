@@ -3156,33 +3156,57 @@ build_round_fact <- function(title, value, detail, badges = character()) {
   )
 }
 
-fetch_next_upcoming_round <- function(conn, season = NULL, now_utc = NULL) {
+fetch_current_or_next_round <- function(conn, season = NULL, now_utc = NULL) {
   if (is.null(now_utc)) {
     now_utc <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
   }
 
-  query <- paste(
+  base_query <- paste(
     "SELECT season, COALESCE(competition_phase, '') AS competition_phase, round_number,",
     "COUNT(*) AS total_matches, MIN(utc_start_time) AS round_start_time",
-    "FROM matches",
-    "WHERE home_score IS NULL AND away_score IS NULL",
-    "AND utc_start_time IS NOT NULL"
+    "FROM matches"
   )
+
   params <- list(now = now_utc)
+  where_clause <- ""
 
   if (!is.null(season)) {
-    query <- paste0(query, " AND season = ?season")
+    where_clause <- " WHERE season = ?season"
     params$season <- as.integer(season)
   }
 
-  query <- paste0(
-    query,
+  # Step 1: Look for in-progress round (at least one match started, at least one unfinished)
+  in_progress_query <- paste0(
+    base_query,
+    where_clause,
+    ifelse(where_clause == "", " WHERE ", " AND "),
+    "MIN(utc_start_time) <= ?now",
+    " AND (MAX(home_score IS NULL) = 1 OR MAX(away_score IS NULL) = 1)",
+    " GROUP BY season, COALESCE(competition_phase, ''), round_number",
+    " ORDER BY MIN(utc_start_time) DESC, season DESC, round_number DESC LIMIT 1"
+  )
+
+  in_progress <- query_rows(conn, in_progress_query, params)
+  if (nrow(in_progress) > 0) {
+    return(in_progress)
+  }
+
+  # Step 2: Fallback to next upcoming round (all matches unfinished, all start in future)
+  where_clause_all <- paste0(where_clause, ifelse(where_clause == "", " WHERE ", " AND "), "home_score IS NULL AND away_score IS NULL AND utc_start_time IS NOT NULL")
+  upcoming_query <- paste0(
+    base_query,
+    where_clause_all,
     " GROUP BY season, COALESCE(competition_phase, ''), round_number",
     " HAVING MIN(utc_start_time) > ?now",
     " ORDER BY round_start_time ASC, season ASC, round_number ASC LIMIT 1"
   )
 
-  query_rows(conn, query, params)
+  query_rows(conn, upcoming_query, params)
+}
+
+fetch_next_upcoming_round <- function(conn, season = NULL, now_utc = NULL) {
+  # Deprecated: use fetch_current_or_next_round instead
+  fetch_current_or_next_round(conn, season, now_utc)
 }
 
 fetch_upcoming_round_matches <- function(conn, season, competition_phase = "", round_number, now_utc) {
@@ -3192,16 +3216,16 @@ fetch_upcoming_round_matches <- function(conn, season, competition_phase = "", r
       "SELECT match_id, season, COALESCE(competition_phase, '') AS competition_phase, round_number, game_number, local_start_time, venue_name,",
       "home_squad_id, home_squad_name, away_squad_id, away_squad_name",
       "FROM matches",
-      "WHERE home_score IS NULL AND away_score IS NULL",
+      "WHERE (home_score IS NULL OR away_score IS NULL)",
       "AND utc_start_time IS NOT NULL",
-      "AND utc_start_time > ?now",
+      "AND utc_start_time <= ?now_upper",
       "AND season = ?season",
       "AND COALESCE(competition_phase, '') = ?competition_phase",
       "AND round_number = ?round_number",
       "ORDER BY local_start_time ASC, game_number ASC, match_id ASC"
     ),
     list(
-      now = now_utc,
+      now_upper = now_utc,
       season = as.integer(season),
       competition_phase = as.character(competition_phase %||% ""),
       round_number = as.integer(round_number)
