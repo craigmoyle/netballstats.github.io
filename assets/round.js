@@ -124,7 +124,7 @@ const {
   function createBadge(label) {
     const badge = document.createElement("span");
     badge.className = "record-badge";
-    if (/archive/i.test(label)) {
+    if (/all-time/i.test(label)) {
       badge.classList.add("record-badge--archive");
     }
     badge.textContent = label;
@@ -144,7 +144,7 @@ const {
     facts.forEach((fact) => {
       const card = document.createElement("article");
       card.className = "round-fact-card";
-      if (Array.isArray(fact.badges) && fact.badges.some((badge) => /archive/i.test(badge))) {
+      if (Array.isArray(fact.badges) && fact.badges.some((badge) => /all-time/i.test(badge))) {
         card.dataset.highlight = "archive";
       }
 

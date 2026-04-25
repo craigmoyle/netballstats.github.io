@@ -2020,7 +2020,7 @@ numeric_equal <- function(left, right, tolerance = 1e-9) {
 
 record_badge_label <- function(scope = c("season", "archive"), ranking = "highest") {
   scope <- match.arg(scope)
-  prefix <- if (identical(scope, "season")) "Season" else "Archive"
+  prefix <- if (identical(scope, "season")) "Season" else "All-time"
   suffix <- if (identical(ranking, "lowest")) "low" else "high"
   paste(prefix, suffix)
 }
@@ -2930,7 +2930,7 @@ build_round_preview_payload <- function(conn, season = NULL) {
       away_last_meeting_note <- fetch_preview_player_watch(conn, away_squad_id, match_id = last_meeting$match_id %||% NULL, seasons = season_value, context = "last_meeting")
 
       sparse_history_note <- if (is.null(head_to_head)) {
-        "First recorded meeting in the archive."
+        "First time these teams have met in the database."
       } else if (head_to_head$meetings <= 2L) {
         sprintf("Only %s prior meetings are logged.", head_to_head$meetings)
       } else {
@@ -3003,9 +3003,9 @@ fetch_preview_head_to_head <- function(conn, home_squad_id, away_squad_id, home_
   summary <- if (home_wins == away_wins) {
     sprintf("%s and %s are level %s-%s over %s meetings.", home_team_name, away_team_name, home_wins, away_wins, meetings)
   } else if (home_wins > away_wins) {
-    sprintf("%s lead the archive series %s-%s over %s meetings.", home_team_name, home_wins, away_wins, meetings)
+    sprintf("%s lead the head-to-head record %s-%s over %s meetings.", home_team_name, home_wins, away_wins, meetings)
   } else {
-    sprintf("%s lead the archive series %s-%s over %s meetings.", away_team_name, away_wins, home_wins, meetings)
+    sprintf("%s lead the head-to-head record %s-%s over %s meetings.", away_team_name, away_wins, home_wins, meetings)
   }
 
   list(

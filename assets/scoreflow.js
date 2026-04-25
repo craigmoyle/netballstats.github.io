@@ -16,7 +16,7 @@ const {
 } = window.NetballStatsTelemetry || {};
 
 const LOADING_MESSAGES = [
-  "Reading the scoreflow archive…",
+  "Reading the scoreflow database…",
   "Tracing lead and trail patterns…",
   "Pulling comeback records…"
 ];
@@ -287,7 +287,7 @@ function updateRecordsHeading() {
   if (elements.recordsCopy) {
     const scenario = elements.scenario?.options[elements.scenario.selectedIndex]?.text || "";
     const scenarioNote = scenario && scenario !== "All games" ? ` — filtered to: ${scenario.toLowerCase()}` : "";
-    elements.recordsCopy.textContent = `Strongest scoreflow stories from the archive${scenarioNote}.`;
+    elements.recordsCopy.textContent = `Strongest scoreflow stories from the database${scenarioNote}.`;
   }
 }
 
@@ -420,18 +420,18 @@ async function loadAndRender() {
       metric: state.filters.metric
     });
     showStatus("Scoreflow records ready.", "success", {
-      kicker: "Archive updated",
+      kicker: "Records updated",
       autoHideMs: 2200
     });
   } catch (error) {
     if (requestToken !== state.requestToken) return;
     state.gameRecords = null;
     state.teamSummary = null;
-    renderMessageRow(elements.recordsBody, 8, "Scoreflow records unavailable. Try again shortly.", "Archive note");
-    renderMessageRow(elements.teamBody, 5, "Team summary unavailable. Try again shortly.", "Archive note");
+    renderMessageRow(elements.recordsBody, 8, "Scoreflow records unavailable. Try again shortly.", "Note");
+    renderMessageRow(elements.teamBody, 5, "Team summary unavailable. Try again shortly.", "Note");
     if (elements.meta) elements.meta.textContent = "Scoreflow unavailable.";
     showStatus(error.message || "Unable to load scoreflow data.", "error", {
-      kicker: "Archive unavailable"
+      kicker: "Records unavailable"
     });
   }
 }
@@ -449,7 +449,7 @@ async function initScoreflowPage() {
     await loadMetadata(1);
   } catch (error) {
     if (elements.meta) {
-      elements.meta.textContent = "Archive metadata is taking longer than usual.";
+      elements.meta.textContent = "Stats database is taking longer than usual.";
     }
   }
   hydrateFiltersFromUrl();

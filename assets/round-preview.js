@@ -14,7 +14,6 @@
     heading: document.querySelector("#round-preview-heading"),
     meta: document.querySelector("#round-preview-meta"),
     intro: document.querySelector("#round-preview-intro"),
-    summaryBand: document.querySelector("#round-preview-summary-band"),
     matchGrid: document.querySelector("#round-preview-match-grid")
   };
 
@@ -30,26 +29,6 @@
 
   function isPlainObject(value) {
     return !!value && typeof value === "object" && !Array.isArray(value);
-  }
-
-  function createSummaryCard(card, accent) {
-    if (!isPlainObject(card)) {
-      return null;
-    }
-
-    const article = document.createElement("article");
-    article.className = accent ? "summary-card summary-card--accent" : "summary-card";
-
-    const label = document.createElement("span");
-    label.className = "summary-card__label";
-    label.textContent = card.label == null ? "" : String(card.label);
-
-    const value = document.createElement("span");
-    value.className = "summary-card__value";
-    value.textContent = card.value == null ? "--" : String(card.value);
-
-    article.append(label, value);
-    return article;
   }
 
   function createTeamHeading(fixture, side) {
@@ -262,16 +241,6 @@
       }
       if (elements.intro) {
         elements.intro.textContent = payload.round_intro || "";
-      }
-
-      if (elements.summaryBand && Array.isArray(payload.summary_cards) && payload.summary_cards.length) {
-        elements.summaryBand.replaceChildren();
-        payload.summary_cards.forEach((card, i) => {
-          const summaryCard = createSummaryCard(card, i === 0);
-          if (summaryCard) {
-            elements.summaryBand.appendChild(summaryCard);
-          }
-        });
       }
 
       renderMatches(payload.matches || []);
