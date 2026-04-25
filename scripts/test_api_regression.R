@@ -2026,6 +2026,21 @@ comp_basic <- request_json_post(base_url, '/query', list(
 assert_true(!is.null(comp_basic$status), 'Comparison should return status')
 assert_true(!is.null(comp_basic$results) || !is.null(comp_basic$error), 
   'Comparison should return results or error')
+# Verify results structure when results are present
+if (!is.null(comp_basic$results)) {
+  assert_true(is.list(comp_basic$results), 
+    'Results should be a list')
+  if (length(comp_basic$results) > 0) {
+    first_result <- comp_basic$results[[1]]
+    assert_true(is.list(first_result),
+      'Each result should be a record (list)')
+    # Verify required fields exist in results
+    assert_true(!is.null(first_result$subject) || !is.null(first_result$team),
+      'Result should have subject/team identifier')
+    assert_true(is.numeric(first_result$total) || is.numeric(first_result$value),
+      'Result should have numeric total/value')
+  }
+}
 check_step('Basic comparison query: 2 teams, 1 stat, 1 season')
 
 cat("  → Testing edge case: Only 1 subject (should fail gracefully)\n")
@@ -2103,6 +2118,15 @@ comb_or <- request_json_post(base_url, '/query', list(
 ), expected_status = 200L)
 
 assert_true(!is.null(comb_or$status), 'Combination with OR should return status')
+# Verify AND and OR have semantic difference
+# AND should be subset of OR (fewer or equal rows)
+if (!is.null(comb_basic$data) && !is.null(comb_or$data)) {
+  and_count <- length(comb_basic$data) %||% nrow(comb_basic$data)
+  or_count <- length(comb_or$data) %||% nrow(comb_or$data)
+  assert_true(and_count <= or_count,
+    sprintf('AND combination (%d rows) should have <= rows than OR (%d rows)', 
+            and_count, or_count))
+}
 check_step('Combination query: Multiple stats with OR operator')
 
 cat("  → Testing edge case: Empty filters (should fail)\n")
@@ -2226,6 +2250,11 @@ if (!is.null(parse_comp_high$confidence)) {
   assert_true(is.numeric(parse_comp_high$confidence), 'Confidence should be numeric')
   assert_true(parse_comp_high$confidence >= 0 && parse_comp_high$confidence <= 1,
     'Confidence should be between 0 and 1')
+  # Verify high confidence triggers builder (either shape is returned or results are provided)
+  assert_true(parse_comp_high$confidence > 0.5, 
+    'High-confidence comparison should have confidence > 0.5')
+  assert_true(!is.null(parse_comp_high$shape) || !is.null(parse_comp_high$results),
+    'High-confidence parse should include shape or results for routing')
 }
 check_step('Parser: High-confidence comparison detection')
 
