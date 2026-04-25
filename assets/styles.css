@@ -5244,14 +5244,14 @@ caption.table-caption {
 }
 
 #builder-validation-errors {
-  background-color: var(--color-error-bg, #fee);
-  color: var(--color-error-text, #c00);
+  background-color: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  border-left: 4px solid var(--danger);
   padding: 12px 16px;
   margin: 12px 0;
   border-radius: 4px;
   font-size: 14px;
   line-height: 1.5;
-  border-left: 4px solid var(--color-error-text, #c00);
 }
 
 .builder-form {
