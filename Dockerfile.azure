@@ -27,7 +27,7 @@ RUN R --no-restore --no-save -q -e " \
   cat('Package installation complete\\n')
 "
 
-# Runtime stage — copy only what's needed
+# Runtime stage — install packages and app
 FROM rocker/r-ver:4.5.2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -40,7 +40,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy only application code (R packages are in the standard library in rocker/r-ver)
+# Install all R packages in runtime stage (not copied from build)
+RUN R --no-restore --no-save -q -e " \
+  options(repos = c(PPM = 'https://packagemanager.posit.co/cran/__linux__/noble/latest')); \
+  packages <- c('askpass','bit','bit64','blob','cli','cpp11','crayon','curl','DBI','dplyr','fastmap','generics','glue','hms','httpuv','httr','jsonlite','later','lifecycle','lubridate','magrittr','mime','openssl','otel','pillar','pkgconfig','plumber','promises','purrr','R6','Rcpp','renv','rlang','RPostgres','sodium','stringi','stringr','superNetballR','swagger','sys','tibble','tidyr','tidyselect','timechange','utf8','vctrs','webutils','withr'); \
+  install.packages(packages, Ncpus = parallel::detectCores()); \
+  cat('Package installation complete\\n')
+"
+
+# Copy only application code
 COPY --from=build /app /app
 
 ENV NETBALL_STATS_REPO_ROOT=/app
