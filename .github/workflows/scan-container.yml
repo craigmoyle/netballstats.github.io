@@ -59,7 +59,7 @@ jobs:
       # v4 tag object d4b3ca9 → commit c10b806
       # https://github.com/github/codeql-action/commits/v4
       - name: Upload Trivy scan results
-        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13
+        uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225
         if: always()
         with:
           sarif_file: trivy-results.sarif
