@@ -20,6 +20,14 @@ const expectedExamples = [
   }
 ];
 
+const expectedApiQuestions = [
+  ...expectedExamples,
+  {
+    question: "Which teams had the lowest general play turnovers in 2025?",
+    intentType: "lowest"
+  }
+];
+
 const exampleMatches = [...html.matchAll(/data-example="([^"]+)"/g)].map((match) => match[1]);
 
 for (const example of expectedExamples) {
@@ -36,7 +44,7 @@ if (!baseUrl) {
   throw new Error("Pass --base-url=<api-root> to verify example questions against a running API.");
 }
 
-for (const example of expectedExamples) {
+for (const example of expectedApiQuestions) {
   const url = new URL(`${baseUrl}/query`);
   url.searchParams.set("question", example.question);
 

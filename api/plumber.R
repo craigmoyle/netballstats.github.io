@@ -680,6 +680,51 @@ database_unavailable <- function(res, error) {
   json_error(res, 503, "The statistics API is currently unavailable. Please try again shortly.")
 }
 
+build_supported_query_response <- function(conn, intent) {
+  all_rows <- fetch_query_result_rows(conn, intent)
+  total_matches <- nrow(all_rows)
+  row_limit <- if (identical(intent$intent_type, "count")) {
+    min(intent$limit, 12L)
+  } else if (identical(intent$intent_type, "list")) {
+    intent$limit
+  } else {
+    1L
+  }
+  rows <- if (nrow(all_rows)) {
+    all_rows[seq_len(min(nrow(all_rows), row_limit)), , drop = FALSE]
+  } else {
+    all_rows
+  }
+
+  list(
+    status = jsonlite::unbox("supported"),
+    question = jsonlite::unbox(intent$question),
+    answer = jsonlite::unbox(build_query_answer(intent, rows, total_matches)),
+    parsed = record_to_scalars(list(
+      intent_type = intent$intent_type,
+      subject_type = intent$subject_type,
+      player_name = intent$player_name,
+      team_name = intent$team_name,
+      stat = intent$stat,
+      stat_label = intent$stat_label,
+      comparison = intent$comparison,
+      comparison_label = intent$comparison_label,
+      threshold = intent$threshold,
+      opponent_name = intent$opponent_name,
+      seasons = intent$seasons,
+      season = intent$season,
+      limit = intent$limit
+    )),
+    summary = record_to_scalars(list(
+      question_type = intent$intent_type,
+      match_count = total_matches,
+      row_count = nrow(rows),
+      stat_label = intent$stat_label
+    )),
+    rows = rows_to_records(rows)
+  )
+}
+
 scoreflow_table_unavailable <- function(res) {
   api_log("WARN", "scoreflow_table_missing",
           error_message = "match_scoreflow_summary not found; database may need rebuilding.")
@@ -1698,54 +1743,65 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
       }
     }
 
-    # Attempt complex parse for question-based queries
+    # Attempt complex/simple preview parse for question-based queries
     if (nzchar(question)) {
-      parse_result <- attempt_complex_parse(question)
-      recognized_complex_shape <- is.character(parse_result$shape) &&
-        length(parse_result$shape) == 1L &&
-        !is.na(parse_result$shape) &&
-        nzchar(parse_result$shape)
+      preview_result <- preview_ask_the_stats_parse(question)
+      preview_shape <- preview_result$shape %||% NA_character_
+      recognized_shape <- is.character(preview_shape) &&
+        length(preview_shape) == 1L &&
+        !is.na(preview_shape) &&
+        nzchar(preview_shape)
 
-      # High confidence parse: route to builder directly
-      if (identical(parse_result$status, "success")) {
-        if (identical(parse_result$shape, "comparison")) {
+      if (isTRUE(preview_result$success) && identical(preview_result$status, "supported")) {
+        if (identical(preview_shape, "comparison")) {
           builder_result <- build_comparison_query(
-            subjects = as.character(parse_result$parsed$subjects),
-            stat = as.character(parse_result$parsed$stat),
-            season = as.integer((parse_result$parsed$seasons %||% parse_result$parsed$season)[[1]]),
+            subjects = as.character(preview_result$parsed$subjects),
+            stat = as.character(preview_result$parsed$stat),
+            season = as.integer((preview_result$parsed$seasons %||% preview_result$parsed$season)[[1]]),
             conn = conn
           )
           return(builder_result)
-        } else if (identical(parse_result$shape, "trend")) {
+        } else if (identical(preview_shape, "trend")) {
           builder_result <- build_trend_query(
-            subject = as.character(parse_result$parsed$subject),
-            stat = as.character(parse_result$parsed$stat),
-            seasons = if (is.null(parse_result$parsed$seasons)) NULL else as.integer(parse_result$parsed$seasons),
+            subject = as.character(preview_result$parsed$subject),
+            stat = as.character(preview_result$parsed$stat),
+            seasons = if (is.null(preview_result$parsed$seasons)) NULL else as.integer(preview_result$parsed$seasons),
             conn = conn
           )
           return(builder_result)
-        } else if (identical(parse_result$shape, "record")) {
+        } else if (identical(preview_shape, "record")) {
           builder_result <- build_record_query(
-            stat = as.character(parse_result$parsed$stat),
-            subject_type = parse_result$parsed$subject_type %||% "player",
-            season = if (is.null(parse_result$parsed$season)) NULL else as.integer(parse_result$parsed$season),
+            stat = as.character(preview_result$parsed$stat),
+            subject_type = preview_result$parsed$subject_type %||% "player",
+            season = if (is.null(preview_result$parsed$season)) NULL else as.integer(preview_result$parsed$season),
             conn = conn
           )
           return(builder_result)
-        } else if (identical(parse_result$shape, "combination")) {
+        } else if (identical(preview_shape, "combination")) {
           builder_result <- build_combination_query(
-            filters = parse_result$parsed$filters,
-            logical_operator = parse_result$parsed$logical_operator %||% "AND",
-            season = if (is.null(parse_result$parsed$season)) NULL else as.integer(parse_result$parsed$season),
+            filters = preview_result$parsed$filters,
+            logical_operator = preview_result$parsed$logical_operator %||% "AND",
+            season = if (is.null(preview_result$parsed$season)) NULL else as.integer(preview_result$parsed$season),
             conn = conn
           )
           return(builder_result)
+        } else if (preview_shape %in% c("count", "highest", "lowest", "list")) {
+          limit <- parse_limit(limit, default = 12L, maximum = 25L)
+          intent <- build_simple_query_intent_from_preview(
+            conn,
+            question,
+            preview_result$parsed %||% list(),
+            limit = limit
+          )
+          if (!identical(intent$status, "supported")) {
+            return(intent)
+          }
+          return(build_supported_query_response(conn, intent))
         }
       }
 
-      # Recognized complex shape but not safe to execute: return builder guidance
-      if (recognized_complex_shape) {
-        guidance <- build_complex_parse_guidance(parse_result)
+      if (recognized_shape && identical(preview_result$status, "parse_help_needed")) {
+        guidance <- build_complex_parse_guidance(preview_result)
         return(list(
           status = jsonlite::unbox("parse_help_needed"),
           query_type = jsonlite::unbox("parse_help_needed"),
@@ -1765,50 +1821,7 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
     if (!identical(intent$status, "supported")) {
       return(intent)
     }
-
-    all_rows <- fetch_query_result_rows(conn, intent)
-    total_matches <- nrow(all_rows)
-    order_direction <- if (identical(intent$intent_type, "lowest")) "ASC" else "DESC"
-    row_limit <- if (identical(intent$intent_type, "count")) {
-      min(intent$limit, 12L)
-    } else if (identical(intent$intent_type, "list")) {
-      intent$limit
-    } else {
-      1L
-    }
-    rows <- if (nrow(all_rows)) {
-      all_rows[seq_len(min(nrow(all_rows), row_limit)), , drop = FALSE]
-    } else {
-      all_rows
-    }
-
-    list(
-      status = jsonlite::unbox("supported"),
-      question = jsonlite::unbox(intent$question),
-      answer = jsonlite::unbox(build_query_answer(intent, rows, total_matches)),
-      parsed = record_to_scalars(list(
-        intent_type = intent$intent_type,
-        subject_type = intent$subject_type,
-        player_name = intent$player_name,
-        team_name = intent$team_name,
-        stat = intent$stat,
-        stat_label = intent$stat_label,
-        comparison = intent$comparison,
-        comparison_label = intent$comparison_label,
-        threshold = intent$threshold,
-        opponent_name = intent$opponent_name,
-        seasons = intent$seasons,
-        season = intent$season,
-        limit = intent$limit
-      )),
-      summary = record_to_scalars(list(
-        question_type = intent$intent_type,
-        match_count = total_matches,
-        row_count = nrow(rows),
-        stat_label = intent$stat_label
-      )),
-      rows = rows_to_records(rows)
-    )
+    build_supported_query_response(conn, intent)
   }, error = function(error) {
     handle_request_error(error, res)
   })

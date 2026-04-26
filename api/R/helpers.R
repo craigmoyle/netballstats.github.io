@@ -1321,6 +1321,162 @@ parse_query_intent <- function(conn, question, limit = 12L) {
   )
 }
 
+build_simple_query_intent_from_preview <- function(conn, question, parsed, limit = 12L) {
+  parsed_question <- parse_query_question(question)
+  normalized_text <- normalize_query_phrase(parsed_question, keep_spaces = TRUE)
+  intent_type <- detect_query_intent_type(normalized_text) %||% simple_parse_shape(parsed)
+  if (is.null(intent_type) || identical(intent_type, "comparison")) {
+    return(query_error_payload(
+      "unsupported",
+      parsed_question,
+      "Try a count, highest/lowest, or list-style stats question."
+    ))
+  }
+
+  stat_input <- parsed$stat %||% NULL
+  stat <- if (!is.null(stat_input) && nzchar(as.character(stat_input))) {
+    resolve_stat_key(as.character(stat_input))
+  } else {
+    NULL
+  }
+  if (is.null(stat)) {
+    return(query_error_payload(
+      "unsupported",
+      parsed_question,
+      "I couldn't identify which stat you want to query."
+    ))
+  }
+
+  threshold <- parse_query_threshold(normalized_text)
+  seasons <- extract_query_seasons(normalized_text)
+  if (is.null(seasons) && !is.null(parsed$season) && !all(is.na(parsed$season))) {
+    seasons <- as.integer(parsed$season)
+  }
+  season <- if (!is.null(seasons) && length(seasons) == 1L) seasons[[1]] else NULL
+
+  opponent_phrase <- parsed$opponent_name %||% extract_first_capture(
+    normalized_text,
+    "\\bagainst\\s+(.+?)(?:\\s+(?:in|during)\\s+20[0-9]{2}\\b|$)"
+  )
+  opponent <- if (!is.null(opponent_phrase) && nzchar(trimws(as.character(opponent_phrase)))) {
+    resolve_query_team(conn, opponent_phrase)
+  } else {
+    NULL
+  }
+  if (is.list(opponent) && !is.null(opponent$status) && !identical(opponent$status, "supported")) {
+    opponent$question <- parsed_question
+    return(opponent)
+  }
+
+  subject_value <- parsed$subject %||% NULL
+  plural_subject_type <- if (identical(subject_value, "players")) {
+    "players"
+  } else if (identical(subject_value, "teams")) {
+    "teams"
+  } else {
+    NULL
+  }
+
+  subject_search_phrase <- if (!is.null(plural_subject_type)) {
+    NULL
+  } else if (!is.null(subject_value) && nzchar(trimws(as.character(subject_value)))) {
+    as.character(subject_value)
+  } else {
+    extract_query_subject_phrase(parsed_question, intent_type) %||% parsed_question
+  }
+  subject <- if (!is.null(plural_subject_type)) {
+    list(status = "supported", subject_type = plural_subject_type)
+  } else {
+    resolve_query_subject(conn, subject_search_phrase)
+  }
+  if (is.list(subject) && !is.null(subject$status) && !identical(subject$status, "supported")) {
+    subject$question <- parsed_question
+    return(subject)
+  }
+
+  subject_type <- subject$subject_type %||% NULL
+  if (is.null(subject_type)) {
+    return(query_error_payload(
+      "unsupported",
+      parsed_question,
+      "I couldn't identify whether the question is about a player or a team."
+    ))
+  }
+  if (
+    identical(subject_type, "player") &&
+    (
+      is.null(subject$player_id) ||
+      is.null(subject$player_name) ||
+      !nzchar(as.character(subject$player_name))
+    )
+  ) {
+    return(query_error_payload(
+      "unsupported",
+      parsed_question,
+      "I couldn't confidently match a single player in that question."
+    ))
+  }
+  if (
+    identical(subject_type, "team") &&
+    (
+      is.null(subject$team_id) ||
+      is.null(subject$team_name) ||
+      !nzchar(as.character(subject$team_name))
+    )
+  ) {
+    return(query_error_payload(
+      "unsupported",
+      parsed_question,
+      "I couldn't confidently match a single team in that question."
+    ))
+  }
+
+  if (identical(intent_type, "count") && is.null(threshold)) {
+    return(query_error_payload(
+      "unsupported",
+      parsed_question,
+      "Count questions need a threshold such as 50+, at least 40, or exactly 20."
+    ))
+  }
+  if (identical(intent_type, "list") && identical(subject_type, "players") &&
+      is.null(threshold) && is.null(opponent) && is.null(seasons)) {
+    return(query_error_payload(
+      "unsupported",
+      parsed_question,
+      "Broader list questions need at least one narrowing filter such as a threshold, opponent, or season."
+    ))
+  }
+  if (identical(intent_type, "list") && identical(subject_type, "teams") &&
+      is.null(threshold) && is.null(opponent) && is.null(seasons)) {
+    return(query_error_payload(
+      "unsupported",
+      parsed_question,
+      "Broader list questions need at least one narrowing filter such as a threshold, opponent, or season."
+    ))
+  }
+
+  list(
+    status = "supported",
+    question = parsed_question,
+    intent_type = intent_type,
+    subject_type = subject_type,
+    player_id = subject$player_id %||% NULL,
+    player_name = subject$player_name %||% NULL,
+    team_id = subject$team_id %||% NULL,
+    team_name = subject$team_name %||% NULL,
+    stat = stat,
+    stat_label = query_stat_label(stat),
+    comparison = threshold$comparison %||% NULL,
+    comparison_label = if (!is.null(threshold$comparison)) query_comparison_label(threshold$comparison) else NULL,
+    threshold = threshold$threshold %||% NULL,
+    opponent_id = opponent$squad_id %||% NULL,
+    opponent_name = opponent$squad_name %||% NULL,
+    seasons = seasons,
+    season = season,
+    limit = limit
+  )
+}
+
 build_player_match_query <- function(stat, seasons = NULL, player_id = NULL, opponent_id = NULL, comparison = NULL, threshold = NULL) {
   query <- paste(
     "SELECT stats.player_id, players.canonical_name AS player_name, stats.squad_name,",
