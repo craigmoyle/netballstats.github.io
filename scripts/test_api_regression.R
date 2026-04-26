@@ -2309,6 +2309,47 @@ assert_true(!is.null(parse_nonsense$status), 'Nonsense input should return statu
 # Should return low confidence or error, not crash
 check_step('Parser: Random/nonsense input handled gracefully')
 
+cat("  → Testing /query/parse trend question preserves multi-season trend shape\n")
+parse_trend <- request_json_post(base_url, '/query/parse', list(
+  question = 'Grace Nweke goal assists across 2023, 2024, 2025'
+), expected_status = 200L)
+
+assert_true(isTRUE(scalar_value(parse_trend$success)), 'Expected /query/parse trend question to parse successfully.')
+assert_true(identical(scalar_value(parse_trend$shape), 'trend'), 'Expected /query/parse trend question to return trend shape.')
+assert_true(
+  is.list(parse_trend$parsed$seasons) && length(parse_trend$parsed$seasons) >= 2,
+  'Expected /query/parse trend question to preserve multi-season parsing.'
+)
+check_step('Parser endpoint: trend question returns complex trend parse metadata')
+
+cat("  → Testing /query/parse all-time record question routes through complex parser\n")
+parse_record <- request_json_post(base_url, '/query/parse', list(
+  question = 'Highest single-game intercepts all time'
+), expected_status = 200L)
+
+assert_true(isTRUE(scalar_value(parse_record$success)), 'Expected /query/parse all-time record question to parse successfully.')
+assert_true(identical(scalar_value(parse_record$shape), 'record'), 'Expected /query/parse all-time record question to return record shape.')
+assert_true(
+  identical(scalar_value(parse_record$parsed$scope), 'all_time'),
+  'Expected /query/parse all-time record question to preserve all_time scope.'
+)
+check_step('Parser endpoint: all-time record question returns complex record metadata')
+
+cat("  → Testing /query/parse combination question returns structured builder guidance\n")
+parse_combination <- request_json_post(base_url, '/query/parse', list(
+  question = 'Players with 40+ goals AND 5+ gains in 2024'
+), expected_status = 200L)
+
+assert_true(
+  identical(scalar_value(parse_combination$status), 'parse_help_needed') ||
+    isTRUE(scalar_value(parse_combination$success)),
+  'Expected /query/parse combination question to return either a successful parse or structured parse_help_needed guidance.'
+)
+if (identical(scalar_value(parse_combination$status), 'parse_help_needed')) {
+  assert_true(!is.null(parse_combination$builder_prefill), 'Expected parse_help_needed response to include builder_prefill.')
+}
+check_step('Parser endpoint: combination question returns complex parse or builder guidance')
+
 # ============================================================================
 # Test Suite 7: API Endpoint Behavior - builder_source Flag
 # ============================================================================

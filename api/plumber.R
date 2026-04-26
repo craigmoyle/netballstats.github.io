@@ -1701,6 +1701,10 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
     # Attempt complex parse for question-based queries
     if (nzchar(question)) {
       parse_result <- attempt_complex_parse(question)
+      recognized_complex_shape <- is.character(parse_result$shape) &&
+        length(parse_result$shape) == 1L &&
+        !is.na(parse_result$shape) &&
+        nzchar(parse_result$shape)
 
       # High confidence parse: route to builder directly
       if (identical(parse_result$status, "success")) {
@@ -1708,7 +1712,7 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
           builder_result <- build_comparison_query(
             subjects = as.character(parse_result$parsed$subjects),
             stat = as.character(parse_result$parsed$stat),
-            season = as.integer(parse_result$parsed$season),
+            season = as.integer((parse_result$parsed$seasons %||% parse_result$parsed$season)[[1]]),
             conn = conn
           )
           return(builder_result)
@@ -1739,15 +1743,18 @@ function(req, res, question = "", limit = "12", builder_source = FALSE, shape = 
         }
       }
 
-      # Medium confidence parse: return parse_help_needed with builder hints
-      if (identical(parse_result$status, "parse_help_needed")) {
+      # Recognized complex shape but not safe to execute: return builder guidance
+      if (recognized_complex_shape) {
+        guidance <- build_complex_parse_guidance(parse_result)
         return(list(
           status = jsonlite::unbox("parse_help_needed"),
           query_type = jsonlite::unbox("parse_help_needed"),
-          confidence = jsonlite::unbox(parse_result$confidence),
-          builder_prefill = parse_result$builder_prefill,
-          message = jsonlite::unbox("Confidence too low for automatic parsing. Use the builder to refine."),
-          shape = jsonlite::unbox(parse_result$shape)
+          confidence = jsonlite::unbox(guidance$confidence %||% "LOW"),
+          confidence_score = jsonlite::unbox(guidance$confidence_score %||% 0),
+          builder_prefill = guidance$builder_prefill,
+          error_message = jsonlite::unbox(guidance$error_message %||% "Use the builder to refine this question."),
+          parsed_hints = record_to_scalars(guidance$parsed_hints %||% list()),
+          shape = if (is.null(guidance$shape)) NULL else jsonlite::unbox(guidance$shape)
         ))
       }
     }
@@ -1847,23 +1854,20 @@ function(req, res) {
       ))
     }
 
-    parse_result <- ask_the_stats_parse(question_text)
-
-    if (identical(parse_result$success, TRUE)) {
-      return(list(
-        success = jsonlite::unbox(TRUE),
-        confidence = jsonlite::unbox(parse_result$confidence %||% "LOW"),
-        confidence_score = jsonlite::unbox(parse_result$confidence_score %||% 0),
-        parsed = record_to_scalars(parse_result$parsed)
-      ))
-    } else {
-      res$status <- 200L  # 200 because it's a valid request, just no match
-      return(list(
-        success = jsonlite::unbox(FALSE),
-        error = jsonlite::unbox(parse_result$error),
-        confidence = jsonlite::unbox(parse_result$confidence %||% "LOW")
-      ))
-    }
+    parse_result <- preview_ask_the_stats_parse(question_text)
+    response <- list(
+      success = jsonlite::unbox(isTRUE(parse_result$success)),
+      status = if (is.null(parse_result$status)) NULL else jsonlite::unbox(parse_result$status),
+      shape = if (is.null(parse_result$shape)) NULL else jsonlite::unbox(parse_result$shape),
+      confidence = jsonlite::unbox(parse_result$confidence %||% "LOW"),
+      confidence_score = jsonlite::unbox(parse_result$confidence_score %||% 0),
+      parsed = if (is.null(parse_result$parsed)) NULL else record_to_scalars(parse_result$parsed),
+      parsed_hints = if (is.null(parse_result$parsed_hints)) NULL else record_to_scalars(parse_result$parsed_hints),
+      builder_prefill = if (is.null(parse_result$builder_prefill)) NULL else record_to_scalars(parse_result$builder_prefill),
+      error_message = if (is.null(parse_result$error_message)) NULL else jsonlite::unbox(parse_result$error_message),
+      error = if (is.null(parse_result$error_message)) NULL else jsonlite::unbox(parse_result$error_message)
+    )
+    return(response)
   }, error = function(error) {
     handle_request_error(error, res)
   })

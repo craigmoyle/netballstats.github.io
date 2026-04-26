@@ -6866,13 +6866,64 @@ detect_combination_pattern <- function(question_lower) {
   }
 
   # Check for ambiguities (mixed operators)
-  and_count <- length(gregexpr("\\band\\b", question_lower)[[1]])
-  or_count <- length(gregexpr("\\bor\\b", question_lower)[[1]])
+  and_matches <- gregexpr("\\band\\b", question_lower, perl = TRUE)[[1]]
+  or_matches <- gregexpr("\\bor\\b", question_lower, perl = TRUE)[[1]]
+  and_count <- if (length(and_matches) == 1L && identical(and_matches[[1]], -1L)) 0L else length(and_matches)
+  or_count <- if (length(or_matches) == 1L && identical(or_matches[[1]], -1L)) 0L else length(or_matches)
   if (and_count > 0 && or_count > 0) {
     confidence <- confidence - 0.20
   }
 
   list(confidence = min(max(confidence, 0), 1.0), parsed = parsed)
+}
+
+extract_subject_prefix <- function(question_lower) {
+  best_start <- Inf
+
+  for (stat_name in names(QUERY_STAT_DEFINITIONS)) {
+    aliases <- QUERY_STAT_DEFINITIONS[[stat_name]]$aliases %||% character()
+    all_names <- unique(c(stat_name, aliases))
+
+    for (alias in all_names) {
+      match <- regexpr(paste0("\\b", tolower(alias), "\\b"), question_lower, perl = TRUE)
+      if (match[[1]] > 0 && match[[1]] < best_start) {
+        best_start <- match[[1]]
+      }
+    }
+  }
+
+  if (!is.finite(best_start) || best_start <= 1) {
+    return(NULL)
+  }
+
+  candidate <- trimws(substr(question_lower, 1L, best_start - 1L))
+  candidate <- gsub(
+    "^(how\\s+many\\s+times\\s+has|how\\s+many\\s+times\\s+have|what\\s+is|what\\s+are|show\\s+me|track|compare)\\s+",
+    "",
+    candidate,
+    perl = TRUE
+  )
+  candidate <- gsub("'s\\s*$", "", candidate, perl = TRUE)
+  candidate <- trimws(candidate)
+
+  if (!nzchar(candidate)) {
+    return(NULL)
+  }
+
+  generic_tokens <- c(
+    "a", "all", "an", "are", "compare", "ever", "fewest", "game", "had",
+    "has", "have", "highest", "how", "in", "is", "list", "lowest", "many",
+    "me", "most", "player", "players", "ranking", "record", "show",
+    "single", "singlegame", "team", "teams", "time", "times", "track", "what"
+  )
+
+  normalized_words <- strsplit(gsub("[^a-z0-9\\s]", " ", candidate), "\\s+")[[1]]
+  normalized_words <- normalized_words[nzchar(normalized_words)]
+  if (!length(normalized_words) || all(normalized_words %in% generic_tokens)) {
+    return(NULL)
+  }
+
+  candidate
 }
 
 extract_subject_from_text <- function(question_lower) {
@@ -6887,6 +6938,11 @@ extract_subject_from_text <- function(question_lower) {
     if (grepl(paste0("\\b", team, "\\b"), question_lower)) {
       return(team)
     }
+  }
+
+  subject_prefix <- extract_subject_prefix(question_lower)
+  if (!is.null(subject_prefix)) {
+    return(subject_prefix)
   }
 
   # Try to extract player names (capitalized words not preceded by common words)
@@ -7297,5 +7353,98 @@ ask_the_stats_parse <- function(question_text) {
     confidence = confidence_tier,
     confidence_score = confidence_score,
     parsed = parsed
+  )
+}
+
+complex_parse_confidence_label <- function(confidence_score) {
+  score <- suppressWarnings(as.numeric(confidence_score %||% 0))
+  if (is.na(score)) {
+    return("LOW")
+  }
+  if (score >= 0.85) {
+    return("HIGH")
+  }
+  if (score >= 0.65) {
+    return("MEDIUM")
+  }
+  "LOW"
+}
+
+simple_parse_shape <- function(parsed) {
+  operator <- parsed$operator %||% NULL
+  if (identical(operator, "count_threshold")) {
+    return("count")
+  }
+  if (identical(operator, "head_to_head")) {
+    return("comparison")
+  }
+  if (identical(operator, "highest")) {
+    return("highest")
+  }
+  if (identical(operator, "lowest")) {
+    return("lowest")
+  }
+  if (identical(operator, "list")) {
+    return("list")
+  }
+  NULL
+}
+
+build_complex_parse_guidance <- function(parse_result) {
+  shape <- parse_result$shape %||% NULL
+  parsed <- parse_result$parsed %||% list()
+
+  list(
+    success = FALSE,
+    status = "parse_help_needed",
+    shape = shape,
+    confidence = complex_parse_confidence_label(parse_result$confidence),
+    confidence_score = parse_result$confidence %||% 0,
+    error_message = parse_result$error_message %||% "I couldn't match all the parts of that question.",
+    builder_prefill = parse_result$builder_prefill %||% extract_builder_prefill(shape, parsed),
+    parsed_hints = parsed
+  )
+}
+
+preview_ask_the_stats_parse <- function(question_text) {
+  complex_result <- attempt_complex_parse(question_text)
+  complex_shape <- complex_result$shape %||% NA_character_
+  recognized_complex_shape <- is.character(complex_shape) && length(complex_shape) == 1L &&
+    !is.na(complex_shape) && nzchar(complex_shape)
+
+  if (recognized_complex_shape) {
+    if (identical(complex_result$status, "success")) {
+      return(list(
+        success = TRUE,
+        status = "supported",
+        shape = complex_shape,
+        confidence = complex_parse_confidence_label(complex_result$confidence),
+        confidence_score = complex_result$confidence %||% 0,
+        parsed = complex_result$parsed %||% list()
+      ))
+    }
+
+    return(build_complex_parse_guidance(complex_result))
+  }
+
+  simple_result <- ask_the_stats_parse(question_text)
+  if (!isTRUE(simple_result$success)) {
+    return(list(
+      success = FALSE,
+      status = "unsupported",
+      confidence = simple_result$confidence %||% "LOW",
+      confidence_score = simple_result$confidence_score %||% 0,
+      error_message = simple_result$error,
+      parsed_hints = list()
+    ))
+  }
+
+  list(
+    success = TRUE,
+    status = "supported",
+    shape = simple_parse_shape(simple_result$parsed),
+    confidence = simple_result$confidence %||% "LOW",
+    confidence_score = simple_result$confidence_score %||% 0,
+    parsed = simple_result$parsed %||% list()
   )
 }

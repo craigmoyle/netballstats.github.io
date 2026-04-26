@@ -5161,8 +5161,6 @@ caption.table-caption {
    ================================================================ */
 
 #query-builder-modal {
-  display: grid;
-  place-items: center;
   background-color: transparent;
   border: none;
   padding: 0;
@@ -5178,6 +5176,8 @@ caption.table-caption {
 }
 
 #query-builder-modal[open] {
+  display: grid;
+  place-items: center;
   animation: slideInBuilder 0.3s ease-out;
 }
 

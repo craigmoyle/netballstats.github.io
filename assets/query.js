@@ -178,12 +178,16 @@ function hideErrorBanner() {
 
 function showBuilderButton(prefill) {
   if (!elements.errorBannerActions) return;
-  elements.errorBannerActions.replaceChildren();
+  const existingButton = elements.errorBannerActions.querySelector("[data-builder-trigger='true']");
+  if (existingButton) {
+    existingButton.remove();
+  }
 
   const button = document.createElement("button");
   button.type = "button";
   button.className = "button button--primary";
   button.textContent = "Use the builder";
+  button.dataset.builderTrigger = "true";
   button.addEventListener("click", () => {
     openBuilderModal(prefill);
   });
@@ -629,11 +633,13 @@ function renderResult(result) {
     const message = result.error_message || "I couldn't match all the parts of that question. Try rephrasing or use the builder to construct it step-by-step.";
     showErrorBanner(message);
 
-    if (result.suggestion) {
-      const actions = elements.errorBannerActions;
-      if (actions) {
-        actions.replaceChildren();
+    const actions = elements.errorBannerActions;
+    if (actions) {
+      actions.replaceChildren();
+    }
 
+    if (result.suggestion) {
+      if (actions) {
         const suggestionLink = document.createElement("button");
         suggestionLink.type = "button";
         suggestionLink.className = "button button--ghost";
@@ -643,11 +649,11 @@ function renderResult(result) {
         });
 
         actions.appendChild(suggestionLink);
-
-        if (result.builder_prefill) {
-          showBuilderButton(result.builder_prefill);
-        }
       }
+    }
+
+    if (result.builder_prefill) {
+      showBuilderButton(result.builder_prefill);
     }
 
     setTableSchema("player");
@@ -758,8 +764,22 @@ async function runQuestion(question, source = "manual") {
     const parseResult = await tryParseQuestion(trimmed);
 
     if (!parseResult.success) {
+      if (parseResult.status === "parse_help_needed") {
+        renderResult(parseResult);
+        updateUrl(trimmed);
+        trackEvent("ask_stats_completed", {
+          source,
+          outcome: "parse_help_needed",
+          parser_confidence: parseResult.confidence || "LOW"
+        });
+        showStatus("Use the builder or tighten the wording.", "error", {
+          kicker: parseResult.confidence === "LOW" ? "Template recommended" : "Need help"
+        });
+        return;
+      }
+
       renderParserGuidance({
-        message: parseResult.error || "The parser could not match that wording.",
+        message: parseResult.error_message || parseResult.error || "The parser could not match that wording.",
         confidence: parseResult.confidence || "LOW"
       });
       updateUrl(trimmed);
