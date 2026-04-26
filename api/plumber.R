@@ -1891,6 +1891,7 @@ function(req, res) {
 
 #* @get /home-venue-impact
 #* @get /api/home-venue-impact
+#* @serializer unboxedJSONNullNA
 #* @summary Home venue impact summary
 #* @param season Optional single season year (e.g. 2023). Overridden by seasons.
 #* @param seasons Optional comma-separated season years (e.g. 2022,2023).
