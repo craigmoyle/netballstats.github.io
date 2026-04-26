@@ -423,6 +423,10 @@ check_step('natural-language query endpoint supports representative team queries
 
 helpers_env <- new.env(parent = globalenv())
 sys.source('api/R/helpers.R', envir = helpers_env)
+assert_true(
+  identical(as.character(helpers_env$canonical_team_query_stat('gain')), 'gain'),
+  'Expected canonical_team_query_stat to leave non-aliased team stats unchanged.'
+)
 captured_team_period_queries <- list()
 helpers_env$query_rows <- function(conn, query, params = list()) {
   normalized_query <- normalize_sql(query)

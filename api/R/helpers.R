@@ -71,8 +71,8 @@ canonical_team_query_stat <- function(stat) {
     return(stat)
   }
 
-  mapped <- unname(TEAM_STAT_QUERY_ALIASES[[as.character(stat)[[1]]]])
-  if (is.null(mapped) || !nzchar(mapped)) {
+  mapped <- unname(TEAM_STAT_QUERY_ALIASES[as.character(stat)[[1]]])
+  if (is.null(mapped) || !length(mapped) || is.na(mapped) || !nzchar(mapped)) {
     return(stat)
   }
 
