@@ -7260,7 +7260,9 @@ fetch_player_round_breakdown <- function(conn, player_id, stat_key, season) {
 
 ask_the_stats_parse <- function(question_text) {
   # Parse natural language question and score confidence
-  source("api/R/parse_question.R", local = TRUE)
+  if (!exists("parse_natural_language_question", mode = "function")) {
+    source(file.path(repo_root(), "api", "R", "parse_question.R"), local = TRUE)
+  }
   
   result <- parse_natural_language_question(question_text)
   
