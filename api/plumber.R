@@ -160,6 +160,8 @@ allowed_browser_event_names <- c(
   "player_directory_loaded"
 )
 
+allowed_browser_traffic_classes <- c("public", "internal", "testing")
+
 parse_connection_string_fields <- function(connection_string) {
   fields <- list()
   parts <- strsplit(connection_string %||% "", ";", fixed = TRUE)[[1]]
@@ -215,6 +217,15 @@ telemetry_iso_time <- function(time = Sys.time()) {
 telemetry_trim_string <- function(value, max_length = 120L) {
   trimmed <- gsub("\\s+", " ", trimws(as.character(value %||% "")))
   substr(trimmed, 1L, max_length)
+}
+
+telemetry_normalise_traffic_class <- function(value) {
+  normalised <- tolower(telemetry_trim_string(value %||% "", 20L))
+  if (!nzchar(normalised) || !(normalised %in% allowed_browser_traffic_classes)) {
+    return("")
+  }
+
+  normalised
 }
 
 # Sanitize custom telemetry properties before sending to Application Insights
@@ -277,6 +288,7 @@ telemetry_sanitise_context <- function(context) {
   device_type <- telemetry_trim_string(context$device_type %||% "", 20L)
   device_os <- telemetry_trim_string(context$device_os %||% "", 40L)
   device_os_version <- telemetry_trim_string(context$device_os_version %||% "", 80L)
+  traffic_class <- telemetry_normalise_traffic_class(context$traffic_class %||% "")
 
   if (nzchar(session_id)) {
     output$session_id <- session_id
@@ -307,6 +319,9 @@ telemetry_sanitise_context <- function(context) {
   }
   if (nzchar(device_os_version)) {
     output$device_os_version <- device_os_version
+  }
+  if (nzchar(traffic_class)) {
+    output$traffic_class <- traffic_class
   }
 
   output
@@ -341,7 +356,8 @@ build_telemetry_envelope <- function(kind, payload, req) {
         timezone = telemetry_context$timezone %||% "",
         device_type = telemetry_context$device_type %||% "",
         device_os = telemetry_context$device_os %||% "",
-        device_os_version = telemetry_context$device_os_version %||% ""
+        device_os_version = telemetry_context$device_os_version %||% "",
+        traffic_class = telemetry_context$traffic_class %||% ""
       )
     )
   )

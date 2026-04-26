@@ -10,8 +10,12 @@
     sessionId: null,
     operationId: null,
     deviceContext: null,
-    deviceContextPromise: null
+    deviceContextPromise: null,
+    trafficClass: null
   };
+  const TRAFFIC_CLASS_STORAGE_KEY = "netballstats.telemetry.traffic_class";
+  const TRAFFIC_CLASS_QUERY_PARAM = "telemetryTraffic";
+  const ALLOWED_TRAFFIC_CLASSES = new Set(["public", "internal", "testing"]);
 
   function apiBaseUrl() {
     return (window.NETBALL_STATS_CONFIG?.apiBaseUrl || "/api").replace(/\/$/, "");
@@ -89,6 +93,73 @@
     const createdValue = createId(prefix);
     storage.setItem(key, createdValue);
     return createdValue;
+  }
+
+  function normaliseTrafficClass(value) {
+    const normalised = trimString(value, 20).toLowerCase();
+    return ALLOWED_TRAFFIC_CLASSES.has(normalised) ? normalised : "";
+  }
+
+  function readStoredTrafficClass() {
+    const storage = getStorage("localStorage");
+    if (!storage) {
+      return "public";
+    }
+
+    return normaliseTrafficClass(storage.getItem(TRAFFIC_CLASS_STORAGE_KEY)) || "public";
+  }
+
+  function persistTrafficClass(value) {
+    const storage = getStorage("localStorage");
+    if (!storage) {
+      return;
+    }
+
+    if (value === "public") {
+      storage.removeItem(TRAFFIC_CLASS_STORAGE_KEY);
+      return;
+    }
+
+    storage.setItem(TRAFFIC_CLASS_STORAGE_KEY, value);
+  }
+
+  function setTrafficClass(value) {
+    const nextValue = normaliseTrafficClass(value) || "public";
+    state.trafficClass = nextValue;
+    persistTrafficClass(nextValue);
+    return nextValue;
+  }
+
+  function clearTrafficClassOverride() {
+    return setTrafficClass("public");
+  }
+
+  function getTrafficClass() {
+    if (!state.trafficClass) {
+      state.trafficClass = readStoredTrafficClass();
+    }
+
+    return state.trafficClass;
+  }
+
+  function consumeTrafficClassQueryParam() {
+    const params = new URLSearchParams(window.location.search || "");
+    const queryValue = normaliseTrafficClass(params.get(TRAFFIC_CLASS_QUERY_PARAM));
+    if (!queryValue) {
+      return;
+    }
+
+    setTrafficClass(queryValue);
+    params.delete(TRAFFIC_CLASS_QUERY_PARAM);
+
+    const pathname = window.location.pathname || "/";
+    const search = params.toString();
+    const hash = window.location.hash || "";
+    const nextUrl = `${pathname}${search ? `?${search}` : ""}${hash}`;
+
+    if (window.history && typeof window.history.replaceState === "function") {
+      window.history.replaceState({}, document.title || "", nextUrl);
+    }
   }
 
   function ensureTelemetryIds() {
@@ -269,7 +340,8 @@
       timezone: trimString(timezone, 60),
       device_type: trimString(device.deviceType || "Browser", 20),
       device_os: trimString(device.deviceOs || "", 40),
-      device_os_version: trimString(device.deviceOsVersion || "", 80)
+      device_os_version: trimString(device.deviceOsVersion || "", 80),
+      traffic_class: getTrafficClass()
     };
   }
 
@@ -507,6 +579,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    consumeTrafficClassQueryParam();
     void ensureDeviceContext().finally(() => {
       trackPageView();
     });
@@ -519,8 +592,11 @@
     {
       applyMetaConfig,
       bucketCount,
+      clearTrafficClassOverride,
+      getTrafficClass,
       pageTypeFromPath,
       sanitisePathname,
+      setTrafficClass,
       trackEvent,
       trackPageView
     }

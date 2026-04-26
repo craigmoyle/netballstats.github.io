@@ -10,6 +10,8 @@ let PageViewEvents = union isfuzzy=true
 );
 PageViewEvents
 | extend PageType = tostring(coalesce(Properties.page_type, PageName))
+| extend TrafficClass = tostring(coalesce(Properties.traffic_class, "public"))
+| where TrafficClass != "internal"
 | summarize Views = sum(toint(coalesce(ItemCount, 1))) by PageType
 | order by Views desc
 
@@ -25,9 +27,12 @@ let PageViewEvents = union isfuzzy=true
 );
 PageViewEvents
 | extend PageType = tostring(coalesce(Properties.page_type, PageName))
+| extend TrafficClass = tostring(coalesce(Properties.traffic_class, "public"))
+| where TrafficClass != "internal"
 | extend RawClientOS = tostring(column_ifexists("ClientOS", "")), RawClientType = tostring(column_ifexists("ClientType", ""))
 | project
     TimeGenerated,
+    TrafficClass,
     PageType,
     PageName,
     PageUri,
@@ -50,6 +55,8 @@ let UsageEvents = union isfuzzy=true
   | project TimeGenerated = timestamp, EventName = name, Properties = todynamic(customDimensions), ItemCount = itemCount
 );
 UsageEvents
+| extend TrafficClass = tostring(coalesce(Properties.traffic_class, "public"))
+| where TrafficClass != "internal"
 | summarize Events = sum(toint(coalesce(ItemCount, 1))) by EventName
 | order by Events desc
 
@@ -64,9 +71,12 @@ let UsageEvents = union isfuzzy=true
   | project TimeGenerated = timestamp, EventName = name, Properties = todynamic(customDimensions), ItemCount = itemCount
 );
 UsageEvents
+| extend TrafficClass = tostring(coalesce(Properties.traffic_class, "public"))
+| where TrafficClass != "internal"
 | extend RawClientOS = tostring(column_ifexists("ClientOS", "")), RawClientType = tostring(column_ifexists("ClientType", ""))
 | project
     TimeGenerated,
+    TrafficClass,
     EventName,
     SessionId = column_ifexists("SessionId", ""),
     UserId = column_ifexists("UserId", ""),
@@ -88,6 +98,8 @@ let UsageEvents = union isfuzzy=true
 );
 UsageEvents
 | where EventName == "ask_stats_completed"
+| extend TrafficClass = tostring(coalesce(Properties.traffic_class, "public"))
+| where TrafficClass != "internal"
 | extend Outcome = tostring(Properties.outcome), QuestionType = tostring(Properties.question_type)
 | summarize Events = sum(toint(coalesce(ItemCount, 1))) by Outcome, QuestionType
 | order by Events desc
@@ -104,6 +116,8 @@ let UsageEvents = union isfuzzy=true
 );
 UsageEvents
 | where EventName == "archive_filters_applied"
+| extend TrafficClass = tostring(coalesce(Properties.traffic_class, "public"))
+| where TrafficClass != "internal"
 | extend TeamStat = tostring(Properties.team_stat), PlayerStat = tostring(Properties.player_stat), StatMode = tostring(Properties.stat_mode), SeasonBucket = tostring(Properties.season_count_bucket)
 | summarize Runs = sum(toint(coalesce(ItemCount, 1))) by TeamStat, PlayerStat, StatMode, SeasonBucket
 | order by Runs desc
@@ -120,6 +134,8 @@ let UsageEvents = union isfuzzy=true
 );
 UsageEvents
 | where EventName == "compare_completed"
+| extend TrafficClass = tostring(coalesce(Properties.traffic_class, "public"))
+| where TrafficClass != "internal"
 | extend Outcome = tostring(Properties.outcome), Mode = tostring(Properties.mode), Metric = tostring(Properties.metric), Stat = tostring(Properties.stat), EntityBucket = tostring(Properties.entity_count_bucket)
 | summarize Runs = sum(toint(coalesce(ItemCount, 1))) by Outcome, Mode, Metric, Stat, EntityBucket
 | order by Runs desc
