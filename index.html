@@ -80,7 +80,6 @@
             </div>
             <p id="active-filter-summary" class="muted filter-summary">Loading query options…</p>
           </div>
-          <p id="archive-context-note" class="archive-context-note"></p>
         </div>
 
         <form id="filters-form" class="filters filters--dashboard" novalidate>
@@ -105,31 +104,30 @@
             <select id="player-stat" name="player-stat"></select>
           </div>
 
-          <div class="field field--secondary field--compact field--toggle">
-            <span class="field-label">Archive mode</span>
-            <input id="archive-mode" name="archive-mode" type="hidden" value="aggregate">
-            <div class="view-toggle" role="group" aria-label="Archive mode">
-              <button type="button" class="button button--small is-active" data-archive-mode="aggregate" aria-pressed="true">Totals</button>
-              <button type="button" class="button button--small button--ghost" data-archive-mode="records" aria-pressed="false">Single-game records</button>
-            </div>
-            <div class="field-hint-wrap">
-              <small id="archive-mode-hint" class="field-hint">Switch player and team sections between totals and single-game records.</small>
-            </div>
-          </div>
-
-          <div class="field field--secondary field--compact">
-            <label for="stat-mode">Stat mode</label>
-            <select id="stat-mode" name="stat-mode">
-              <option value="total" selected>Total</option>
-              <option value="average">Average per game</option>
-            </select>
-          </div>
           <details id="archive-advanced" class="archive-advanced field--wide">
             <summary class="archive-advanced__summary">
               <span>Need a tighter slice?</span>
-              <small>Add a player, club, round, or switch the leaderboard order.</small>
+              <small>Add a player, club, round, or change how the leaderboards read.</small>
             </summary>
             <div class="archive-advanced__grid">
+              <div class="field field--secondary field--compact field--toggle">
+                <span class="field-label">Archive mode</span>
+                <input id="archive-mode" name="archive-mode" type="hidden" value="aggregate">
+                <div class="view-toggle" role="group" aria-label="Archive mode">
+                  <button type="button" class="button button--small is-active" data-archive-mode="aggregate" aria-pressed="true">Totals</button>
+                  <button type="button" class="button button--small button--ghost" data-archive-mode="records" aria-pressed="false">Single-game records</button>
+                </div>
+                <div class="field-hint-wrap">
+                  <small id="archive-mode-hint" class="field-hint">Switch between totals and one-game peaks.</small>
+                </div>
+              </div>
+              <div class="field field--secondary field--compact">
+                <label for="stat-mode">Stat mode</label>
+                <select id="stat-mode" name="stat-mode">
+                  <option value="total" selected>Total</option>
+                  <option value="average">Average per game</option>
+                </select>
+              </div>
               <div class="field field--wide field--search-bar">
                 <label for="player-search">Player search</label>
                 <input id="player-search" name="player-search" type="search" maxlength="80" placeholder="e.g. Fowler, Harten, Koenen">
@@ -153,7 +151,7 @@
                   <button type="button" class="button button--small button--ghost" data-ranking-mode="lowest" aria-pressed="false">Lowest</button>
                 </div>
                 <div class="field-hint-wrap">
-                  <small class="field-hint">Applies to both leaderboards. Use Lowest for error stats such as general play turnovers.</small>
+                  <small class="field-hint">Use Lowest for error stats such as general play turnovers.</small>
                 </div>
               </div>
             </div>
@@ -191,18 +189,6 @@
           <a class="editorial-lead__link" href="/round-preview/">Preview the next round</a>
           <a class="editorial-lead__link" href="/query/">Ask the stats</a>
           <a class="editorial-lead__link" href="/compare/">Build a comparison</a>
-        </div>
-      </section>
-
-      <section class="panel scoreflow-teaser reveal" aria-label="Scoreflow highlights" id="scoreflow-teaser-band">
-        <div class="scoreflow-teaser__header">
-          <p class="panel__eyebrow">Scoreflow</p>
-          <h2>Match momentum records</h2>
-          <p class="panel__lead">Which teams came back hardest, led longest, and won despite trailing? Three records from the scoreflow archive.</p>
-          <a class="scoreflow-teaser__all-link" href="/scoreflow/">Explore the full scoreflow archive →</a>
-        </div>
-        <div class="scoreflow-teaser__cards" id="scoreflow-teaser-cards" aria-live="polite" aria-label="Scoreflow featured records">
-          <!-- Populated by loadScoreflowHomeCards() in app.js -->
         </div>
       </section>
 

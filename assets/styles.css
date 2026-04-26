@@ -1480,21 +1480,13 @@ button[aria-busy="true"] {
 
 .archive-advanced__grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   padding-top: 1rem;
 }
 
 .archive-advanced[open] .archive-advanced__summary span {
   color: var(--accent);
-}
-
-.archive-context-note {
-  margin: 0;
-  max-width: 58ch;
-  color: var(--muted);
-  font-size: var(--text-ui-size);
-  line-height: 1.65;
 }
 
 .results-panel--rail .panel__heading--split {
@@ -3065,13 +3057,36 @@ caption.table-caption {
   max-width: 68ch;
 }
 
-.round-fact-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0.9rem;
+.round-hero-meta,
+.round-hero-summary {
+  margin: 0;
 }
 
-.round-fact-card,
+.round-hero-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55rem;
+}
+
+.round-hero-meta strong {
+  font-family: var(--body-font);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.round-hero-summary {
+  max-width: 38ch;
+  color: var(--muted);
+}
+
+.round-fact-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.round-fact-strip__item,
 .round-match-card {
   position: relative;
   overflow: hidden;
@@ -3085,7 +3100,6 @@ caption.table-caption {
     rgba(9, 17, 23, 0.36);
 }
 
-.round-fact-card::after,
 .round-match-card::after {
   content: "";
   position: absolute;
@@ -3096,11 +3110,11 @@ caption.table-caption {
   pointer-events: none;
 }
 
-.round-fact-card[data-highlight="archive"] {
+.round-fact-strip__item[data-highlight="archive"] {
   border-color: color-mix(in srgb, var(--accent-cool) 34%, var(--border));
 }
 
-.round-fact-card__title,
+.round-fact-strip__title,
 .round-match-card__kicker,
 .round-match-card__time {
   margin: 0;
@@ -3110,15 +3124,15 @@ caption.table-caption {
   color: var(--muted);
 }
 
-.round-fact-card__value {
+.round-fact-strip__value {
   margin: 0;
   font-family: var(--display-font);
-  font-size: clamp(1.6rem, 3vw, 2.15rem);
+  font-size: clamp(1.35rem, 2.4vw, 1.85rem);
   line-height: 0.95;
   letter-spacing: 0.05em;
 }
 
-.round-fact-card__detail {
+.round-fact-strip__detail {
   margin: 0;
   color: var(--muted);
 }
@@ -3460,15 +3474,49 @@ caption.table-caption {
   margin-top: 0.4rem;
 }
 
+.round-preview-card__extras {
+  border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  padding-top: 0.75rem;
+}
+
+.round-preview-card__extras-summary {
+  cursor: pointer;
+  list-style: none;
+  color: var(--text);
+  font-size: var(--type-sm);
+  font-weight: 600;
+}
+
+.round-preview-card__extras-summary::-webkit-details-marker {
+  display: none;
+}
+
+.round-preview-card__extras-summary::after {
+  content: "Show";
+  margin-left: 0.65rem;
+  color: var(--muted);
+  font-size: var(--type-xs);
+  font-weight: 400;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+
+.round-preview-card__extras[open] .round-preview-card__extras-summary::after {
+  content: "Hide";
+}
+
+.round-preview-card__extras > :not(summary) {
+  margin-top: 0.75rem;
+}
+
 .round-preview-card__watch-list {
   margin: 0;
-  padding: 0.65rem 0 0;
+  padding: 0;
   list-style: none;
   display: grid;
   gap: 0.6rem;
   font-size: var(--type-sm);
   color: var(--muted);
-  border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .round-preview-card__watch-group {
@@ -4705,7 +4753,7 @@ caption.table-caption {
   border-top-color: rgba(130, 90, 30, 0.18);
 }
 
-[data-theme="light"] .round-fact-card,
+[data-theme="light"] .round-fact-strip__item,
 [data-theme="light"] .round-match-card {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.9)),
@@ -4909,136 +4957,6 @@ caption.table-caption {
   margin-top: var(--space-2xs);
 }
 
-/* ----- Scoreflow page ----- */
-
-/* ---------------------------------------------------------------------------
-   Scoreflow teaser band — homepage editorial bridge to /scoreflow/
-   Three featured cards with generous breathing room, teal/amber editorial tone.
-   --------------------------------------------------------------------------- */
-
-.scoreflow-teaser {
-  display: grid;
-  gap: var(--space-lg);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent-cool) 6%, transparent), transparent 44%),
-    var(--panel-solid);
-  border-color: color-mix(in srgb, var(--accent-cool) 18%, var(--border));
-}
-
-.scoreflow-teaser__header {
-  display: grid;
-  gap: var(--space-xs);
-}
-
-.scoreflow-teaser__header h2 {
-  margin: 0;
-  max-width: 22ch;
-}
-
-.scoreflow-teaser__header .panel__lead {
-  margin: 0;
-  color: var(--muted);
-  font-size: var(--text-ui-size);
-  line-height: 1.65;
-}
-
-.scoreflow-teaser__all-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35em;
-  color: var(--accent-cool);
-  text-decoration: none;
-  font-size: var(--type-sm);
-  font-weight: 600;
-  margin-top: calc(var(--space-xs) * 0.5);
-  transition: color 0.18s ease-out;
-}
-
-.scoreflow-teaser__all-link:hover,
-.scoreflow-teaser__all-link:focus-visible {
-  color: var(--text);
-}
-
-.scoreflow-teaser__cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-md);
-}
-
-.scoreflow-teaser__card {
-  display: grid;
-  gap: 0.5rem;
-  padding: 1.6rem 1.35rem 1.35rem;
-  border-radius: var(--radius-card);
-  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-  background: color-mix(in srgb, var(--panel-alt) 90%, transparent);
-  color: var(--text);
-  text-decoration: none;
-  align-content: start;
-  transition: border-color 0.2s ease-out, background 0.2s ease-out, transform 0.2s ease-out;
-}
-
-.scoreflow-teaser__card:hover,
-.scoreflow-teaser__card:focus-visible {
-  border-color: color-mix(in srgb, var(--accent-cool) 30%, var(--border-strong));
-  background: color-mix(in srgb, var(--accent-cool) 8%, var(--panel-alt));
-  transform: translateY(-2px);
-}
-
-.scoreflow-teaser__card-label {
-  font-size: var(--type-xs);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-kicker);
-  color: var(--accent-cool);
-  font-weight: 700;
-}
-
-.scoreflow-teaser__card-value {
-  font-family: var(--display-font);
-  font-size: clamp(1.65rem, 2.8vw, 2.3rem);
-  line-height: 0.95;
-  letter-spacing: 0.025em;
-  margin-top: 0.1rem;
-}
-
-.scoreflow-teaser__card-team {
-  font-weight: 600;
-  font-size: var(--text-ui-size);
-  margin-top: 0.35rem;
-}
-
-.scoreflow-teaser__card-context {
-  color: var(--muted);
-  font-size: var(--type-sm);
-  line-height: 1.5;
-}
-
-.scoreflow-teaser__card-arrow {
-  margin-top: 0.65rem;
-  color: var(--accent-cool);
-  font-family: var(--display-font);
-  font-size: 1.15rem;
-  line-height: 1;
-}
-
-.scoreflow-teaser__empty {
-  color: var(--muted);
-  font-size: var(--text-ui-size);
-  grid-column: 1 / -1;
-  margin: 0;
-}
-
-@media (max-width: 860px) {
-  .scoreflow-teaser__cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 560px) {
-  .scoreflow-teaser__cards {
-    grid-template-columns: 1fr;
-  }
-}
 
 .scoreflow-page .hero-panel {
   padding: 1.35rem 1.45rem;

@@ -37,15 +37,9 @@
           <p class="eyebrow">Latest completed round</p>
           <h1>This round in Super Netball</h1>
           <p class="intro-copy">The latest scores, standout lines, and any records worth noting.</p>
+          <p class="round-hero-meta"><span class="hero-aside__label">Round snapshot</span> <strong id="round-hero-label">Loading…</strong></p>
+          <p id="round-hero-summary" class="round-hero-summary">Loading the latest completed round.</p>
         </div>
-
-        <aside class="hero-aside" aria-label="Round summary">
-          <div class="hero-aside__card">
-            <span class="hero-aside__label">Round snapshot</span>
-            <strong id="round-hero-label">Loading…</strong>
-            <p id="round-hero-summary">Loading the latest completed round.</p>
-          </div>
-        </aside>
       </section>
     </header>
 
@@ -84,19 +78,11 @@
         <section class="panel results-panel results-panel--wide">
           <div class="panel__heading panel__heading--split">
             <div>
-              <h2>Notable facts</h2>
-            </div>
-          </div>
-          <div id="round-fact-grid" class="round-fact-grid"></div>
-        </section>
-
-        <section class="panel results-panel results-panel--wide">
-          <div class="panel__heading panel__heading--split">
-            <div>
               <h2>Match recap</h2>
             </div>
             <p class="muted">Completed results, ordered by first centre pass.</p>
           </div>
+          <div id="round-fact-strip" class="round-fact-strip" aria-label="Notable facts from the round"></div>
           <div id="round-match-grid" class="round-match-grid"></div>
         </section>
 

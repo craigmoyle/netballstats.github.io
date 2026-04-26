@@ -23,7 +23,7 @@ const {
     summaryGoals: document.querySelector("#round-summary-goals"),
     summaryBiggestMargin: document.querySelector("#round-summary-biggest-margin"),
     summaryClosestMargin: document.querySelector("#round-summary-closest-margin"),
-    factGrid: document.querySelector("#round-fact-grid"),
+    factStrip: document.querySelector("#round-fact-strip"),
     matchGrid: document.querySelector("#round-match-grid"),
     playerBody: document.querySelector("#round-player-body"),
     teamBody: document.querySelector("#round-team-body"),
@@ -33,7 +33,7 @@ const {
     teamCaption: document.querySelector("#round-team-caption")
   };
 
-  if (!elements.status || !elements.factGrid || !elements.matchGrid || !elements.playerBody || !elements.teamBody) {
+  if (!elements.status || !elements.factStrip || !elements.matchGrid || !elements.playerBody || !elements.teamBody) {
     return;
   }
 
@@ -131,11 +131,11 @@ const {
     return badge;
   }
 
-  function renderFactCards(facts) {
-    elements.factGrid.replaceChildren();
+  function renderFactStrip(facts) {
+    elements.factStrip.replaceChildren();
 
     if (!Array.isArray(facts) || !facts.length) {
-      elements.factGrid.appendChild(emptyState("No notable fact cards were available for this round.", "Recap"));
+      elements.factStrip.appendChild(emptyState("No notable facts were available for this round.", "Recap"));
       return;
     }
 
@@ -143,21 +143,21 @@ const {
 
     facts.forEach((fact) => {
       const card = document.createElement("article");
-      card.className = "round-fact-card";
+      card.className = "round-fact-strip__item";
       if (Array.isArray(fact.badges) && fact.badges.some((badge) => /all-time/i.test(badge))) {
         card.dataset.highlight = "archive";
       }
 
       const title = document.createElement("h3");
-      title.className = "round-fact-card__title";
+      title.className = "round-fact-strip__title";
       title.textContent = fact.title || "Notable fact";
 
       const value = document.createElement("p");
-      value.className = "round-fact-card__value";
+      value.className = "round-fact-strip__value";
       value.textContent = fact.value || "--";
 
       const detail = document.createElement("p");
-      detail.className = "round-fact-card__detail";
+      detail.className = "round-fact-strip__detail";
       detail.textContent = fact.detail || "";
 
       card.append(title, value, detail);
@@ -172,7 +172,7 @@ const {
       fragment.appendChild(card);
     });
 
-    elements.factGrid.appendChild(fragment);
+    elements.factStrip.appendChild(fragment);
   }
 
   function renderMatches(matches) {
@@ -363,12 +363,16 @@ const {
     const roundLabel = unwrapValue(payload.round_label) || "Latest completed round";
     const seasonLabel = payload.season ? `${roundLabel}, ${payload.season}` : roundLabel;
 
-    elements.heroLabel.textContent = seasonLabel;
+    if (elements.heroLabel) {
+      elements.heroLabel.textContent = seasonLabel;
+    }
     elements.heading.textContent = seasonLabel;
     elements.meta.textContent = unwrapValue(payload.round_end_time)
       ? `Completed ${formatDate(payload.round_end_time, { includeTime: true, includeYear: false })}.`
       : "Latest completed fixtures.";
-    elements.heroSummary.textContent = `${formatNumber(summary.total_matches)} matches · ${formatNumber(summary.total_goals)} goals · biggest margin ${formatNumber(summary.biggest_margin)}`;
+    if (elements.heroSummary) {
+      elements.heroSummary.textContent = `${formatNumber(summary.total_matches)} matches · ${formatNumber(summary.total_goals)} goals · biggest margin ${formatNumber(summary.biggest_margin)}`;
+    }
     elements.intro.textContent = "Every scoreline, standout line, and low-turnover result from the round.";
 
     elements.summaryMatches.textContent = formatNumber(summary.total_matches);
@@ -387,8 +391,12 @@ const {
   }
 
   function applyEmptyState(message) {
-    elements.heroLabel.textContent = "Unavailable";
-    elements.heroSummary.textContent = message;
+    if (elements.heroLabel) {
+      elements.heroLabel.textContent = "Unavailable";
+    }
+    if (elements.heroSummary) {
+      elements.heroSummary.textContent = message;
+    }
     elements.heading.textContent = "Round recap unavailable";
     elements.meta.textContent = "Try again shortly.";
     elements.intro.textContent = message;
@@ -396,7 +404,7 @@ const {
     elements.summaryGoals.textContent = "--";
     elements.summaryBiggestMargin.textContent = "--";
     elements.summaryClosestMargin.textContent = "--";
-    elements.factGrid.replaceChildren(emptyState(message, "Recap"));
+    elements.factStrip.replaceChildren(emptyState(message, "Recap"));
     elements.matchGrid.replaceChildren(emptyState(message, "Fixtures"));
     clearTable(elements.playerBody, message);
     clearTable(elements.teamBody, message);
@@ -411,7 +419,7 @@ const {
     try {
       const payload = await fetchJson("/round-summary", Object.fromEntries(buildQuery()));
       renderSummary(payload);
-      renderFactCards(payload.notable_facts || []);
+      renderFactStrip(payload.notable_facts || []);
       renderMatches(payload.matches || []);
       renderStandoutTable(elements.playerBody, payload.standout_players || [], "player");
       renderStandoutTable(elements.teamBody, payload.standout_teams || [], "team");

@@ -195,6 +195,13 @@
       const awayResults = recentForm && recentForm.away && Array.isArray(recentForm.away.results)
         ? recentForm.away.results : null;
 
+      const extras = document.createElement("details");
+      extras.className = "round-preview-card__extras";
+      const extrasSummary = document.createElement("summary");
+      extrasSummary.className = "round-preview-card__extras-summary";
+      extrasSummary.textContent = "Form and player watch";
+      extras.appendChild(extrasSummary);
+
       if (homeResults || awayResults) {
         const formSection = document.createElement("div");
         formSection.className = "round-preview-card__form";
@@ -207,7 +214,7 @@
         }
 
         if (formSection.children.length) {
-          details.appendChild(formSection);
+          extras.appendChild(formSection);
         }
       }
 
@@ -266,8 +273,12 @@
         });
 
         if (watchList.children.length) {
-          details.appendChild(watchList);
+          extras.appendChild(watchList);
         }
+      }
+
+      if (extras.children.length > 1) {
+        details.appendChild(extras);
       }
 
       article.appendChild(details);

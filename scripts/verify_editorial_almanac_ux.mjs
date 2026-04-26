@@ -1,21 +1,30 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(scriptDir, "..", "dist");
+const assetDir = path.join(distDir, "assets");
+
+function readFingerprintedAsset(assetName) {
+  const parsed = path.parse(assetName);
+  const pattern = new RegExp(`^${parsed.name}\\.[a-f0-9]{10}\\${parsed.ext}$`);
+  const match = readdirSync(assetDir).find((entry) => pattern.test(entry));
+  assert.ok(match, `Expected built asset for ${assetName}`);
+  return readFileSync(path.join(assetDir, match), "utf8");
+}
+
 const indexHtml = readFileSync(path.join(distDir, "index.html"), "utf8");
 const playerHtml = readFileSync(path.join(distDir, "player", "index.html"), "utf8");
-const css = readFileSync(path.join(distDir, "assets", "styles.css"), "utf8");
-const appJs = readFileSync(path.join(distDir, "assets", "app.js"), "utf8");
+const css = readFingerprintedAsset("styles.css");
+const appJs = readFingerprintedAsset("app.js");
 
 assert.match(indexHtml, /archive-control-desk/, "Expected homepage build to include archive-control-desk");
-assert.match(indexHtml, /archive-context-note/, "Expected homepage build to include archive-context-note");
-assert.match(indexHtml, /archive-results-intro/, "Expected homepage build to include archive-results-intro");
+assert.doesNotMatch(indexHtml, /archive-context-note/, "Expected homepage build to remove archive-context-note");
 assert.match(indexHtml, /archive-control-desk__header/, "Expected homepage build to include archive-control-desk__header");
-assert.match(indexHtml, /aria-label="Archive reading guide"/, "Expected homepage build to include an archive reading guide label");
+assert.match(indexHtml, /id="archive-advanced"/, "Expected homepage build to keep archive advanced controls");
 assert.match(playerHtml, /player-dossier/, "Expected player build to include player-dossier");
 assert.match(playerHtml, /player-dossier__ledger/, "Expected player build to include player-dossier__ledger");
 assert.match(playerHtml, /player-dossier__pillars/, "Expected player build to include player-dossier__pillars");
@@ -23,7 +32,6 @@ assert.match(playerHtml, /player-dossier__marginalia/, "Expected player build to
 assert.match(playerHtml, /season-ledger__notes/, "Expected player build to include season-ledger__notes");
 assert.match(playerHtml, /aria-label="Player dossier notes"/, "Expected player build to include a player dossier notes label");
 assert.match(css, /\.archive-control-desk\b/, "Expected built CSS to include .archive-control-desk");
-assert.match(css, /\.archive-results-intro\b/, "Expected built CSS to include .archive-results-intro");
 assert.match(css, /\.archive-control-desk__header\b/, "Expected built CSS to include .archive-control-desk__header");
 assert.match(css, /\.player-dossier__ledger\b/, "Expected built CSS to include .player-dossier__ledger");
 assert.match(css, /\.player-dossier__pillars\b/, "Expected built CSS to include .player-dossier__pillars");
@@ -150,7 +158,6 @@ const runtimeContext = {
     }
   },
   elements: {
-    archiveContextNote: new FakeElement("p"),
     playerLeadersBody: new FakeElement("tbody")
   },
   state: {
@@ -185,6 +192,7 @@ const runtimeContext = {
   statValue(row) {
     return row.value ?? row.total_value;
   },
+  clearEmptyTableState() {},
   syncResponsiveTable() {}
 };
 
@@ -192,26 +200,10 @@ vm.runInNewContext(
   [
     extractFunction(appJs, "describeSeasonScope", "teamLabel"),
     extractFunction(appJs, "isRecordMode", "statModeLabel"),
-    extractFunction(appJs, "renderArchiveContextNote", "createPlayerLinkCell"),
     extractFunction(appJs, "createPlayerLinkCell", "createTeamCell"),
     extractFunction(appJs, "renderPlayerLeaders", "renderCompetitionSeasonTable")
   ].join("\n\n"),
   runtimeContext
-);
-
-runtimeContext.renderArchiveContextNote();
-assert.equal(
-  runtimeContext.elements.archiveContextNote.textContent,
-  "Use the archive to scan the strongest totals in all seasons, then open the dossier for season-by-season context.",
-  "Expected archive context note to describe dossier context in totals mode"
-);
-
-runtimeContext.state.filters.archiveMode = "records";
-runtimeContext.renderArchiveContextNote();
-assert.equal(
-  runtimeContext.elements.archiveContextNote.textContent,
-  "Use the archive to surface the sharpest one-game performances in all seasons, then open the dossier for full career context.",
-  "Expected archive context note to describe dossier context in records mode"
 );
 
 function assertRenderedDossierLink(archiveMode) {
