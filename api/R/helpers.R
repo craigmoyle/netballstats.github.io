@@ -3555,9 +3555,9 @@ round_preview_team_logo_url <- function(team_name) {
     "West Coast Fever" = "fever.svg",
     "Adelaide Thunderbirds" = "thunderbirds.svg",
     "Melbourne Vixens" = "vixens.svg"
-  )[[normalized]]
+  )[normalized]
 
-  if (is.null(logo_file) || !nzchar(logo_file)) {
+  if (is.null(logo_file) || !length(logo_file) || is.na(logo_file) || !nzchar(logo_file)) {
     return(NULL)
   }
 
