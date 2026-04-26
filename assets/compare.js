@@ -4,12 +4,12 @@ const SUPER_SHOT_START_SEASON = 2020;
 const DEFAULT_CHART_PALETTE = [
   "#f0c67e",
   "#79d8d0",
-  "#ff9e9e",
-  "#f4a0d8",
-  "#d1c36b",
-  "#8ac6ff",
-  "#f7b267",
-  "#9ad1d4"
+  "#b88484",
+  "#8d7086",
+  "#a39562",
+  "#6f8aa3",
+  "#b48a62",
+  "#6f9391"
 ];
 const LEGACY_STAT_ALIASES = new Map([
   ["goal1", "goals"],

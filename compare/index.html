@@ -37,15 +37,9 @@
         <div class="hero-copy">
           <p class="eyebrow">Head to head across seasons</p>
           <h1>Compare players or teams</h1>
+          <p id="compare-hero-summary" class="compare-hero-dek">Choose a mode, then add two names to unlock the head-to-head.</p>
+          <p class="compare-hero-meta"><span class="hero-aside__label">Mode</span> <strong id="compare-hero-mode">Players</strong></p>
         </div>
-
-        <aside class="hero-aside" aria-label="Comparison summary">
-          <div class="hero-aside__card">
-            <span class="hero-aside__label">Head-to-head mode</span>
-            <strong id="compare-hero-mode">Players</strong>
-            <p id="compare-hero-summary">Choose a mode, then add two names to unlock the head-to-head.</p>
-          </div>
-        </aside>
       </section>
     </header>
 
@@ -61,7 +55,7 @@
         </div>
 
         <form id="compare-form" class="filters compare-builder" novalidate>
-          <section id="compare-step-mode" class="builder-step" data-step-state="ready" aria-labelledby="compare-step-mode-title">
+          <section id="compare-step-mode" class="builder-step builder-step--rail" data-step-state="ready" aria-labelledby="compare-step-mode-title">
             <div class="builder-step__header">
               <span class="builder-step__number" aria-hidden="true">1</span>
               <div>
@@ -150,7 +144,7 @@
             </div>
           </section>
 
-          <section id="compare-step-action" class="builder-step builder-step--action" data-step-state="pending" aria-labelledby="compare-step-action-title">
+          <section id="compare-step-action" class="builder-step builder-step--action builder-step--rail" data-step-state="pending" aria-labelledby="compare-step-action-title">
             <div class="builder-step__header">
               <span class="builder-step__number" aria-hidden="true">4</span>
               <div>
@@ -166,39 +160,41 @@
         </form>
       </section>
 
-      <section id="compare-verdict" class="panel compare-verdict reveal" aria-label="Comparison verdict" hidden>
-        <div class="compare-verdict__lead">
-          <p class="panel__eyebrow">Verdict</p>
-          <h2 id="compare-verdict-headline">Choose names to load a verdict.</h2>
-          <p id="compare-verdict-dek" class="panel__lead">The archive will call the overall edge once at least two players or teams are selected.</p>
-        </div>
-        <div id="compare-verdict-facts" class="compare-verdict__facts"></div>
-      </section>
-
-      <section class="panel results-panel results-panel--wide reveal">
-        <div class="panel__heading panel__heading--split">
-          <div>
-            <h2>Season trend</h2>
+      <div class="compare-results-stack">
+        <section id="compare-verdict" class="panel compare-verdict compare-results-lead reveal" aria-label="Comparison verdict" hidden>
+          <div class="compare-verdict__lead">
+            <p class="panel__eyebrow">Verdict</p>
+            <h2 id="compare-verdict-headline">Choose names to load a verdict.</h2>
+            <p id="compare-verdict-dek" class="panel__lead">The archive will call the overall edge once at least two players or teams are selected.</p>
           </div>
-          <p id="compare-results-meta" class="muted">Choose names to load the chart.</p>
-        </div>
-        <div id="compare-trend-chart" class="chart-shell"></div>
-      </section>
+          <div id="compare-verdict-facts" class="compare-verdict__facts"></div>
+        </section>
 
-      <section class="panel results-panel results-panel--wide reveal">
-        <div class="panel__heading">
-          <p class="panel__eyebrow">Exact values</p>
-          <h2>Comparison table</h2>
-        </div>
-        <div class="table-wrapper">
-            <table class="compare-table stack-table" aria-describedby="compare-table-caption">
-            <caption id="compare-table-caption" class="table-caption">Comparison rows appear here once you choose players or teams.</caption>
-            <thead id="compare-table-head"></thead>
-            <tbody id="compare-table-body"></tbody>
-            <tfoot id="compare-table-foot"></tfoot>
-          </table>
-        </div>
-      </section>
+        <section class="panel results-panel results-panel--wide compare-results-panel compare-results-panel--chart reveal">
+          <div class="panel__heading panel__heading--split">
+            <div>
+              <h2>Season trend</h2>
+            </div>
+            <p id="compare-results-meta" class="muted">Choose names to load the chart.</p>
+          </div>
+          <div id="compare-trend-chart" class="chart-shell"></div>
+        </section>
+
+        <section class="panel results-panel results-panel--wide compare-results-panel compare-results-panel--table reveal">
+          <div class="panel__heading">
+            <p class="panel__eyebrow">Exact values</p>
+            <h2>Comparison table</h2>
+          </div>
+          <div class="table-wrapper compare-table-shell">
+              <table class="compare-table stack-table" aria-describedby="compare-table-caption">
+              <caption id="compare-table-caption" class="table-caption">Comparison rows appear here once you choose players or teams.</caption>
+              <thead id="compare-table-head"></thead>
+              <tbody id="compare-table-body"></tbody>
+              <tfoot id="compare-table-foot"></tfoot>
+            </table>
+          </div>
+        </section>
+      </div>
     </main>
   </body>
 </html>

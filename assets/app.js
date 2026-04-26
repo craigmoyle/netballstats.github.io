@@ -6,10 +6,12 @@ const CHART_RANK_LIMIT = 10;
 const DEFAULT_CHART_PALETTE = [
   "#f0c67e",
   "#79d8d0",
-  "#ff9e9e",
-  "#f4a0d8",
-  "#d1c36b",
-  "#8ac6ff"
+  "#b88484",
+  "#8d7086",
+  "#a39562",
+  "#6f8aa3",
+  "#b48a62",
+  "#6f9391"
 ];
 const {
   clearChart,
