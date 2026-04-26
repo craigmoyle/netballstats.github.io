@@ -51,7 +51,10 @@ const FALLBACK_EXAMPLES = [
   "How many times has Grace Nweke scored 50 goals or more against the Vixens?",
   "What is Liz Watson's highest goal assist total against the Firebirds?",
   "Which players had 5+ gains in 2025?",
-  "Which teams had the lowest general play turnovers in 2025?"
+  "Which teams had the lowest general play turnovers in 2025?",
+  "Grace Nweke goal assists across 2023, 2024, 2025",
+  "Vixens vs Swifts goal assists in 2025",
+  "Highest single-game intercepts all time"
 ];
 const TABLE_SCHEMAS = {
   player: {
