@@ -7393,6 +7393,10 @@ simple_parse_shape <- function(parsed) {
 build_complex_parse_guidance <- function(parse_result) {
   shape <- parse_result$shape %||% NULL
   parsed <- parse_result$parsed %||% list()
+  builder_prefill <- parse_result$builder_prefill %||% extract_builder_prefill(shape, parsed)
+  if (!is.null(shape)) {
+    builder_prefill$shape <- shape
+  }
 
   list(
     success = FALSE,
@@ -7401,7 +7405,7 @@ build_complex_parse_guidance <- function(parse_result) {
     confidence = complex_parse_confidence_label(parse_result$confidence),
     confidence_score = parse_result$confidence %||% 0,
     error_message = parse_result$error_message %||% "I couldn't match all the parts of that question.",
-    builder_prefill = parse_result$builder_prefill %||% extract_builder_prefill(shape, parsed),
+    builder_prefill = builder_prefill,
     parsed_hints = parsed
   )
 }

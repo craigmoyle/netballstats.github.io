@@ -873,6 +873,7 @@ function resetBuilderState() {
     subjects: [],
     stat: null,
     filters: {},
+    logicalOperator: "AND",
     timeframe: null,
     seasonSingle: null,
     seasonRange: null,
@@ -920,8 +921,14 @@ function validateBuilderStep(stepNum) {
     case 1: // Shape
       return !!builderState.shape;
     case 2: // Subjects
+      if (builderState.shape === "combination" || builderState.shape === "record") {
+        return true;
+      }
       return builderState.subjects && builderState.subjects.length > 0;
     case 3: // Stat
+      if (builderState.shape === "combination") {
+        return true;
+      }
       return !!builderState.stat;
     case 4: // Filters (optional)
       return true;
@@ -1250,6 +1257,7 @@ async function submitBuilderQuery() {
     subjects: builderState.subjects,
     stat: builderState.stat,
     filters: builderState.filters,
+    logical_operator: builderState.logicalOperator,
     timeframe: builderState.timeframe
   };
 
@@ -1269,13 +1277,19 @@ async function submitBuilderQuery() {
   try {
     showLoadingStatus(QUERY_LOADING_MESSAGES, "Building query");
 
-    // Convert builder query to natural language or construct API payload
-    // For now, post builder_source flag
-    const result = await fetchJson("/query", {
+    const requestBody = {
       builder_source: true,
-      builder_query: formData,
+      shape: formData.shape,
+      subjects: formData.subjects,
+      subject: formData.subjects?.[0] || null,
+      stat: formData.stat,
+      filters: formData.filters,
+      logical_operator: formData.logical_operator,
+      seasons: formData.seasons,
       limit: 12
-    });
+    };
+
+    const result = await fetchJson("/query", requestBody);
 
     renderResult(result);
     closeBuilderModal();
@@ -1298,6 +1312,12 @@ function openBuilderModalUI(prefill = {}) {
   if (!builderElements.modal) return;
 
   resetBuilderState();
+  const prefillSubjects = Array.isArray(prefill.subjects)
+    ? prefill.subjects
+    : (prefill.subject ? [prefill.subject] : []);
+  const prefillSeasons = Array.isArray(prefill.seasons)
+    ? prefill.seasons
+    : (prefill.seasons ? [prefill.seasons] : []);
 
   // Prefill if provided
   if (prefill.shape) {
@@ -1306,28 +1326,43 @@ function openBuilderModalUI(prefill = {}) {
     if (shapeRadio) shapeRadio.checked = true;
   }
 
-  if (prefill.subjects && Array.isArray(prefill.subjects)) {
-    builderState.subjects = [...prefill.subjects];
+  if (prefillSubjects.length) {
+    builderState.subjects = [...prefillSubjects];
   }
 
   if (prefill.stat) {
     builderState.stat = prefill.stat;
   }
 
-  if (prefill.seasons && Array.isArray(prefill.seasons)) {
-    if (prefill.seasons.length === 1) {
+  if (prefill.filters && Array.isArray(prefill.filters)) {
+    builderState.filters = [...prefill.filters];
+  }
+
+  if (prefill.logical_operator) {
+    builderState.logicalOperator = prefill.logical_operator;
+  }
+
+  if (prefillSeasons.length) {
+    if (prefillSeasons.length === 1) {
       builderState.timeframe = "single";
-      builderState.seasonSingle = prefill.seasons[0];
+      builderState.seasonSingle = prefillSeasons[0];
     } else {
       builderState.timeframe = "range";
       builderState.seasonRange = {
-        from: Math.min(...prefill.seasons),
-        to: Math.max(...prefill.seasons)
+        from: Math.min(...prefillSeasons),
+        to: Math.max(...prefillSeasons)
       };
     }
   }
 
-  showBuilderStep(2);
+  const initialStep = builderState.shape === "combination"
+    ? 4
+    : builderState.shape === "record"
+      ? 3
+      : builderState.shape
+        ? 2
+        : 1;
+  showBuilderStep(initialStep);
   builderElements.modal.showModal();
 }
 
