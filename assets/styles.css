@@ -3818,6 +3818,111 @@ caption.table-caption {
   gap: 0.7rem;
 }
 
+/* ── Query input footer (builder trigger) ─────────────────────────────────── */
+
+.query-input-footer {
+  padding-top: 0.1rem;
+}
+
+.query-builder-trigger {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--type-sm);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--muted) 40%, transparent);
+  transition: color 0.2s ease-out, text-decoration-color 0.2s ease-out;
+}
+
+.query-builder-trigger:hover,
+.query-builder-trigger:focus-visible {
+  color: var(--text);
+  text-decoration-color: color-mix(in srgb, var(--text) 50%, transparent);
+  outline: none;
+}
+
+.query-builder-trigger:focus-visible {
+  outline: 2px solid var(--accent-cool);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* ── Query support surface (collapsed starters + examples) ────────────────── */
+
+.query-support {
+  border-radius: var(--radius-card);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  background: color-mix(in srgb, var(--text) 1.5%, transparent);
+}
+
+.query-support > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  color: var(--muted);
+  font-size: var(--type-sm);
+  font-weight: 500;
+  user-select: none;
+  transition: color 0.2s ease-out;
+}
+
+.query-support > summary::-webkit-details-marker {
+  display: none;
+}
+
+.query-support > summary::before {
+  content: "▸";
+  font-size: 0.7em;
+  transition: transform 0.2s ease-out;
+  flex-shrink: 0;
+}
+
+.query-support[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.query-support > summary:hover,
+.query-support[open] > summary {
+  color: var(--text);
+}
+
+.query-support__body {
+  display: grid;
+  gap: 1.5rem;
+  padding: 0 1rem 1.2rem;
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.query-support__section {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.query-support__section-label {
+  margin: 0;
+  color: var(--accent-cool);
+  font-size: var(--type-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-kicker);
+  text-transform: uppercase;
+}
+
+.query-support__section-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-ui-size);
+  line-height: 1.62;
+  max-width: 54ch;
+}
+
 .example-chip {
   display: inline-flex;
   align-items: center;

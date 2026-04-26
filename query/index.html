@@ -67,114 +67,83 @@
           </div>
 
           <form id="query-form" class="query-form" novalidate>
-            <section id="query-step-compose" class="builder-step builder-step--query" data-step-state="active" aria-labelledby="query-step-compose-title">
-              <div class="builder-step__header">
-                <span class="builder-step__number" aria-hidden="true">1</span>
-                <div>
-                  <h3 id="query-step-compose-title">Write the question</h3>
-                  <p class="builder-step__hint">Start with the player or team and the stat you want. Add a season or opponent only when it changes the answer.</p>
+            <div class="query-input-shell">
+              <label for="question-input">Question</label>
+              <div class="query-input-row">
+                <textarea
+                  id="question-input"
+                  name="question"
+                  maxlength="220"
+                  placeholder="How many times has Grace Nweke scored 50 goals or more against the Vixens?"
+                  aria-describedby="query-hint"
+                ></textarea>
+                <div class="query-submit-stack">
+                  <button type="submit">Ask the archive</button>
+                  <button type="button" id="clear-question" class="button button--ghost">Clear</button>
                 </div>
               </div>
+              <div class="query-input-meta">
+                <p id="query-hint" class="query-hint">Name a player or team, name the stat, then ask what you want to know.</p>
+                <p id="question-character-count" class="query-character-count" aria-live="polite">0 / 220 characters</p>
+              </div>
+              <div class="query-input-footer">
+                <button type="button" id="open-builder-trigger" class="query-builder-trigger">Use the builder instead</button>
+              </div>
+            </div>
 
-              <div class="query-input-shell">
-                <label for="question-input">Question</label>
-                <div class="query-input-row">
-                  <textarea
-                    id="question-input"
-                    name="question"
-                    maxlength="220"
-                    placeholder="How many times has Grace Nweke scored 50 goals or more against the Vixens?"
-                    aria-describedby="query-hint"
-                  ></textarea>
-                  <div class="query-submit-stack">
-                    <button type="submit">Run question</button>
-                    <button type="button" id="clear-question" class="button button--ghost">Clear</button>
+            <details id="query-support" class="query-support">
+              <summary class="query-support__toggle">Starters and examples</summary>
+              <div class="query-support__body">
+                <div class="query-support__section">
+                  <p class="query-support__section-label">Question starters</p>
+                  <p class="query-support__section-note">Choose a starter, then swap in real names, stats, thresholds, or seasons.</p>
+                  <div id="query-template-strip" class="query-template-strip" role="group" aria-label="Question templates">
+                    <button type="button" class="query-template-button" data-template="How many times has [player] recorded [threshold] or more [stat]?">
+                      <span class="query-template-button__label">Count threshold</span>
+                      <span class="query-template-button__text">How many times has [player] recorded [threshold] or more [stat]?</span>
+                    </button>
+                    <button type="button" class="query-template-button" data-template="What is [player]'s highest [stat] total against [opponent]?">
+                      <span class="query-template-button__label">Single peak</span>
+                      <span class="query-template-button__text">What is [player]'s highest [stat] total against [opponent]?</span>
+                    </button>
+                    <button type="button" class="query-template-button" data-template="Which players had [threshold]+ [stat] in [season]?">
+                      <span class="query-template-button__label">Player list</span>
+                      <span class="query-template-button__text">Which players had [threshold]+ [stat] in [season]?</span>
+                    </button>
+                    <button type="button" class="query-template-button" data-template="Which teams had the lowest [stat] in [season]?">
+                      <span class="query-template-button__label">Team low mark</span>
+                      <span class="query-template-button__text">Which teams had the lowest [stat] in [season]?</span>
+                    </button>
+                    <button type="button" class="query-template-button" data-template="How many [stat] did [team] score against [opponent] in [season]?">
+                      <span class="query-template-button__label">Team comparison</span>
+                      <span class="query-template-button__text">How many [stat] did [team] score against [opponent] in [season]?</span>
+                    </button>
+                    <button type="button" class="query-template-button" data-template="What is [team]'s [stat] by quarter in [season]?">
+                      <span class="query-template-button__label">Quarter trend</span>
+                      <span class="query-template-button__text">What is [team]'s [stat] by quarter in [season]?</span>
+                    </button>
                   </div>
                 </div>
-                <div class="query-input-meta">
-                  <p id="query-hint" class="query-hint">
-                     Best with: player or team + stat + question. Add a season or opponent only when it changes the answer.
-                   </p>
-                  <p id="question-character-count" class="query-character-count" aria-live="polite">0 / 220 characters</p>
+                <div class="query-support__section">
+                  <p class="query-support__section-label">Working examples</p>
+                  <p class="query-support__section-note">Tap one to run a complete question against the archive.</p>
+                  <div class="example-strip" id="example-strip" aria-label="Example question prompts">
+                    <button type="button" class="example-chip" data-example="How many times has Grace Nweke scored 50 goals or more against the Vixens?">Grace Nweke 50+ against Vixens</button>
+                    <button type="button" class="example-chip" data-example="What is Liz Watson's highest goal assist total against the Firebirds?">Liz Watson goal assists</button>
+                    <button type="button" class="example-chip" data-example="Which players had 5+ gains in 2025?">Players with 5+ gains</button>
+                    <button type="button" class="example-chip" data-example="Which teams had the lowest general play turnovers in 2025?">Teams with lowest turnovers</button>
+                    <button type="button" class="example-chip" data-example="Grace Nweke goal assists across 2023, 2024, 2025">Grace Nweke trend</button>
+                    <button type="button" class="example-chip" data-example="Vixens vs Swifts goal assists in 2025">Vixens vs Swifts comparison</button>
+                    <button type="button" class="example-chip" data-example="Highest single-game intercepts all time">All-time intercepts record</button>
+                  </div>
                 </div>
               </div>
-
-              <div class="query-recipe" aria-label="Question recipe">
-                <span class="query-recipe__label">Quick guide</span>
-                <p>Name the player or team, name the stat, then ask what you want to know.</p>
-              </div>
-            </section>
-
-            <section id="query-step-shape" class="builder-step builder-step--query" data-step-state="active" aria-labelledby="query-step-shape-title">
-              <div class="builder-step__header">
-                <span class="builder-step__number" aria-hidden="true">2</span>
-                <div>
-                  <h3 id="query-step-shape-title">Need a prompt?</h3>
-                  <p class="builder-step__hint">Choose a question starter, then swap in the player, team, stat, threshold, or season you want.</p>
-                </div>
-              </div>
-
-              <div id="query-template-strip" class="query-template-strip" role="group" aria-label="Question templates">
-                <button type="button" class="query-template-button" data-template="How many times has [player] recorded [threshold] or more [stat]?">
-                  <span class="query-template-button__label">Count threshold</span>
-                  <span class="query-template-button__text">How many times has [player] recorded [threshold] or more [stat]?</span>
-                </button>
-                <button type="button" class="query-template-button" data-template="What is [player]'s highest [stat] total against [opponent]?">
-                  <span class="query-template-button__label">Single peak</span>
-                  <span class="query-template-button__text">What is [player]'s highest [stat] total against [opponent]?</span>
-                </button>
-                <button type="button" class="query-template-button" data-template="Which players had [threshold]+ [stat] in [season]?">
-                  <span class="query-template-button__label">Player list</span>
-                  <span class="query-template-button__text">Which players had [threshold]+ [stat] in [season]?</span>
-                </button>
-                <button type="button" class="query-template-button" data-template="Which teams had the lowest [stat] in [season]?">
-                  <span class="query-template-button__label">Team low mark</span>
-                  <span class="query-template-button__text">Which teams had the lowest [stat] in [season]?</span>
-                </button>
-                <button type="button" class="query-template-button" data-template="How many [stat] did [team] score against [opponent] in [season]?">
-                  <span class="query-template-button__label">Team comparison</span>
-                  <span class="query-template-button__text">How many [stat] did [team] score against [opponent] in [season]?</span>
-                </button>
-                <button type="button" class="query-template-button" data-template="What is [team]'s [stat] by quarter in [season]?">
-                  <span class="query-template-button__label">Quarter trend</span>
-                  <span class="query-template-button__text">What is [team]'s [stat] by quarter in [season]?</span>
-                </button>
-              </div>
-              <p class="builder-step__note">Replace the bracketed placeholders with real names, stats, thresholds, or seasons before you run it.</p>
-            </section>
-
-            <section id="query-step-run" class="builder-step builder-step--query" data-step-state="pending" aria-labelledby="query-step-run-title">
-              <div class="builder-step__header">
-                <span class="builder-step__number" aria-hidden="true">3</span>
-                <div>
-                  <h3 id="query-step-run-title">Try an example</h3>
-                  <p class="builder-step__hint">Use one of these if you want to see a working question first.</p>
-                </div>
-              </div>
-
-              <p id="query-runway-hint" class="builder-step__runway">Write a question or start from a prompt.</p>
-
-              <div class="query-examples">
-                <div class="query-examples__header">
-                  <strong>Working examples</strong>
-                  <p>Use one to see how the page answers a complete question.</p>
-                </div>
-                <div class="example-strip" id="example-strip" aria-label="Example question prompts">
-                  <button type="button" class="example-chip" data-example="How many times has Grace Nweke scored 50 goals or more against the Vixens?">Grace Nweke 50+ against Vixens</button>
-                  <button type="button" class="example-chip" data-example="What is Liz Watson's highest goal assist total against the Firebirds?">Liz Watson goal assists</button>
-                  <button type="button" class="example-chip" data-example="Which players had 5+ gains in 2025?">Players with 5+ gains</button>
-                  <button type="button" class="example-chip" data-example="Which teams had the lowest general play turnovers in 2025?">Teams with lowest turnovers</button>
-                  <button type="button" class="example-chip" data-example="Grace Nweke goal assists across 2023, 2024, 2025">Grace Nweke trend</button>
-                  <button type="button" class="example-chip" data-example="Vixens vs Swifts goal assists in 2025">Vixens vs Swifts comparison</button>
-                  <button type="button" class="example-chip" data-example="Highest single-game intercepts all time">All-time intercepts record</button>
-                </div>
-              </div>
-            </section>
+            </details>
           </form>
         </div>
       </section>
 
-      <section class="query-pulse reveal" aria-label="Query status strip">
+      <section id="query-pulse-section" class="query-pulse reveal" aria-label="Query status strip" hidden>
         <article class="query-pulse__item query-pulse__item--accent">
           <span class="query-pulse__label">Question type</span>
           <span id="summary-question-type" class="query-pulse__value">--</span>
@@ -203,7 +172,7 @@
 
             <div id="interpretation-grid" class="interpretation-grid" aria-label="Parsed interpretation"></div>
 
-            <details id="query-help" class="query-help">
+            <details id="query-help" class="query-help" hidden>
               <summary id="query-help-summary">Question patterns</summary>
               <div id="query-state" class="query-state"></div>
             </details>

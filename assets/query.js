@@ -115,7 +115,9 @@ const elements = {
   queryRowsBody: document.getElementById("query-rows-body"),
   errorBanner: document.getElementById("error-banner"),
   errorBannerMessage: document.getElementById("error-banner-message"),
-  errorBannerActions: document.getElementById("error-banner-actions")
+  errorBannerActions: document.getElementById("error-banner-actions"),
+  queryPulseSection: document.getElementById("query-pulse-section"),
+  openBuilderTrigger: document.getElementById("open-builder-trigger")
 };
 
 elements.submitButton = elements.queryForm.querySelector('[type="submit"]');
@@ -486,13 +488,15 @@ function applyQuestionText(question, { focus = true } = {}) {
 function setIdleState() {
   hideErrorBanner();
   setTableSchema("player");
-  setSummaryCards("--", "--", "--", "Write a question");
   elements.answerHeadline.textContent = "Write a question to see the answer.";
   elements.answerMeta.textContent = "Ask a question, then check the answer and rows below.";
   elements.interpretationGrid.replaceChildren();
   renderDefaultQueryState();
+  if (elements.queryPulseSection) {
+    elements.queryPulseSection.hidden = true;
+  }
   if (elements.queryHelp) {
-    elements.queryHelp.hidden = false;
+    elements.queryHelp.hidden = true;
     elements.queryHelp.open = false;
   }
   elements.tableMeta.textContent = "";
@@ -877,6 +881,9 @@ function renderUnsupported(result) {
   const reason = result.reason || "That wording is not supported yet.";
   setTableSchema("player");
   setSummaryCards("--", "--", "--", result.status === "ambiguous" ? "Ambiguous" : "Unsupported");
+  if (elements.queryPulseSection) {
+    elements.queryPulseSection.hidden = false;
+  }
   elements.answerHeadline.textContent = reason;
   elements.answerMeta.textContent = "Try a clearer question or start from a prompt below.";
   elements.interpretationGrid.replaceChildren();
@@ -912,6 +919,9 @@ function renderParserGuidance({ message, confidence = "LOW", examples = FALLBACK
   }
   setTableSchema("player");
   setSummaryCards("--", "--", "--", PARSER_CONFIDENCE_COPY[confidence] || "Need help");
+  if (elements.queryPulseSection) {
+    elements.queryPulseSection.hidden = false;
+  }
   elements.answerHeadline.textContent = "Tighten the wording or start from a prompt.";
   elements.answerMeta.textContent = "Name the player or team, then the stat, then what you want to know.";
   elements.interpretationGrid.replaceChildren();
@@ -966,6 +976,13 @@ function renderResult(result) {
 
     setTableSchema("player");
     setSummaryCards("--", "--", "--", "Help needed");
+    if (elements.queryPulseSection) {
+      elements.queryPulseSection.hidden = false;
+    }
+    if (elements.queryHelp) {
+      elements.queryHelp.hidden = false;
+      elements.queryHelp.open = true;
+    }
     elements.answerHeadline.textContent = "Try a different approach or use the builder.";
     elements.answerMeta.textContent = "";
     elements.interpretationGrid.replaceChildren();
@@ -988,9 +1005,13 @@ function renderResult(result) {
     normalized?.summary?.stat || "--",
     normalized?.summary?.status || "Supported"
   );
+  if (elements.queryPulseSection) {
+    elements.queryPulseSection.hidden = false;
+  }
   elements.answerHeadline.textContent = normalized?.answer || "No answer.";
   elements.answerMeta.textContent = normalized?.answerMeta || "Transparent answer with the matching evidence table below.";
   if (elements.queryHelp) {
+    elements.queryHelp.hidden = false;
     elements.queryHelp.open = false;
   }
   setTableSchema(tableKind);
@@ -1060,6 +1081,9 @@ async function runQuestion(question, source = "manual") {
   }
 
   showLoadingStatus(QUERY_LOADING_MESSAGES, "Reading archive");
+  if (elements.queryPulseSection) {
+    elements.queryPulseSection.hidden = false;
+  }
   setSummaryCards("…", "…", "…", "Running");
   trackEvent("ask_stats_submitted", {
     source,
@@ -1800,6 +1824,12 @@ elements.clearQuestion.addEventListener("click", () => {
     previous_question_length_bucket: bucketCount(previousQuestion.length, [0, 20, 40, 80, 120, 180])
   });
 });
+
+if (elements.openBuilderTrigger) {
+  elements.openBuilderTrigger.addEventListener("click", () => {
+    openBuilderModal({});
+  });
+}
 
 if (elements.queryTemplateStrip) {
   elements.queryTemplateStrip.addEventListener("click", (event) => {
