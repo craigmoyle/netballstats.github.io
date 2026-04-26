@@ -780,7 +780,7 @@ json_scalar <- function(value) {
 }
 
 serializer_unboxed_json_null_na <- function(...) {
-  plumber::serializer_unboxed_json(na = "null", ...)
+  plumber::serializer_unboxed_json(na = "null", null = "null", ...)
 }
 
 plumber::register_serializer("unboxedJSONNullNA", serializer_unboxed_json_null_na)
