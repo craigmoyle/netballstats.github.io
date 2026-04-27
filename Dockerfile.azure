@@ -31,8 +31,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install all R packages
-RUN R --no-restore --no-save -q -e 'options(repos=c(PPM="https://packagemanager.posit.co/cran/__linux__/noble/latest"));packages=c("askpass","bit","bit64","blob","cli","cpp11","crayon","curl","DBI","dplyr","fastmap","generics","glue","hms","httpuv","httr","jsonlite","later","lifecycle","lubridate","magrittr","mime","openssl","otel","pillar","pkgconfig","plumber","promises","purrr","R6","Rcpp","renv","rlang","RPostgres","sodium","stringi","stringr","superNetballR","swagger","sys","tibble","tidyr","tidyselect","timechange","utf8","vctrs","webutils","withr");install.packages(packages,Ncpus=parallel::detectCores());cat("Package installation complete\n")'
+# Install runtime R packages. superNetballR is GitHub-sourced in renv.lock, so
+# install it explicitly and fail the build if any required package is still missing.
+RUN R --no-restore --no-save -q -e 'options(repos=c(PPM="https://packagemanager.posit.co/cran/__linux__/noble/latest"));cran_packages=c("askpass","bit","bit64","blob","cli","cpp11","crayon","curl","DBI","dplyr","fastmap","generics","glue","hms","httpuv","httr","jsonlite","later","lifecycle","lubridate","magrittr","mime","openssl","otel","pillar","pkgconfig","plumber","promises","purrr","R6","Rcpp","remotes","renv","rlang","RPostgres","sodium","stringi","stringr","swagger","sys","tibble","tidyr","tidyselect","timechange","utf8","vctrs","webutils","withr");install.packages(cran_packages,Ncpus=parallel::detectCores());remotes::install_github("craigmoyle/superNetballR_updated@v0.3.1",dependencies=TRUE,upgrade="never");required_packages=c(setdiff(cran_packages,"remotes"),"superNetballR");missing=required_packages[!vapply(required_packages,requireNamespace,logical(1),quietly=TRUE)];if(length(missing)) stop(sprintf("Missing required packages: %s",paste(missing,collapse=", ")));cat("Package installation complete\n")'
 
 # Copy only application code
 COPY --from=build /app /app
