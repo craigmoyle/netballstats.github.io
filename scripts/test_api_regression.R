@@ -259,6 +259,42 @@ if (identical(round_summary_status, 200L)) {
   assert_true(nzchar(as.character(scalar_value(round_summary_payload$round_label %||% ''))), 'Expected /round-summary to return a round label.')
   assert_true(is.list(round_summary_payload$matches) && length(round_summary_payload$matches) >= 1, 'Expected /round-summary to return completed matches.')
   assert_true(is.list(round_summary_payload$notable_facts) && length(round_summary_payload$notable_facts) >= 1, 'Expected /round-summary to return notable facts.')
+  round_summary_season <- as.integer(scalar_value(round_summary_payload$season %||% NA_integer_))
+  round_summary_round <- as.integer(scalar_value((round_summary_payload$round_number %||% round_summary_payload$round) %||% NA_integer_))
+  round_summary_phase <- as.character(scalar_value(round_summary_payload$competition_phase %||% ''))
+  round_matches_payload <- request_json(
+    base_url,
+    '/matches',
+    query = list(season = round_summary_season, round = round_summary_round, limit = 50L)
+  )
+  round_matches <- Filter(function(row) {
+    identical(as.character(scalar_value(row$competition_phase %||% '')), round_summary_phase)
+  }, round_matches_payload$data %||% list())
+  round_match_total_goals <- sum(vapply(round_matches, function(row) {
+    as.numeric(scalar_value(row$home_score %||% 0)) + as.numeric(scalar_value(row$away_score %||% 0))
+  }, numeric(1)), na.rm = TRUE)
+  assert_true(
+    length(round_summary_payload$matches) == length(round_matches),
+    sprintf(
+      'Expected /round-summary to include the same number of completed matches as /matches for season %s round %s (%s), got %s vs %s.',
+      round_summary_season,
+      round_summary_round,
+      round_summary_phase %||% 'regular',
+      length(round_summary_payload$matches),
+      length(round_matches)
+    )
+  )
+  assert_true(
+    identical(as.numeric(scalar_value(round_summary_payload$summary$total_goals %||% NA_real_)), round_match_total_goals),
+    sprintf(
+      'Expected /round-summary total goals to match /matches for season %s round %s (%s), got %s vs %s.',
+      round_summary_season,
+      round_summary_round,
+      round_summary_phase %||% 'regular',
+      scalar_value(round_summary_payload$summary$total_goals %||% NA_real_),
+      round_match_total_goals
+    )
+  )
   check_step('round summary endpoint returns recap content')
 } else {
   assert_true(nzchar(as.character(scalar_value(round_summary_payload$error %||% ''))), 'Expected /round-summary 404 responses to include an error payload.')

@@ -4039,27 +4039,45 @@ fetch_preview_fantasy_watch <- function(conn, squad_id, seasons) {
     )
   )
 }
-# Cleared automatically when the Container App restarts (e.g. after a DB refresh).
+# Cached in the API process. DB refresh jobs do not restart the API, so the
+# cache key must reflect the current round snapshot rather than just season/round.
 .round_summary_cache <- new.env(parent = emptyenv())
 .round_cache_ttl_secs <- 3600L  # 1 hour
 
-build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
-  # Fast path: when both season and round are specified, we can build the cache
-  # key immediately and skip the DB lookup entirely on a hit.
-  if (!is.null(season) && !is.null(round)) {
-    fast_key <- paste0(as.integer(season), "_", as.integer(round), "_")
-    # Try an exact key match; also check with known phase suffixes.
-    for (candidate_key in ls(envir = .round_summary_cache)) {
-      if (startsWith(candidate_key, fast_key)) {
-        cached <- .round_summary_cache[[candidate_key]]
-        if (!is.null(cached) &&
-            as.numeric(difftime(Sys.time(), cached$ts, units = "secs")) < .round_cache_ttl_secs) {
-          return(cached$payload)
-        }
-      }
-    }
+round_summary_cache_fragment <- function(value) {
+  if (is.null(value) || !length(value) || all(is.na(value))) {
+    return("")
   }
 
+  as.character(value[[1]])
+}
+
+build_round_summary_cache_key <- function(matches, season, round_number, competition_phase = "") {
+  round_snapshot <- vapply(seq_len(nrow(matches)), function(index) {
+    paste(
+      round_summary_cache_fragment(matches$match_id[index]),
+      round_summary_cache_fragment(matches$local_start_time[index]),
+      round_summary_cache_fragment(matches$venue_name[index]),
+      round_summary_cache_fragment(matches$home_squad_name[index]),
+      round_summary_cache_fragment(matches$home_score[index]),
+      round_summary_cache_fragment(matches$away_squad_name[index]),
+      round_summary_cache_fragment(matches$away_score[index]),
+      sep = ":"
+    )
+  }, character(1))
+
+  paste0(
+    as.integer(season),
+    "_",
+    as.integer(round_number),
+    "_",
+    as.character(competition_phase %||% ""),
+    "_",
+    paste(round_snapshot, collapse = ";")
+  )
+}
+
+build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
   selected_round <- fetch_latest_completed_round(conn, season = season, round = round)
   if (!nrow(selected_round)) {
     return(NULL)
@@ -4078,6 +4096,12 @@ build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
   matches <- fetch_round_matches(conn, season_value, competition_phase, round_value)
   if (!nrow(matches)) {
     return(NULL)
+  }
+
+  cache_key <- build_round_summary_cache_key(matches, season_value, round_value, competition_phase)
+  cached <- .round_summary_cache[[cache_key]]
+  if (!is.null(cached) && as.numeric(difftime(Sys.time(), cached$ts, units = "secs")) < .round_cache_ttl_secs) {
+    return(cached$payload)
   }
 
   round_summary <- build_round_match_summary(matches)
@@ -4328,6 +4352,11 @@ build_round_summary_payload <- function(conn, season = NULL, round = NULL) {
     notable_facts = notable_facts
   )
 
+  cache_prefix <- paste0(season_value, "_", round_value, "_", competition_phase, "_")
+  stale_keys <- setdiff(ls(envir = .round_summary_cache, pattern = paste0("^", cache_prefix)), cache_key)
+  if (length(stale_keys)) {
+    rm(list = stale_keys, envir = .round_summary_cache)
+  }
   .round_summary_cache[[cache_key]] <- list(payload = payload, ts = Sys.time())
   payload
 }
